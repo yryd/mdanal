@@ -4,62 +4,96 @@
 
 设计说明见 `process/plan/mdanal-spec.md`。
 
+## 目录
+
+```
+mdanal/
+├── main.py              入口：python main.py <命令>
+├── pyproject.toml       安装配置（提供 mdanal 命令）
+├── requirements.txt     运行依赖（下限）
+├── requirements-dev.txt 运行依赖 + pytest
+├── example/system.yaml  完整的配置模板
+├── src/mdanal/          源码（包）
+│   ├── cli.py           命令行
+│   ├── system.py        体系加载、选择解析
+│   ├── registry.py      analyses.yaml 与计划校验
+│   ├── runner.py        编排与落盘
+│   ├── writers.py       CSV、密度投影、manifest、provenance
+│   ├── plotutil.py      样式、画布、色标、标注、保存
+│   ├── analyses/        六个分析模块
+│   └── *.yaml           默认配置、分析定义、标签
+└── tests/               集成测试
+```
+
 ## 依赖
 
-运行环境为 conda env `go_analysis`：
+```bash
+conda activate go_analysis
+pip install -r requirements.txt        # 或 requirements-dev.txt
+```
 
 | 包 | 用途 |
 |---|---|
-| MDAnalysis ≥ 2.8 | 轨迹读取、全部分析 |
+| MDAnalysis ≥ 2.8 | 轨迹读取与全部分析 |
 | numpy / pandas / matplotlib | 计算与绘图 |
 | PyYAML | 读取 yaml |
 | scienceplots | 绘图样式（`science` + `retro`） |
-| maicos ≥ 0.12 | 流速剖面 |
-| pytest | 测试 |
+| maicos ≥ 0.12 | 仅 velocity 分析需要 |
 
 中文字体使用系统自带的 `Noto Serif CJK SC`。
 
-## 快速开始
+## 运行
 
-在 `process/code` 目录下执行：
+在程序目录内，无需安装：
 
 ```bash
-# 查看可用的分析及其槽位、默认参数
-python -m mdanal list
-
-# 查看某个体系的分组与将要运行的分析（不读轨迹）
-python -m mdanal list --system ../runs/003-systems/zgom/flow_F0p2
-
-# 只校验：文件、分组、槽位数、参数名、依赖
-python -m mdanal check --system ../runs/003-systems/zgom/flow_F0p2
-
-# 执行
-python -m mdanal run --system ../runs/003-systems/zgom/flow_F0p2 --out /tmp/out
-
-# 英文图、600 dpi、在图内标注帧窗口
-python -m mdanal run --system ../runs/003-systems/zgom/flow_F0p2 --out /tmp/out-en \
-       --lang en --dpi 600 --annotate
+python main.py list                                    # 可用分析与槽位
+python main.py list --system <体系目录>                 # 该体系的分组与计划
+python main.py check --system <体系目录>                # 只校验，不计算
+python main.py run --system <体系目录> --out <输出目录>  # 执行
 ```
+
+安装后可在任意目录用 `mdanal` 命令：
+
+```bash
+pip install -e .
+mdanal run --system <体系目录> --out <输出目录>
+```
+
+常用选项：
+
+| 选项 | 说明 |
+|---|---|
+| `--lang zh\|en` | 图内文字语言，默认 `zh` |
+| `--dpi N` | 图片分辨率，默认 300 |
+| `--annotate` | 在图内标注帧窗口与参数 |
+| `--force` | 允许覆盖已存在的输出目录 |
 
 ## 输入：`system.yaml`
 
-体系目录下必须有该文件。拓扑与轨迹可省略，省略时在同目录内唯一查找。
+体系目录下必须有该文件。完整模板见 `example/system.yaml`，复制到算例目录后改文件名与分组即可。
 
 ```yaml
 name: gom_F0p2
+topology: data.lmp
+trajectory: run_flow.lammpstrj
 timestep_fs: 1.0
 dump_every: 10000
 frames: [400, 500]
+
 groups:
   water_o: "type 17"
   water_h: "type 18"
   walls:   "resid 1 or resid 90"
+
 analyses:
   - {name: density, tag: xz, sel: [water_o], sum_axis: y}
   - {name: rdf,     sel: [water_o, walls]}
 ```
 
-`sel` 的长度必须等于该分析的槽位数（见 `list`）；多条分析写在同一列表里，输出按 `name` 或 `name-tag` 分目录。
+- `topology` / `trajectory` 可省略，省略时在同目录内唯一查找。
+- `sel` 的长度必须等于该分析的槽位数（见 `python main.py list`）。
+- 同一种分析可写多条，用 `tag` 区分输出子目录。
 
 ## 输出
 
@@ -69,36 +103,35 @@ analyses:
 ├── density-xz/figures/density_xz.png
 ├── rdf/...
 ├── manifest.csv        本次运行的分析清单与落位
-└── provenance.json     输入校验和、帧窗口、参数、`meta`、库版本
+└── provenance.json     输入校验和、帧窗口、参数、meta、库版本
 ```
 
 输出目录已存在时会被拒绝，需加 `--force`。
 
 ## 新增一个分析
 
-两处改动，无需修改共享代码：
+两处改动，不改共享代码：
 
-1. 在 `analyses.yaml` 中加一段定义（`slots`、`params`、`requires`、`package`、`labels`）；
-2. 在 `analyses/` 下加同名模块，实现：
+1. 在 `src/mdanal/analyses.yaml` 加一段定义（`slots`、`params`、`requires`、`package`、`labels`）；
+2. 在 `src/mdanal/analyses/` 下加同名模块：
 
 ```python
-def run(ctx, tables_unused=None):
+def run(ctx):
     """返回 {表名: pandas.DataFrame}"""
 
 def figures(ctx, tables):
     """返回 [(图名, matplotlib Figure)]，可选"""
 ```
 
-`ctx` 提供 `groups`（槽位 → 原子组）、`start/stop`、`params`、`label()`、`size()` 与 `universe`。
+`ctx` 提供 `groups`（槽位 → 原子组）、`start/stop`、`params`、`label()`、`size()`、`universe`。
 
 ## 测试
 
 ```bash
-cd process/code
-python -m pytest mdanal/tests -q
+python -m pytest tests -q
 ```
 
-测试依赖真实体系目录，默认取 `process/runs/003-systems/zgom/flow_F0p2`，可用环境变量 `MDANAL_SYSTEM` 指向其他体系；目录不存在时整组跳过。
+测试依赖真实体系目录，默认取 `process/runs/003-systems/zgom/flow_F0p2`，可用 `MDANAL_SYSTEM` 指向其他体系；目录不存在时整组跳过。
 
 ## 已知限制
 
