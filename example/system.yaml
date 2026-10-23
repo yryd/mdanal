@@ -33,11 +33,8 @@ groups:
   water:   "type 17 18"              # 整个水分子
   walls:   "resid 1 or resid 90"     # 上下两块板
 
-  # 需要限定空间区域时，分组写成映射并给 slab。
-  # 按分子质心判定归属，取帧窗口首帧；坐标为原始坐标（与输出表一致）。
-  slit_water:                        # 两块板之间的水
-    select: "type 17 18"
-    slab: {axis: z, lo: 17.58, hi: 29.37}
+  # 需要限定空间区域时用 prop 按坐标筛（坐标为原始坐标，与输出表一致）
+  slit_water: "type 17 18 and prop z > 17.58 and prop z < 29.37"
 
 # 要跑的分析：按顺序执行，一个分析一条。
 # 每条只有 name 必填；sel 的长度必须等于该分析声明的槽位数；

@@ -24,12 +24,13 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     atoms = ctx.groups["group"].atoms
     lx, ly, lz = (float(v) for v in ctx.universe.dimensions[:3])
+    ox, oy, oz = ctx.system.origin
     # 显式给定网格范围：默认以原子包围盒居中，会漏掉盒边缘的原子
     analysis = DensityAnalysis(
         atoms,
         delta=delta,
         padding=0.0,
-        gridcenter=[lx / 2, ly / 2, lz / 2],
+        gridcenter=[ox + lx / 2, oy + ly / 2, oz + lz / 2],
         xdim=lx,
         ydim=ly,
         zdim=lz,
@@ -43,9 +44,6 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     center_a, center_b, density, keep = project_grid(grid.grid, grid.edges, sum_axis)
     a, b = AXES[keep[0]], AXES[keep[1]]
-    # 回到原始坐标（reader 把盒平移到了原点）
-    center_a = center_a + ctx.system.origin[AXES.index(a)]
-    center_b = center_b + ctx.system.origin[AXES.index(b)]
 
     # 平面场要摊平成 (坐标, 坐标, 值) 三列；density[i, j] 对应 (a_i, b_j)
     grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")

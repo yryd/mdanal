@@ -182,66 +182,17 @@ def test_deterministic_tables(real, tmp_path):
     assert (first / "msd/tables/msd.csv").read_bytes() == (second / "msd/tables/msd.csv").read_bytes()
 
 
-def test_slab_group_restricts_region(real, tmp_path):
+def test_coordinates_use_original_frame(real):
     cfg, _ = real
-    probe = load_universe(cfg)
-    z = probe.atoms.positions[:, 2] + cfg.origin[2]
-    low, high = float(z.min()), float(z.max())
-    middle = 0.5 * (low + high)
-    band = 0.02 * (high - low)
+    universe = load_universe(cfg)
+    z = universe.atoms.positions[:, 2]
+    # 平移后坐标落在 [origin, origin + L] 内
+    assert z.min() >= cfg.origin[2] - 1e-6
+    assert z.max() <= cfg.origin[2] + universe.dimensions[2] + 1e-6
 
-    path = tmp_path / "system.yaml"
-    path.write_text(
-        f"""\
-name: slab
-topology: {cfg.topology}
-trajectory: {cfg.trajectory}
-frames: [0, 1]
-groups:
-  whole: "all"
-  everything:
-    select: "all"
-    slab:
-      - {{axis: z, lo: {low - 1:g}, hi: {high + 1:g}}}
-  narrow:
-    select: "all"
-    slab: {{axis: z, lo: {middle - band:g}, hi: {middle + band:g}}}
-analyses:
-  - {{name: msd, sel: [whole]}}
-""",
-        encoding="utf-8",
-    )
-    slab_cfg = read_system(path)
-    universe = load_universe(slab_cfg)
-
-    whole = resolve_group(slab_cfg, universe, "whole")
-    everything = resolve_group(slab_cfg, universe, "everything")
-    narrow = resolve_group(slab_cfg, universe, "narrow")
-
-    assert everything.n_atoms == whole.n_atoms
-    assert 0 < narrow.n_atoms < whole.n_atoms
-    assert narrow.selection.startswith("(all) and bynum ")
-
-
-def test_slab_rejects_empty_range(real, tmp_path):
-    cfg, _ = real
-    path = tmp_path / "system.yaml"
-    path.write_text(
-        f"""\
-name: bad
-topology: {cfg.topology}
-trajectory: {cfg.trajectory}
-groups:
-  bad:
-    select: "all"
-    slab: {{axis: z, lo: 5, hi: 1}}
-analyses:
-  - {{name: msd, sel: [bad]}}
-""",
-        encoding="utf-8",
-    )
-    with pytest.raises(ValidationError, match="lo < hi"):
-        read_system(path)
+    low, high = (float(np.quantile(z, q)) for q in (0.4, 0.6))
+    expected = int(((z > low) & (z < high)).sum())
+    assert universe.select_atoms(f"prop z > {low} and prop z < {high}").n_atoms == expected
 
 
 def test_list_commands_run(real, capsys):
