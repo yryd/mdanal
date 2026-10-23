@@ -393,6 +393,85 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     assert centers[0] - spacing / 2 == pytest.approx(low, abs=1e-5)
 
 
+def _balance_data(cfg) -> Path:
+    path = Path(cfg.directory).parent / "balance" / "data.lmp"
+    if not path.is_file():
+        pytest.skip("同级目录下没有 balance/data.lmp，跳过命名测试")
+    return path
+
+
+def test_naming_from_data(real, tmp_path):
+    cfg, registry = real
+    source = _balance_data(cfg)
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: msd, sel: [all_atoms]}',
+        extra=f"naming:\n  from_data: {source}\n",
+    )
+    probe = read_system(path)
+    prepared = prepare(probe, build_plan(probe, registry))
+    universe = prepared.views["in_box"]
+
+    assert set(universe.atoms.elements) == {"C", "H", "N", "O", "P", "S"}
+    assert universe.select_atoms("resname WAT").n_atoms == 7503
+    assert universe.select_atoms("resname MPC").n_atoms == 1180
+    assert prepared.naming is not None
+    assert prepared.naming.residue_counts["WAT"] == 2501
+    assert prepared.naming.overrides == ()
+    assert prepared.naming.atom_count == 12037
+
+
+def test_naming_rules_override_warns(real, tmp_path):
+    cfg, registry = real
+    source = _balance_data(cfg)
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: msd, sel: [all_atoms]}',
+        extra=(
+            f"naming:\n  from_data: {source}\n"
+            "  residues:\n    - {name: WATER, types: [17, 18]}\n"
+            '  atoms:\n    "17": OW\n'
+        ),
+    )
+    probe = read_system(path)
+    prepared = prepare(probe, build_plan(probe, registry))
+
+    assert prepared.naming is not None
+    assert prepared.naming.overrides
+    assert "WAT→WATER" in prepared.naming.warning
+    assert prepared.naming.residue_counts["WATER"] == 2501
+    universe = prepared.views["in_box"]
+    assert universe.select_atoms("resname WATER and name OW").n_atoms == 2501
+
+
+def test_naming_incomplete_is_rejected(real, tmp_path):
+    cfg, registry = real
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: msd, sel: [all_atoms]}',
+        extra='naming:\n  atoms:\n    "17": OW\n',
+    )
+    probe = read_system(path)
+    with pytest.raises(ValidationError, match="没有分子名"):
+        prepare(probe, build_plan(probe, registry))
+
+
+def test_naming_keyword_is_rejected(real, tmp_path):
+    cfg, registry = real
+    source = _balance_data(cfg)
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: msd, sel: [all_atoms]}',
+        extra=(
+            f"naming:\n  from_data: {source}\n"
+            "  residues:\n    - {name: water, types: [17, 18]}\n"
+        ),
+    )
+    probe = read_system(path)
+    with pytest.raises(ValidationError, match="关键字"):
+        prepare(probe, build_plan(probe, registry))
+
+
 def test_velocity_axis_accepts_axis_names(real, tmp_path):
     cfg, _ = real
     analyses = (

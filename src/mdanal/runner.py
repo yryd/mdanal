@@ -14,6 +14,7 @@ import MDAnalysis as mda
 
 from . import __version__, plotutil
 from .errors import MdanalError, ValidationError
+from .naming import NamingSummary, apply_naming, build_plan
 from .registry import PlanItem
 from .system import (
     NOJUMP_WARNING,
@@ -50,6 +51,7 @@ class Prepared:
     start: int
     stop: int
     selection_frame: int
+    naming: NamingSummary | None = None
 
     def item_groups(self, item: PlanItem) -> dict[str, Group]:
         """在分析所用视图上按原子索引重建该分析的选择。"""
@@ -127,10 +129,17 @@ def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
     if any(item.view == "continuous" for item in plan):
         needed.append("continuous")
     velocity_views = {item.view for item in plan if item.needs_velocity}
-    views = {
-        key: load_universe(cfg, coordinates=key, scale_velocity=key in velocity_views)
-        for key in needed
-    }
+    naming_plan = build_plan(cfg.naming)
+    views: dict[str, mda.Universe] = {}
+    naming_summary = None
+    for key in needed:
+        universe = load_universe(
+            cfg, coordinates=key, scale_velocity=key in velocity_views
+        )
+        if naming_plan is not None:
+            summary = apply_naming(universe, naming_plan)
+            naming_summary = naming_summary or summary
+        views[key] = universe
 
     in_box = views["in_box"]
     start, stop = frame_window(cfg, in_box)
@@ -150,6 +159,7 @@ def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
         start=start,
         stop=stop,
         selection_frame=start,
+        naming=naming_summary,
     )
 
 
@@ -259,6 +269,7 @@ def execute(
                 },
             },
             "selection": {"frame": prepared.selection_frame},
+            "naming": _naming_payload(prepared.naming),
             "frames": {
                 "start": prepared.start,
                 "stop": prepared.stop,
@@ -281,6 +292,17 @@ def execute(
 # --------------------------------------------------------------------------- #
 # 内部
 # --------------------------------------------------------------------------- #
+
+
+def _naming_payload(summary: NamingSummary | None) -> dict[str, Any] | None:
+    if summary is None:
+        return None
+    return {
+        "sources": list(summary.sources),
+        "residues": dict(summary.residue_counts),
+        "atoms": summary.atom_count,
+        "overrides": list(summary.overrides),
+    }
 
 
 def _view_warnings(cfg: SystemConfig, item: PlanItem) -> list[str]:

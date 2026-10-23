@@ -110,6 +110,8 @@ def _prepare(path: str) -> tuple[Prepared, list[str], list[str]]:
     prepared = prepare(cfg, plan)
     problems.extend(check_requirements(plan, prepared.views["in_box"]))
     warnings = [UNKNOWN_INPUT_WARNING] if cfg.input_state == "unknown" else []
+    if prepared.naming is not None and prepared.naming.warning:
+        warnings.append(prepared.naming.warning)
     return prepared, problems, warnings
 
 
@@ -133,6 +135,12 @@ def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
         )
         print(f"      窗口 {window}")
     print(f"选择：按第 {prepared.selection_frame} 帧解析")
+    if prepared.naming is not None:
+        counts = "、".join(
+            f"{name} {count}"
+            for name, count in sorted(prepared.naming.residue_counts.items())
+        )
+        print(f"命名：{counts}    原子：{prepared.naming.atom_count} 个全部有名")
 
     print("\n分组解析：")
     for item in prepared.plan:

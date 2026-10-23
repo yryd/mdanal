@@ -31,6 +31,18 @@ frames: [400, 500]          # 帧窗口，左闭右开；省略则用全部帧
 #   window:
 #     z: [17.0, 30.0]
 
+# 命名（可选）：给残基（分子）与原子补名字，之后可用 resname / name 选择。
+# from_data 读带注释的 data 文件（Atoms 段每行末尾 "# 原子名 分子名"）；
+# residues / atoms 按类型覆盖，覆盖会记一条警告；覆盖后必须每个都命名。
+# naming:
+#   from_data: ../balance/data.lmp
+#   residues:
+#     - {name: WAT, types: [17, 18]}
+#     - {name: GRA, types: [1, 2]}
+#   atoms:
+#     "17": OW
+#     "18": HW
+
 # 具名分组：名字 → MDAnalysis 选择串。
 # 分析里的 sel 可以写这些名字，也可以直接写选择串。
 # 注意：type 只接受空格分隔的枚举（"type 17 18"），

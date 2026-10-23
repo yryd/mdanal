@@ -13,6 +13,7 @@ import numpy as np
 import yaml
 
 from .errors import ValidationError
+from .naming import NamingConfig, parse_naming
 
 SYSTEM_FILENAME = "system.yaml"
 TOPOLOGY_SUFFIXES = (".lmp", ".data")
@@ -37,6 +38,7 @@ ALLOWED_KEYS = {
     "groups",
     "analyses",
     "view",
+    "naming",
 }
 
 
@@ -74,6 +76,7 @@ class SystemConfig:
     frames: tuple[int, int] | None
     groups: dict[str, str]
     analyses: tuple[dict[str, Any], ...]
+    naming: NamingConfig = field(default_factory=NamingConfig)
     box_low: tuple[float, float, float] = (0.0, 0.0, 0.0)
     view: ViewConfig = field(
         default_factory=lambda: ViewConfig((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
@@ -154,6 +157,7 @@ def read_system(path: str | Path) -> SystemConfig:
     )
     box_low, input_state, input_evidence = _scan_dump(trajectory)
     view = _parse_view(data.get("view"), box_low, where)
+    naming = parse_naming(data.get("naming"), directory, where)
 
     return SystemConfig(
         name=name,
@@ -167,6 +171,7 @@ def read_system(path: str | Path) -> SystemConfig:
         frames=frames,
         groups=groups,
         analyses=analyses,
+        naming=naming,
         box_low=box_low,
         view=view,
         input_state=input_state,
