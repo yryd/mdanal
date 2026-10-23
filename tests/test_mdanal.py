@@ -1,7 +1,8 @@
-"""集成测试。只依赖真实体系目录，缺失时整组跳过。"""
+"""集成测试。需要 MDANAL_SYSTEM 指向一个含 system.yaml 与轨迹的目录，未设置时整组跳过。"""
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import os
 from pathlib import Path
@@ -11,21 +12,18 @@ import pandas as pd
 import pytest
 from PIL import Image
 
-import importlib.metadata
-
 from mdanal import cli
 from mdanal import registry as registry_module
 from mdanal.errors import ValidationError
 from mdanal.registry import build_plan, check_packages, load_registry
 from mdanal.system import load_universe, read_system, resolve_group
 
-REPO = Path(__file__).resolve().parents[4]
-DEFAULT_SYSTEM = REPO / "process" / "runs" / "003-systems" / "zgom" / "flow_F0p2"
-SYSTEM = Path(os.environ.get("MDANAL_SYSTEM", DEFAULT_SYSTEM))
+_SYSTEM_ENV = os.environ.get("MDANAL_SYSTEM")
+SYSTEM = Path(_SYSTEM_ENV) if _SYSTEM_ENV else None
 
 pytestmark = pytest.mark.skipif(
-    not (SYSTEM / "system.yaml").is_file(),
-    reason=f"缺少真实体系目录：{SYSTEM}",
+    SYSTEM is None or not (SYSTEM / "system.yaml").is_file(),
+    reason="未设置 MDANAL_SYSTEM，或该目录下没有 system.yaml",
 )
 
 
