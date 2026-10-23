@@ -38,23 +38,13 @@ def figures(ctx, tables):
     name, table = next(iter(tables.items()))
     z = table["z (Å)"].to_numpy()
     v = table["vx (Å/ps)"].to_numpy()
-    err = table["误差 (Å/ps)"].to_numpy()
     valid = np.isfinite(v)
 
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
     v_plot = np.where(valid, v, np.nan)
-    err_plot = np.where(valid, err, np.nan)
 
     fig, ax = plotutil.figure(ctx.size("single"))
     ax.plot(v_plot, z, lw=1.2)
-    if np.isfinite(err_plot).any():
-        ax.fill_betweenx(
-            z,
-            v_plot - err_plot,
-            v_plot + err_plot,
-            alpha=0.25,
-            lw=0,
-        )
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))

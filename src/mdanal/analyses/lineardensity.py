@@ -21,7 +21,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         result = analysis.results[axis]
         edges = np.asarray(result["hist_bin_edges"], dtype=float)
         length = float(ctx.universe.dimensions[AXES.index(axis)])
-        # LinearDensity 对三个轴统一用 max(dimensions) 作上界，需按盒长截断
+        # LinearDensity 对三个轴统一用 max(dimensions) 作上界，需按盒长截断；
+        # 末尾不足一个 bin 的薄层整格丢弃，否则该格的密度会因体积按满格计而偏低
         n_bins = int(np.searchsorted(edges, length, side="right") - 1)
         centers = 0.5 * (edges[1:] + edges[:-1])[:n_bins]
         centers = centers + ctx.system.origin[AXES.index(axis)]
