@@ -104,6 +104,7 @@ analyses:
       - "type 17 15"
       - "type 18 16"
       - "type 17 15 14 7 10"
+    figure_axis: rate        # rate = 每帧平均；total = 总次数
 
   # 均方位移：msd_type 取 xyz / xy / x 等
   - name: msd

@@ -514,8 +514,18 @@ def test_hbond_type_output(real, tmp_path):
     assert table["供体"].str.match(r"^[A-Z]{3}-[A-Z][a-z]?$").all()
     assert np.allclose(table["每帧平均"], table["次数"] / 2)   # 窗口两帧
     assert table["占比"].sum() == pytest.approx(1.0)
-    assert (out / "hbond_type/figures/hbond_type_count.png").is_file()
-    assert (out / "hbond_type/figures/hbond_type_rate.png").is_file()
+    assert (out / "hbond_type/figures/hbond_type.png").is_file()
+
+    # 横轴可切换为总次数
+    total = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: hbond_type, figure_axis: total,'
+        ' sel: ["type 17 15", "type 18 16", "type 17 15 14 7 10"]}',
+        extra=f"naming:\n  from_data: {source}\n",
+    )
+    out_total = tmp_path / "out-total"
+    assert cli.main(["run", "--system", str(total), "--out", str(out_total)]) == 0
+    assert (out_total / "hbond_type/figures/hbond_type.png").is_file()
 
 
 def test_hbond_type_requires_naming(real, tmp_path):

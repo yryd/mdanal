@@ -45,11 +45,15 @@ def figures(ctx, tables):
         ctx.warn("窗口内没有氢键，跳过类型分布图")
         return []
 
+    axis = str(ctx.params["figure_axis"]).lower()
+    if axis not in ("rate", "total"):
+        raise ValidationError(
+            f"figure_axis 只能是 rate 或 total，收到 {axis!r}"
+        )
+    column, label = ("每帧平均", "rate") if axis == "rate" else ("次数", "count")
+
     shown = table.head(FIGURE_ROWS)
-    return [
-        ("hbond_type_count", _bars(ctx, shown, "次数", "count")),
-        ("hbond_type_rate", _bars(ctx, shown, "每帧平均", "rate")),
-    ]
+    return [("hbond_type", _bars(ctx, shown, column, label))]
 
 
 # --------------------------------------------------------------------------- #

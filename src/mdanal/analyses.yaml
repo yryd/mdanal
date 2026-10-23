@@ -92,6 +92,7 @@ hbond_type:
   params:
     d_a_cutoff: 3.5
     d_h_a_angle_cutoff: 150
+    figure_axis: rate      # rate = 每帧平均，total = 总次数
   requires: []
   package: null
   labels:

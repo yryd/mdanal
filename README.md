@@ -143,7 +143,7 @@ groups:
 | `lineardensity` | group | `binsize`、`dim` | 三个轴的线密度表，指定轴的图 |
 | `rdf` | a, b | `range`、`nbins` | g(r) 表与图 |
 | `hbond` | donor, hydrogen, acceptor | `d_a_cutoff`、`d_h_a_angle_cutoff` | 每帧计数、汇总、占有率，计数图 |
-| `hbond_type` | donor, hydrogen, acceptor | 同上；需先配置 `naming` | 按分子-元素分类的类型表，两张条形图 |
+| `hbond_type` | donor, hydrogen, acceptor | 同上、`figure_axis`（`rate`/`total`）；需先配置 `naming` | 按分子-元素分类的类型表，一张条形图 |
 | `msd` | group | `msd_type`、`fft` | MSD 表与图 |
 | `velocity` | group, ref | `dim`、`vdim`（写 `x`/`y`/`z`）、`bin_width`、`grouping` | 速度剖面表与图 |
 
