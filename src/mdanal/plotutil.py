@@ -79,25 +79,30 @@ def limit(ax, axis: str, bounds: tuple[float, float] | None) -> None:
     """按窗口裁剪坐标轴范围；落在数据范围之外的边界忽略。"""
     if not bounds:
         return
-
-    low, high = bounds
-    data_low, data_high = _data_range(ax, axis)
-    if not (np.isfinite(data_low) and np.isfinite(data_high)) or data_high <= data_low:
-        return
-
-    low = low if data_low <= low <= data_high else data_low
-    high = high if data_low <= high <= data_high else data_high
-    if high <= low:
-        return
-    getattr(ax, f"set_{axis}lim")(low, high)
+    low, high = clip_window(bounds, data_range(ax, axis))
+    if high > low:
+        getattr(ax, f"set_{axis}lim")(low, high)
 
 
-def _data_range(ax, axis: str) -> tuple[float, float]:
+def data_range(ax, axis: str) -> tuple[float, float]:
+    """该轴上美术对象的数据范围。"""
     bounds = ax.dataLim
     low, high = (bounds.x0, bounds.x1) if axis == "x" else (bounds.y0, bounds.y1)
     if np.isfinite(low) and np.isfinite(high):
         return float(low), float(high)
     return getattr(ax, f"get_{axis}lim")()
+
+
+def clip_window(
+    bounds: tuple[float, float] | None, data: tuple[float, float]
+) -> tuple[float, float]:
+    """把窗口边界裁到数据范围内；整个窗口落在数据之外时返回数据范围。"""
+    low, high = data
+    if not bounds or high <= low:
+        return low, high
+    clipped_low = bounds[0] if low <= bounds[0] <= high else low
+    clipped_high = bounds[1] if low <= bounds[1] <= high else high
+    return (clipped_low, clipped_high) if clipped_high > clipped_low else (low, high)
 
 
 class Labels:

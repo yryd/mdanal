@@ -87,12 +87,19 @@ def figures(ctx, tables):
         shading="auto",
         cmap=plotutil.density_cmap(),
     )
+
+    x_range = plotutil.clip_window(ctx.window(a), plotutil.data_range(ax, "x"))
+    y_range = plotutil.clip_window(ctx.window(b), plotutil.data_range(ax, "y"))
+    # 画布高度按数据纵横比取，等比例坐标轴才不会在画布里留下大片空白
+    width = ctx.size("map")[0]
+    height = width * (y_range[1] - y_range[0]) / (x_range[1] - x_range[0]) + 0.9
+    fig.set_size_inches(width, max(height, 1.6))
+    ax.set_xlim(x_range)
+    ax.set_ylim(y_range)
     ax.set_aspect("equal")
     ax.set_xlabel(ctx.label(f"axis_{a}"))
     ax.set_ylabel(ctx.label(f"axis_{b}"))
     ax.set_title(ctx.label("title"))
-    plotutil.limit(ax, "x", ctx.window(a))
-    plotutil.limit(ax, "y", ctx.window(b))
     plotutil.colorbar(fig, ax, mesh, ctx.label("cbar"))
     if ctx.annotate:
         plotutil.annotate(ax, ctx.annotation())
