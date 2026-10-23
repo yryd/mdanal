@@ -108,9 +108,15 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
     bars = ax.barh(positions, values, height=0.7, color="#4165c0")
     ax.set_yticks(positions, labels)
     ax.invert_yaxis()
-    # 数值标在条末：占比极小的类型在条形图上几乎看不见，靠数字读
-    ax.bar_label(bars, labels=[_number(v) for v in values], padding=2, fontsize=6)
-    ax.set_xlim(0, float(values.max()) * 1.18 if values.size else 1.0)
+    # 数值与占比标在条末：占比极小的类型在条形图上几乎看不见，靠数字读
+    shares = table["占比"].to_numpy(dtype=float)
+    ax.bar_label(
+        bars,
+        labels=[f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)],
+        padding=2,
+        fontsize=6,
+    )
+    ax.set_xlim(0, float(values.max()) * 1.35 if values.size else 1.0)
     ax.set_xlabel(ctx.label(suffix))
     ax.set_title(ctx.label("title"))
     if ctx.annotate:
@@ -120,3 +126,12 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
 
 def _number(value: float) -> str:
     return f"{value:,.0f}" if value >= 100 else f"{value:.3g}"
+
+
+def _percent(share: float) -> str:
+    percent = share * 100.0
+    if percent >= 10:
+        return f"{percent:.0f}%"
+    if percent >= 1:
+        return f"{percent:.1f}%"
+    return f"{percent:.2f}%"
