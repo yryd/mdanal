@@ -41,7 +41,7 @@ mdanal run --system DIR --out OUT              # 执行分析
 | `--lang zh\|en` | 图内文字语言 | `zh` |
 | `--dpi N` | 图片分辨率 | 300 |
 | `--annotate` | 在图内标注帧窗口与参数 | 关闭 |
-| `--force` | 允许写入已存在的输出目录 | 关闭 |
+| `--force` | 清空并重写已存在的输出目录（仅限本程序的输出） | 关闭 |
 
 源码运行时把 `mdanal` 换成 `python main.py`。
 

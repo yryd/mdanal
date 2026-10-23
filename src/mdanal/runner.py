@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import importlib
 import json
+import shutil
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
@@ -84,11 +85,7 @@ def execute(
 ) -> Path:
     """执行全部计划条目，返回输出目录。"""
     outdir = Path(outdir).expanduser().resolve()
-    if outdir.exists() and not options.force:
-        raise ValidationError(
-            "输出目录已存在；加 --force 才会覆盖", where=str(outdir)
-        )
-    outdir.mkdir(parents=True, exist_ok=True)
+    _prepare_outdir(outdir, options.force)
 
     plotutil.apply_style()
 
@@ -190,6 +187,24 @@ def execute(
 # --------------------------------------------------------------------------- #
 # 内部
 # --------------------------------------------------------------------------- #
+
+
+def _prepare_outdir(outdir: Path, force: bool) -> None:
+    """准备输出目录：--force 时清空上一次的结果，避免残留旧分析的子目录。"""
+    if not outdir.exists():
+        outdir.mkdir(parents=True)
+        return
+    if not force:
+        raise ValidationError("输出目录已存在；加 --force 才会覆盖", where=str(outdir))
+    if not any(outdir.iterdir()):
+        return
+    if not (outdir / "provenance.json").is_file():
+        raise ValidationError(
+            "输出目录非空且不含 provenance.json，不像是本程序的输出，拒绝清空；请换一个目录",
+            where=str(outdir),
+        )
+    shutil.rmtree(outdir)
+    outdir.mkdir(parents=True)
 
 
 def _import_module(item: PlanItem):

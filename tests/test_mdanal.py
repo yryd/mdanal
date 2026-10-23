@@ -158,6 +158,21 @@ def test_existing_output_refused(real, tmp_path):
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
 
 
+def test_force_replaces_previous_output(real, tmp_path):
+    cfg, _ = real
+    first_cfg = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: [all_atoms]}')
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(first_cfg), "--out", str(out)]) == 0
+    assert (out / "msd").is_dir()
+
+    second_cfg = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory, '  - {name: density, tag: xz, sel: [all_atoms], sum_axis: y}'
+    )
+    assert cli.main(["run", "--system", str(second_cfg), "--out", str(out), "--force"]) == 0
+    assert (out / "density-xz").is_dir()
+    assert not (out / "msd").exists()
+
+
 def test_deterministic_tables(real, tmp_path):
     cfg, _ = real
     path = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: [all_atoms]}')
