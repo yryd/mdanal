@@ -109,8 +109,8 @@ velocity:
   module: analyses.velocity
   slots: [group, ref]
   params:
-    dim: 2
-    vdim: 0
+    dim: z
+    vdim: x
     bin_width: 1.0
     grouping: molecules
   requires: [velocities]
@@ -120,9 +120,17 @@ velocity:
   labels:
     zh:
       title: 流速剖面
-      x: $v_x$ (Å ps$^{-1}$)
-      y: $z$ (Å)
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+      v_x: $v_x$ (Å ps$^{-1}$)
+      v_y: $v_y$ (Å ps$^{-1}$)
+      v_z: $v_z$ (Å ps$^{-1}$)
     en:
       title: Velocity profile
-      x: $v_x$ (Å ps$^{-1}$)
-      y: $z$ (Å)
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+      v_x: $v_x$ (Å ps$^{-1}$)
+      v_y: $v_y$ (Å ps$^{-1}$)
+      v_z: $v_z$ (Å ps$^{-1}$)

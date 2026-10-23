@@ -15,6 +15,8 @@ import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
+from .errors import MdanalError  # noqa: E402
+
 STYLE = ("science", "no-latex", "retro")
 CJK_FONT = "Noto Serif CJK SC"
 
@@ -106,7 +108,7 @@ def clip_window(
 
 
 class Labels:
-    """标签解析：分析级（analyses.yaml）→ 全局（labels.yaml）→ 键名本身。"""
+    """标签解析：分析级（analyses.yaml）→ 全局（labels.yaml）；缺键报错。"""
 
     def __init__(
         self,
@@ -117,5 +119,12 @@ class Labels:
         self._common = dict(common or {})
 
     def __call__(self, key: str, **fmt: Any) -> str:
-        text = self._analysis.get(key) or self._common.get(key) or key
+        if key in self._analysis:
+            text = self._analysis[key]
+        elif key in self._common:
+            text = self._common[key]
+        else:
+            raise MdanalError(
+                f"缺少标签 {key!r}；请在 analyses.yaml 中该分析的 labels 或 labels.yaml 中补齐"
+            )
         return text.format(**fmt) if fmt else text

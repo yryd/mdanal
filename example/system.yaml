@@ -87,10 +87,11 @@ analyses:
     msd_type: xyz
     fft: true
 
-  # 流速剖面：槽位依次为计算组、参考组（决定剖面原点）
+  # 流速剖面：槽位依次为计算组、参考组（决定剖面零点）。
+  # dim 为分箱轴、vdim 为速度分量，都写轴名 x/y/z。
   - name: velocity
     sel: [water, walls]
     bin_width: 1.0
-    vdim: 0
-    dim: 2
+    dim: z
+    vdim: x
     grouping: molecules

@@ -14,11 +14,7 @@ AXES = ("x", "y", "z")
 def run(ctx) -> dict[str, pd.DataFrame]:
     from maicos.modules.velocityplanar import VelocityPlanar
 
-    dim = int(ctx.params["dim"])
-    vdim = int(ctx.params["vdim"])
-    if dim not in (0, 1, 2) or vdim not in (0, 1, 2):
-        raise ValidationError(f"dim 与 vdim 只能取 0、1、2，收到 dim={dim}、vdim={vdim}")
-    axis = AXES[dim]
+    dim, vdim, axis = _axes(ctx)
 
     # 剖面坐标以参考组质心为零点；把该质心加回去即视图坐标
     ctx.universe.trajectory[ctx.selection_frame]
@@ -51,7 +47,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
 def meta(ctx, tables) -> dict:
     return {
-        "axis": AXES[int(ctx.params["dim"])],
+        "axis": _axes(ctx)[2],
         "ref_com": ctx.extras.get("velocity_ref"),
         "ref_frame": ctx.selection_frame,
     }
@@ -59,19 +55,36 @@ def meta(ctx, tables) -> dict:
 
 def figures(ctx, tables):
     name, table = next(iter(tables.items()))
-    axis = AXES[int(ctx.params["dim"])]
-    z = table[f"{axis} (Å)"].to_numpy()
-    v = table[f"v{AXES[int(ctx.params['vdim'])]} (Å/ps)"].to_numpy()
+    dim, vdim, axis = _axes(ctx)
+    coordinate = table[f"{axis} (Å)"].to_numpy()
+    velocity = table[f"v{AXES[vdim]} (Å/ps)"].to_numpy()
 
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
-    v_plot = np.where(np.isfinite(v), v, np.nan)
+    velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
     fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(v_plot, z, lw=1.2)
-    ax.set_xlabel(ctx.label("x"))
-    ax.set_ylabel(ctx.label("y"))
+    ax.plot(velocity_plot, coordinate, lw=1.2)
+    ax.set_xlabel(ctx.label(f"v_{AXES[vdim]}"))
+    ax.set_ylabel(ctx.label(f"axis_{axis}"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "y", ctx.window(axis))
     if ctx.annotate:
         plotutil.annotate(ax, ctx.annotation())
     return [(name, fig)]
+
+
+def _axes(ctx) -> tuple[int, int, str]:
+    dim = _axis_index(ctx.params["dim"], "dim")
+    vdim = _axis_index(ctx.params["vdim"], "vdim")
+    return dim, vdim, AXES[dim]
+
+
+def _axis_index(value, key: str) -> int:
+    """轴名（x/y/z）或序号（0/1/2）转成轴序号。"""
+    if isinstance(value, str):
+        name = value.strip().lower()
+        if name in AXES:
+            return AXES.index(name)
+    elif isinstance(value, int) and not isinstance(value, bool) and 0 <= value <= 2:
+        return int(value)
+    raise ValidationError(f"{key} 只能是 x、y、z 或 0、1、2，收到 {value!r}")

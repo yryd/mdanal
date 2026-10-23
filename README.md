@@ -124,7 +124,7 @@ groups:
 | `rdf` | a, b | `range`、`nbins` | g(r) 表与图 |
 | `hbond` | donor, hydrogen, acceptor | `d_a_cutoff`、`d_h_a_angle_cutoff` | 每帧计数、汇总、占有率，计数图 |
 | `msd` | group | `msd_type`、`fft` | MSD 表与图 |
-| `velocity` | group, ref | `dim`、`vdim`、`bin_width`、`grouping` | 速度剖面表与图 |
+| `velocity` | group, ref | `dim`、`vdim`（写 `x`/`y`/`z`）、`bin_width`、`grouping` | 速度剖面表与图 |
 
 `mdanal list` 显示各分析的选择数与默认参数。
 
@@ -173,7 +173,7 @@ def figures(ctx, tables):
     """返回 [(图名, matplotlib Figure)]，可省略"""
 ```
 
-`ctx` 提供 `groups`、`start`、`stop`、`params`、`label()`、`size()`、`universe`。
+`ctx` 提供 `groups`、`start`、`stop`、`params`、`view`、`selection_frame`、`window()`、`warn()`、`label()`、`size()`、`universe`。
 
 ## 测试
 

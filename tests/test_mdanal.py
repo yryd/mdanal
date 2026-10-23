@@ -16,7 +16,7 @@ from PIL import Image
 
 from mdanal import cli, plotutil
 from mdanal import registry as registry_module
-from mdanal.errors import ValidationError
+from mdanal.errors import MdanalError, ValidationError
 from mdanal.registry import build_plan, check_packages, load_registry
 from mdanal.runner import prepare
 from mdanal.system import load_universe, read_system, resolve_group
@@ -391,6 +391,44 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     centers = lineardensity["z (Å)"].to_numpy()
     spacing = float(centers[1] - centers[0])
     assert centers[0] - spacing / 2 == pytest.approx(low, abs=1e-5)
+
+
+def test_velocity_axis_accepts_axis_names(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: velocity, tag: by-index, sel: ["type 17 18", "resid 1 or resid 90"],'
+        ' dim: 0, vdim: 0, bin_width: 2.0}\n'
+        '  - {name: velocity, tag: by-name, sel: ["type 17 18", "resid 1 or resid 90"],'
+        ' dim: x, vdim: x, bin_width: 2.0}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    by_index = pd.read_csv(
+        out / "velocity-by-index/tables/velocity.csv", encoding="utf-8-sig"
+    )
+    by_name = pd.read_csv(
+        out / "velocity-by-name/tables/velocity.csv", encoding="utf-8-sig"
+    )
+    assert list(by_name.columns) == ["x (Å)", "vx (Å/ps)", "误差 (Å/ps)"]
+    pd.testing.assert_frame_equal(by_index, by_name)
+
+
+def test_unknown_axis_is_rejected(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: velocity, sel: ["type 17 18", "resid 1 or resid 90"], dim: q}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+
+
+def test_missing_label_is_rejected():
+    labels = plotutil.Labels({"zh": {"title": "t"}}, {})
+    with pytest.raises(MdanalError, match="缺少标签"):
+        labels("axis_x")
 
 
 def test_rdf_range_beyond_half_box_is_rejected(real, tmp_path):
