@@ -22,6 +22,15 @@ timestep_fs: 1.0            # LAMMPS 时间步长，单位 fs；时间 = 步数 
 dump_every: 10000           # dump 间隔（步）；相邻两帧相差 dump_every × timestep_fs
 frames: [400, 500]          # 帧窗口，左闭右开；省略则用全部帧
 
+# 视图坐标与显示窗口（可选）：省略时坐标与 data.lmp 一致。
+# origin 写 box_corner 时以盒下角为零点（坐标范围 0…L）；写 [x, y, z] 时以该点为零点，
+# 此时下面的 prop 区间要按新零点同步改。
+# window 只裁图件的坐标轴范围，不改数据表；某个轴不写就不裁。
+# view:
+#   origin: [0, 0, 23.47]
+#   window:
+#     z: [17.0, 30.0]
+
 # 具名分组：名字 → MDAnalysis 选择串。
 # 分析里的 sel 可以写这些名字，也可以直接写选择串。
 # 注意：type 只接受空格分隔的枚举（"type 17 18"），
@@ -33,7 +42,7 @@ groups:
   water:   "type 17 18"              # 整个水分子
   walls:   "resid 1 or resid 90"     # 上下两块板
 
-  # 需要限定空间区域时用 prop 按坐标筛（坐标为原始坐标，与输出表一致）
+  # 需要限定空间区域时用 prop 按坐标筛（坐标为视图坐标，默认与 data.lmp 和输出表一致）
   slit_water: "type 17 18 and prop z > 17.58 and prop z < 29.37"
 
 # 要跑的分析：按顺序执行，一个分析一条。

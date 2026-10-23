@@ -10,6 +10,7 @@ density:
     delta: 1.0
     sum_axis: y
   requires: []
+  coordinates: in_box
   package: null
   labels:
     zh:
@@ -92,6 +93,7 @@ msd:
     msd_type: xyz
     fft: true
   requires: []
+  coordinates: continuous
   package: null
   labels:
     zh:

@@ -25,7 +25,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         # 末尾不足一个 bin 的薄层整格丢弃，否则该格的密度会因体积按满格计而偏低
         n_bins = int(np.searchsorted(edges, length, side="right") - 1)
         centers = 0.5 * (edges[1:] + edges[:-1])[:n_bins]
-        centers = centers + ctx.system.origin[AXES.index(axis)]
+        centers = centers + ctx.system.view.lower[AXES.index(axis)]
         tables[f"lineardensity_{axis}"] = pd.DataFrame(
             {
                 f"{axis} (Å)": centers,
@@ -47,6 +47,7 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label("mass"))
     ax.set_title(ctx.label("title"))
+    plotutil.limit(ax, "x", ctx.window(axis))
     if ctx.annotate:
         plotutil.annotate(ax, ctx.annotation())
     return [(name, fig)]

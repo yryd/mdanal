@@ -7,6 +7,7 @@ import pandas as pd
 from MDAnalysis.analysis.rdf import InterRDF
 
 from .. import plotutil
+from ..errors import ValidationError
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -14,6 +15,15 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     group_b = ctx.groups["b"]
     rmin, rmax = (float(v) for v in ctx.params["range"])
     nbins = int(ctx.params["nbins"])
+
+    dimensions = ctx.universe.dimensions
+    if dimensions is not None:
+        limit = 0.5 * float(min(dimensions[:3]))
+        if rmax > limit:
+            raise ValidationError(
+                f"range 上限 {rmax:g} Å 超过半盒长 {limit:g} Å；"
+                "距离超过半盒长时无法配对，请缩小 range"
+            )
 
     analysis = InterRDF(group_a.atoms, group_b.atoms, nbins=nbins, range=(rmin, rmax))
     analysis.run(start=ctx.start, stop=ctx.stop)

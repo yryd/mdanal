@@ -24,7 +24,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     atoms = ctx.groups["group"].atoms
     lx, ly, lz = (float(v) for v in ctx.universe.dimensions[:3])
-    ox, oy, oz = ctx.system.origin
+    ox, oy, oz = ctx.system.view.lower
     # 显式给定网格范围：默认以原子包围盒居中，会漏掉盒边缘的原子
     analysis = DensityAnalysis(
         atoms,
@@ -89,6 +89,8 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label(f"axis_{a}"))
     ax.set_ylabel(ctx.label(f"axis_{b}"))
     ax.set_title(ctx.label("title"))
+    plotutil.limit(ax, "x", ctx.window(a))
+    plotutil.limit(ax, "y", ctx.window(b))
     plotutil.colorbar(fig, ax, mesh, ctx.label("cbar"))
     if ctx.annotate:
         plotutil.annotate(ax, ctx.annotation())

@@ -1,4 +1,4 @@
-"""执行计划：解析分组、调用各分析模块、落盘。
+"""执行计划：按视图加载体系、解析分组、调用各分析模块、落盘。
 """
 
 from __future__ import annotations
@@ -15,7 +15,16 @@ import MDAnalysis as mda
 from . import __version__, plotutil
 from .errors import MdanalError, ValidationError
 from .registry import PlanItem
-from .system import Group, SystemConfig, resolve_group
+from .system import (
+    NOJUMP_WARNING,
+    Group,
+    SystemConfig,
+    frame_window,
+    load_universe,
+    rebuild_group,
+    resolve_group,
+    seek_frame,
+)
 from .writers import sha256, write_manifest, write_provenance, write_tables
 
 
@@ -28,6 +37,27 @@ class RunOptions:
     figure_sizes: Mapping[str, tuple[float, float]] = field(
         default_factory=lambda: {"single": (3.5, 2.6), "wide": (7.0, 3.2), "map": (4.2, 3.0)}
     )
+
+
+@dataclass
+class Prepared:
+    """一次运行所需的输入：体系、计划、各视图的 Universe、帧窗口与已解析的选择。"""
+
+    cfg: SystemConfig
+    plan: tuple[PlanItem, ...]
+    views: Mapping[str, mda.Universe]
+    groups: Mapping[int, Mapping[str, Group]]
+    start: int
+    stop: int
+    selection_frame: int
+
+    def item_groups(self, item: PlanItem) -> dict[str, Group]:
+        """在分析所用视图上按原子索引重建该分析的选择。"""
+        universe = self.views[item.view]
+        return {
+            slot: rebuild_group(group, universe)
+            for slot, group in self.groups[item.order].items()
+        }
 
 
 @dataclass
@@ -45,6 +75,9 @@ class RunContext:
     annotate: bool
     labels: plotutil.Labels
     figure_sizes: Mapping[str, tuple[float, float]]
+    view: str
+    selection_frame: int
+    warnings: list[str] = field(default_factory=list)
     extras: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -61,6 +94,13 @@ class RunContext:
     def size(self, name: str = "single") -> tuple[float, float]:
         return self.figure_sizes.get(name, (3.5, 2.6))
 
+    def window(self, axis: str) -> tuple[float, float] | None:
+        """该轴的显示窗口；未设置时为 None。"""
+        return self.system.view.window.get(axis)
+
+    def warn(self, message: str) -> None:
+        self.warnings.append(message)
+
     def annotation(self) -> str:
         """帧窗口与关键参数，供 --annotate 使用。"""
         # 帧窗口左闭右开；标注里显示实际用到的最后一帧，时间换算为 ns
@@ -73,12 +113,48 @@ class RunContext:
         return f"{window}\n{params}"
 
 
+# --------------------------------------------------------------------------- #
+# 准备与执行
+# --------------------------------------------------------------------------- #
+
+
+def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
+    """构建计划所需的视图，并在帧窗口首帧一次性解析全部分析的选择。"""
+    if not plan:
+        raise ValidationError("没有要运行的分析", where=str(cfg.yaml_path))
+
+    needed = ["in_box"]
+    if any(item.view == "continuous" for item in plan):
+        needed.append("continuous")
+    velocity_views = {item.view for item in plan if item.needs_velocity}
+    views = {
+        key: load_universe(cfg, coordinates=key, scale_velocity=key in velocity_views)
+        for key in needed
+    }
+
+    in_box = views["in_box"]
+    start, stop = frame_window(cfg, in_box)
+    seek_frame(in_box, start)
+    groups = {
+        item.order: {
+            slot: resolve_group(cfg, in_box, value)
+            for slot, value in zip(item.definition.slots, item.selections)
+        }
+        for item in plan
+    }
+    return Prepared(
+        cfg=cfg,
+        plan=tuple(plan),
+        views=views,
+        groups=groups,
+        start=start,
+        stop=stop,
+        selection_frame=start,
+    )
+
+
 def execute(
-    cfg: SystemConfig,
-    plan: Sequence[PlanItem],
-    universe: mda.Universe,
-    start: int,
-    stop: int,
+    prepared: Prepared,
     outdir: str | Path,
     options: RunOptions,
     common_labels: Mapping[str, Mapping[str, str]],
@@ -87,16 +163,14 @@ def execute(
     outdir = Path(outdir).expanduser().resolve()
     _prepare_outdir(outdir, options.force)
 
+    cfg = prepared.cfg
     plotutil.apply_style()
 
     manifest_rows: list[dict[str, Any]] = []
     details: list[dict[str, Any]] = []
 
-    for item in plan:
-        groups = {
-            slot: resolve_group(cfg, universe, value)
-            for slot, value in zip(item.definition.slots, item.selections)
-        }
+    for item in prepared.plan:
+        groups = prepared.item_groups(item)
         labels = plotutil.Labels(
             item.definition.labels.get(options.lang),
             common_labels.get(options.lang),
@@ -104,15 +178,18 @@ def execute(
         ctx = RunContext(
             system=cfg,
             plan_item=item,
-            universe=universe,
+            universe=prepared.views[item.view],
             groups=groups,
-            start=start,
-            stop=stop,
+            start=prepared.start,
+            stop=prepared.stop,
             lang=options.lang,
             dpi=options.dpi,
             annotate=options.annotate,
             labels=labels,
             figure_sizes=options.figure_sizes,
+            view=item.view,
+            selection_frame=prepared.selection_frame,
+            warnings=_view_warnings(cfg, item),
         )
 
         module = _import_module(item)
@@ -144,6 +221,9 @@ def execute(
                 "selections": [groups[s].selection for s in item.definition.slots],
                 "atoms": atoms,
                 "params": dict(item.params),
+                "coordinates": item.definition.coordinates,
+                "view": item.view,
+                "warnings": list(ctx.warnings),
                 "tables": [p.name for p in table_paths.values()],
                 "figures": [p.name for p in figure_paths],
                 "meta": meta,
@@ -152,6 +232,8 @@ def execute(
 
         print(f"[{item.order:02d}] {item.directory:<18} "
               f"表 {len(table_paths)} 张，图 {len(figure_paths)} 张")
+        for message in ctx.warnings:
+            print(f"     警告：{message}")
 
     write_manifest(outdir, manifest_rows)
     write_provenance(
@@ -165,11 +247,23 @@ def execute(
                 "path": str(cfg.trajectory),
                 "sha256": sha256(cfg.trajectory),
             },
+            "input": {
+                "coordinates": cfg.input_state,
+                "detected_from": cfg.input_evidence,
+            },
+            "view": {
+                "origin": list(cfg.view.origin),
+                "shift": list(cfg.view.shift),
+                "window": {
+                    axis: list(bounds) for axis, bounds in cfg.view.window.items()
+                },
+            },
+            "selection": {"frame": prepared.selection_frame},
             "frames": {
-                "start": start,
-                "stop": stop,
-                "n_frames": len(universe.trajectory),
-                "frame_dt_ps": ctx.frame_dt_ps,
+                "start": prepared.start,
+                "stop": prepared.stop,
+                "n_frames": len(prepared.views["in_box"].trajectory),
+                "frame_dt_ps": prepared.cfg.dump_every * prepared.cfg.dt_ps,
             },
             "render": {
                 "language": options.lang,
@@ -187,6 +281,13 @@ def execute(
 # --------------------------------------------------------------------------- #
 # 内部
 # --------------------------------------------------------------------------- #
+
+
+def _view_warnings(cfg: SystemConfig, item: PlanItem) -> list[str]:
+    """框架级提示：该分析所用视图在构建时做过什么。"""
+    if item.view == "continuous" and cfg.input_state == "wrapped":
+        return [NOJUMP_WARNING]
+    return []
 
 
 def _prepare_outdir(outdir: Path, force: bool) -> None:

@@ -1,9 +1,9 @@
-"""体系加载：定位并解析 system.yaml，构建 Universe，解析原子选择。
+"""体系加载：定位并解析 system.yaml，构建各视图的 Universe，解析原子选择。
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +16,16 @@ from .errors import ValidationError
 SYSTEM_FILENAME = "system.yaml"
 TOPOLOGY_SUFFIXES = (".lmp", ".data")
 TRAJECTORY_SUFFIXES = (".lammpstrj",)
+AXES = ("x", "y", "z")
+VIEWS = ("in_box", "continuous")
+INPUT_STATES = ("unwrapped", "wrapped", "unknown")
+
+UNKNOWN_INPUT_WARNING = "无法从轨迹表头判断坐标是否包裹，按未包裹坐标处理。"
+NOJUMP_WARNING = (
+    "输入为包裹坐标，已用 NoJump 重建连续坐标；"
+    "相邻帧位移超过半个盒长时结果可能失真。"
+)
+
 ALLOWED_KEYS = {
     "name",
     "topology",
@@ -25,7 +35,27 @@ ALLOWED_KEYS = {
     "frames",
     "groups",
     "analyses",
+    "view",
 }
+
+
+@dataclass(frozen=True)
+class ViewConfig:
+    """视图坐标的设置。
+
+    origin 是视图坐标的零点（绝对坐标），shift 是加到读取器坐标上的平移量，
+    二者与盒下角 box_low 满足 shift = box_low - origin。
+    shift 同时就是视图坐标下的盒下角。
+    """
+
+    origin: tuple[float, float, float]
+    shift: tuple[float, float, float]
+    window: dict[str, tuple[float, float]] = field(default_factory=dict)
+
+    @property
+    def lower(self) -> tuple[float, float, float]:
+        """视图坐标下的盒下角。"""
+        return self.shift
 
 
 @dataclass(frozen=True)
@@ -43,7 +73,12 @@ class SystemConfig:
     frames: tuple[int, int] | None
     groups: dict[str, str]
     analyses: tuple[dict[str, Any], ...]
-    origin: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    box_low: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    view: ViewConfig = field(
+        default_factory=lambda: ViewConfig((0.0, 0.0, 0.0), (0.0, 0.0, 0.0))
+    )
+    input_state: str = "unknown"
+    input_evidence: str = ""
 
 
 @dataclass(frozen=True)
@@ -116,10 +151,11 @@ def read_system(path: str | Path) -> SystemConfig:
     trajectory = _resolve_file(
         data.get("trajectory"), directory, TRAJECTORY_SUFFIXES, "轨迹文件", where
     )
+    box_low, input_state, input_evidence = _scan_dump(trajectory)
+    view = _parse_view(data.get("view"), box_low, where)
 
     return SystemConfig(
         name=name,
-        origin=_read_origin(trajectory),
         directory=directory,
         yaml_path=yaml_path,
         topology=topology,
@@ -130,6 +166,10 @@ def read_system(path: str | Path) -> SystemConfig:
         frames=frames,
         groups=groups,
         analyses=analyses,
+        box_low=box_low,
+        view=view,
+        input_state=input_state,
+        input_evidence=input_evidence,
     )
 
 
@@ -138,8 +178,19 @@ def read_system(path: str | Path) -> SystemConfig:
 # --------------------------------------------------------------------------- #
 
 
-def load_universe(cfg: SystemConfig, *, scale_velocity: bool = False) -> mda.Universe:
-    """按配置构建 Universe：补分子号、包裹坐标、按需换算速度单位。"""
+def load_universe(
+    cfg: SystemConfig, *, coordinates: str = "in_box", scale_velocity: bool = False
+) -> mda.Universe:
+    """按视图构建 Universe。
+
+    in_box 视图把每个原子折回主盒，坐标落在 [origin, origin + L] 内；
+    continuous 视图保持坐标连续。
+    """
+    if coordinates not in VIEWS:
+        raise ValidationError(
+            f"未知的坐标视图 {coordinates!r}；只能是 {list(VIEWS)}"
+        )
+
     try:
         universe = mda.Universe(
             str(cfg.topology),
@@ -162,9 +213,16 @@ def load_universe(cfg: SystemConfig, *, scale_velocity: bool = False) -> mda.Uni
             "有分析需要速度，但轨迹不含速度列", where=str(cfg.trajectory)
         )
 
-    transforms = [tr.wrap(universe.atoms), _translate(cfg.origin)]
+    wrapped_input = cfg.input_state == "wrapped"
+    transforms = []
+    if coordinates == "in_box" or wrapped_input:
+        transforms.append(tr.wrap(universe.atoms))
+    if coordinates == "continuous" and wrapped_input:
+        transforms.append(tr.NoJump())
+    transforms.append(_translate(cfg.view.shift))
     if scale_velocity:
         transforms.append(_scale_velocity)
+
     universe.trajectory.add_transformations(*transforms)
     return universe
 
@@ -185,6 +243,11 @@ def frame_window(cfg: SystemConfig, universe: mda.Universe) -> tuple[int, int]:
     return start, stop
 
 
+def seek_frame(universe: mda.Universe, frame: int) -> None:
+    """把轨迹定位到指定帧。"""
+    universe.trajectory[frame]
+
+
 def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Group:
     """把配置里的一个选择值解析成原子组：先查具名分组，再当作选择串。"""
     if not isinstance(value, str) or not value.strip():
@@ -201,6 +264,15 @@ def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Grou
             where=f"{cfg.yaml_path}:analyses",
         )
     return Group(key=value if named else None, selection=selection, atoms=atoms)
+
+
+def rebuild_group(group: Group, universe: mda.Universe) -> Group:
+    """按原子索引在另一个视图上重建原子组。"""
+    return Group(
+        key=group.key,
+        selection=group.selection,
+        atoms=universe.atoms[group.atoms.indices],
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -288,6 +360,86 @@ def _parse_analyses(value: Any, where: str) -> tuple[dict[str, Any], ...]:
     return tuple(entries)
 
 
+def _parse_view(value: Any, box_low: tuple[float, ...], where: str) -> ViewConfig:
+    """解析 view 块：把 origin 解析成绝对坐标，并据此算出平移量。"""
+    if value is None:
+        return ViewConfig((0.0, 0.0, 0.0), box_low)
+
+    if not isinstance(value, dict):
+        raise ValidationError(
+            "view 必须是映射（可含 origin 与 window）", where=f"{where}:view"
+        )
+    unknown = set(value) - {"origin", "window"}
+    if unknown:
+        raise ValidationError(
+            f"view 含未知字段 {sorted(unknown)}；允许 origin、window",
+            where=f"{where}:view",
+        )
+
+    origin = _parse_origin(value.get("origin"), box_low, where)
+    window = _parse_window(value.get("window"), where)
+    shift = tuple(float(b - o) for b, o in zip(box_low, origin))
+    return ViewConfig(origin, shift, window)
+
+
+def _parse_origin(
+    value: Any, box_low: tuple[float, ...], where: str
+) -> tuple[float, float, float]:
+    if value is None:
+        return (0.0, 0.0, 0.0)
+    if value == "box_corner":
+        return tuple(float(v) for v in box_low)  # type: ignore[return-value]
+    if (
+        isinstance(value, (list, tuple))
+        and len(value) == 3
+        and all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) for v in value
+        )
+    ):
+        return tuple(float(v) for v in value)  # type: ignore[return-value]
+    raise ValidationError(
+        f"view.origin 只能是 [x, y, z] 或 box_corner，收到 {value!r}",
+        where=f"{where}:view.origin",
+    )
+
+
+def _parse_window(value: Any, where: str) -> dict[str, tuple[float, float]]:
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise ValidationError(
+            "view.window 必须是映射（轴 → [下界, 上界]）", where=f"{where}:view.window"
+        )
+    unknown = set(value) - set(AXES)
+    if unknown:
+        raise ValidationError(
+            f"view.window 含未知轴 {sorted(unknown)}；允许 {list(AXES)}",
+            where=f"{where}:view.window",
+        )
+
+    window: dict[str, tuple[float, float]] = {}
+    for axis, bounds in value.items():
+        if (
+            not isinstance(bounds, (list, tuple))
+            or len(bounds) != 2
+            or not all(
+                isinstance(v, (int, float)) and not isinstance(v, bool) for v in bounds
+            )
+        ):
+            raise ValidationError(
+                f"view.window.{axis} 必须是两个数 [下界, 上界]，收到 {bounds!r}",
+                where=f"{where}:view.window.{axis}",
+            )
+        low, high = (float(v) for v in bounds)
+        if high <= low:
+            raise ValidationError(
+                f"view.window.{axis} 要求下界小于上界，收到 {[low, high]}",
+                where=f"{where}:view.window.{axis}",
+            )
+        window[axis] = (low, high)
+    return window
+
+
 def _resolve_file(
     value: Any, directory: Path, suffixes: tuple[str, ...], label: str, where: str
 ) -> Path:
@@ -316,16 +468,16 @@ def _resolve_file(
     return candidates[0].resolve()
 
 
-def _read_origin(trajectory: Path) -> tuple[float, float, float]:
-    """读取 dump 首个盒边界，返回盒下角坐标。
+def _scan_dump(trajectory: Path) -> tuple[tuple[float, float, float], str, str]:
+    """读 dump 首帧的盒边界与原子列，返回 (盒下角, 输入状态, 依据)。
 
-    MDAnalysis 会把盒平移到原点，输出坐标时用它还原原始坐标。
+    MDAnalysis 会把盒平移到原点，输出坐标时用盒下角还原原始坐标。
     """
-    lows: list[float] = []
     bounds: list[list[float]] = []
+    columns: list[str] = []
     try:
         with open(trajectory, encoding="utf-8", errors="replace") as handle:
-            for _ in range(12):
+            for _ in range(64):
                 line = handle.readline()
                 if not line:
                     break
@@ -333,10 +485,22 @@ def _read_origin(trajectory: Path) -> tuple[float, float, float]:
                     bounds = [
                         [float(v) for v in handle.readline().split()] for _ in range(3)
                     ]
+                elif line.startswith("ITEM: ATOMS"):
+                    columns = line[len("ITEM: ATOMS") :].split()
                     break
-    except OSError:
-        return (0.0, 0.0, 0.0)
+    except (OSError, ValueError):
+        return (0.0, 0.0, 0.0), "unknown", ""
 
+    box_low = _box_low(bounds)
+    names = set(columns)
+    if {"xu", "yu", "zu"} <= names:
+        return box_low, "unwrapped", "xu yu zu"
+    if {"x", "y", "z"} <= names:
+        return box_low, "wrapped", "x y z"
+    return box_low, "unknown", ""
+
+
+def _box_low(bounds: list[list[float]]) -> tuple[float, float, float]:
     if len(bounds) != 3:
         return (0.0, 0.0, 0.0)
 
@@ -353,7 +517,7 @@ def _read_origin(trajectory: Path) -> tuple[float, float, float]:
 
 
 def _translate(offset: tuple[float, float, float]):
-    """把包裹到 [0, L) 的坐标平移回 dump 的原始坐标，使选择、图、表同一框架。"""
+    """把读取器坐标平移到视图坐标，使选择、图、表同一框架。"""
 
     def apply(ts):
         ts.positions = ts.positions + offset

@@ -11,6 +11,7 @@ import matplotlib
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
+import numpy as np  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
@@ -72,6 +73,31 @@ def annotate(ax, text: str) -> None:
 
 def density_cmap() -> LinearSegmentedColormap:
     return LinearSegmentedColormap.from_list("mdanal_density", _DENSITY_COLORS)
+
+
+def limit(ax, axis: str, bounds: tuple[float, float] | None) -> None:
+    """按窗口裁剪坐标轴范围；落在数据范围之外的边界忽略。"""
+    if not bounds:
+        return
+
+    low, high = bounds
+    data_low, data_high = _data_range(ax, axis)
+    if not (np.isfinite(data_low) and np.isfinite(data_high)) or data_high <= data_low:
+        return
+
+    low = low if data_low <= low <= data_high else data_low
+    high = high if data_low <= high <= data_high else data_high
+    if high <= low:
+        return
+    getattr(ax, f"set_{axis}lim")(low, high)
+
+
+def _data_range(ax, axis: str) -> tuple[float, float]:
+    bounds = ax.dataLim
+    low, high = (bounds.x0, bounds.x1) if axis == "x" else (bounds.y0, bounds.y1)
+    if np.isfinite(low) and np.isfinite(high):
+        return float(low), float(high)
+    return getattr(ax, f"get_{axis}lim")()
 
 
 class Labels:

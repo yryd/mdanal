@@ -9,23 +9,20 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
-from . import __version__, plotutil
+from . import __version__
 from .errors import MdanalError, UsageError, ValidationError
 from .registry import (
     AnalysisDef,
-    PlanItem,
     build_plan,
     check_packages,
     check_requirements,
     load_registry,
 )
-from .runner import RunOptions, execute
+from .runner import Prepared, RunOptions, execute, prepare
 from .system import (
     SystemConfig,
-    frame_window,
-    load_universe,
+    UNKNOWN_INPUT_WARNING,
     read_system,
-    resolve_group,
 )
 
 PROGRAM_DIR = Path(__file__).resolve().parent
@@ -37,6 +34,12 @@ EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
 EXIT_RUNTIME = 4
+
+INPUT_LABELS = {
+    "unwrapped": "未包裹",
+    "wrapped": "包裹",
+    "unknown": "无法判断",
+}
 
 
 # --------------------------------------------------------------------------- #
@@ -53,16 +56,16 @@ def cmd_list(args: argparse.Namespace) -> int:
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    cfg, plan, universe, start, stop, resolved, problems = _prepare(args.system)
-    _print_inspection(cfg, plan, universe, start, stop, resolved)
+    prepared, problems, warnings = _prepare(args.system)
+    _print_inspection(prepared, warnings)
     _raise_if_problems(problems)
     print("\n校验通过。")
     return EXIT_OK
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    cfg, plan, universe, start, stop, resolved, problems = _prepare(args.system)
-    _print_inspection(cfg, plan, universe, start, stop, resolved)
+    prepared, problems, warnings = _prepare(args.system)
+    _print_inspection(prepared, warnings)
     _raise_if_problems(problems)
 
     defaults = _load_defaults()
@@ -79,11 +82,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
     print()
     execute(
-        cfg=cfg,
-        plan=plan,
-        universe=universe,
-        start=start,
-        stop=stop,
+        prepared=prepared,
         outdir=args.out,
         options=options,
         common_labels=_load_labels(),
@@ -101,38 +100,65 @@ def cmd_help(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def _prepare(path: str):
-    """读配置 → 建计划 → 加载轨迹 → 校验依赖 → 解析分组。"""
+def _prepare(path: str) -> tuple[Prepared, list[str], list[str]]:
+    """读配置 → 建计划 → 查依赖 → 建视图 → 解析分组，返回 (输入, 问题, 提示)。"""
     cfg = read_system(path)
     registry = load_registry(REGISTRY_PATH)
     plan = build_plan(cfg, registry)
 
     problems: list[str] = list(check_packages(plan))
-    universe = load_universe(cfg, scale_velocity=any(i.needs_velocity for i in plan))
-    start, stop = frame_window(cfg, universe)
-    problems.extend(check_requirements(plan, universe))
-
-    resolved = []
-    for item in plan:
-        for slot, value in zip(item.definition.slots, item.selections):
-            resolved.append((item, slot, value, resolve_group(cfg, universe, value)))
-    return cfg, plan, universe, start, stop, resolved, problems
+    prepared = prepare(cfg, plan)
+    problems.extend(check_requirements(plan, prepared.views["in_box"]))
+    warnings = [UNKNOWN_INPUT_WARNING] if cfg.input_state == "unknown" else []
+    return prepared, problems, warnings
 
 
-def _print_inspection(cfg, plan, universe, start, stop, resolved) -> None:
+def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
+    cfg = prepared.cfg
+    in_box = prepared.views["in_box"]
     print(f"体系：{cfg.name}（{cfg.directory}）")
-    print(f"配置：{cfg.yaml_path.name}    分析：{len(plan)} 条")
+    print(f"配置：{cfg.yaml_path.name}    分析：{len(prepared.plan)} 条")
     print(
-        f"轨迹：{len(universe.trajectory)} 帧    窗口：[{start}, {stop})    "
-        f"原子：{universe.atoms.n_atoms}"
+        f"轨迹：{len(in_box.trajectory)} 帧    "
+        f"窗口：[{prepared.start}, {prepared.stop})    原子：{in_box.atoms.n_atoms}"
     )
-    print("\n分组解析：")
-    for item, slot, value, group in resolved:
-        origin = f"分组 {group.key}" if group.key else "选择串"
-        print(
-            f"  {item.directory:<18}{slot:<10}{value:<34}"
-            f"{group.n_atoms:>7} 原子   （{origin}）"
+    print(f"输入：{_input_text(cfg)}")
+    print(
+        f"视图：原点 {_point(cfg.view.origin)}    "
+        f"平移 {_point(cfg.view.shift)} Å"
+    )
+    if cfg.view.window:
+        window = "、".join(
+            f"{axis}=[{low:g}, {high:g}]" for axis, (low, high) in cfg.view.window.items()
         )
+        print(f"      窗口 {window}")
+    print(f"选择：按第 {prepared.selection_frame} 帧解析")
+
+    print("\n分组解析：")
+    for item in prepared.plan:
+        for slot, value in zip(item.definition.slots, item.selections):
+            group = prepared.groups[item.order][slot]
+            origin = f"分组 {group.key}" if group.key else "选择串"
+            print(
+                f"  {item.directory:<18}{slot:<10}{value:<34}"
+                f"{group.n_atoms:>7} 原子   （{origin}）"
+            )
+
+    if warnings:
+        print()
+        for message in warnings:
+            print(f"提示：{message}")
+
+
+def _input_text(cfg: SystemConfig) -> str:
+    label = INPUT_LABELS.get(cfg.input_state, cfg.input_state)
+    if cfg.input_state in ("unwrapped", "wrapped") and cfg.input_evidence:
+        return f"{label}坐标（{cfg.input_evidence}）"
+    return f"{label}坐标"
+
+
+def _point(values: Sequence[float]) -> str:
+    return "[" + ", ".join(f"{v:g}" for v in values) + "]"
 
 
 def _raise_if_problems(problems: Sequence[str]) -> None:
@@ -157,6 +183,10 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
     print(
         f"帧窗口：{list(cfg.frames)}（左闭右开）" if cfg.frames else "帧窗口：未指定（全帧）"
     )
+    print(f"输入：{_input_text(cfg)}")
+    print(
+        f"视图：原点 {_point(cfg.view.origin)}    平移 {_point(cfg.view.shift)} Å"
+    )
 
     print(f"\n具名分组（{len(cfg.groups)}）：")
     if cfg.groups:
@@ -167,11 +197,11 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
 
     plan = build_plan(cfg, registry)
     print(f"\n将要运行的分析（{len(plan)}）：")
-    print(f"  {'序号':<4}{'子目录':<18}{'分析':<12}选择")
+    print(f"  {'序号':<4}{'子目录':<18}{'分析':<12}{'视图':<12}选择")
     for item in plan:
         print(
             f"  {item.order:<6}{item.directory:<20}{item.name:<14}"
-            f"{', '.join(item.selections)}"
+            f"{item.view:<14}{', '.join(item.selections)}"
         )
     return EXIT_OK
 
@@ -182,9 +212,18 @@ def _print_registry(registry: Mapping[str, AnalysisDef]) -> None:
         definition = registry[name]
         params = ", ".join(f"{k}={v}" for k, v in definition.params.items()) or "-"
         requires = ", ".join(definition.requires) or "-"
-        rows.append((name, ", ".join(definition.slots), params, requires, definition.module))
+        rows.append(
+            (
+                name,
+                ", ".join(definition.slots),
+                params,
+                requires,
+                definition.coordinates,
+                definition.module,
+            )
+        )
 
-    headers = ("分析", "槽位", "默认参数", "依赖", "模块")
+    headers = ("分析", "槽位", "默认参数", "依赖", "坐标需求", "模块")
     widths = [
         max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))
     ]

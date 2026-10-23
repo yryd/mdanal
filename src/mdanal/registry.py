@@ -18,6 +18,7 @@ API_VERSION = 1
 RESERVED_KEYS = {"name", "tag", "sel"}
 TAG_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 KNOWN_REQUIREMENTS = {"velocities"}
+COORDINATE_NEEDS = ("in_box", "continuous", "any")
 
 
 @dataclass(frozen=True)
@@ -31,6 +32,7 @@ class AnalysisDef:
     requires: tuple[str, ...]
     package: Mapping[str, str] | None
     labels: Mapping[str, Mapping[str, str]]
+    coordinates: str = "any"
 
 
 @dataclass(frozen=True)
@@ -48,6 +50,13 @@ class PlanItem:
     @property
     def needs_velocity(self) -> bool:
         return "velocities" in self.definition.requires
+
+    @property
+    def view(self) -> str:
+        """该分析实际使用的坐标视图。"""
+        if self.definition.coordinates == "continuous":
+            return "continuous"
+        return "in_box"
 
 
 # --------------------------------------------------------------------------- #
@@ -90,7 +99,15 @@ def _parse_definition(name: str, block: Any, path: Path) -> AnalysisDef:
     if not isinstance(block, dict):
         raise ValidationError("分析定义必须是映射", where=where)
 
-    allowed = {"module", "slots", "params", "requires", "package", "labels"}
+    allowed = {
+        "module",
+        "slots",
+        "params",
+        "requires",
+        "package",
+        "labels",
+        "coordinates",
+    }
     unknown = set(block) - allowed
     if unknown:
         raise ValidationError(
@@ -121,6 +138,13 @@ def _parse_definition(name: str, block: Any, path: Path) -> AnalysisDef:
         raise ValidationError(
             f"未知依赖 {sorted(unknown_req)}；已知 {sorted(KNOWN_REQUIREMENTS)}",
             where=f"{where}:requires",
+        )
+
+    coordinates = block.get("coordinates", "any")
+    if coordinates not in COORDINATE_NEEDS:
+        raise ValidationError(
+            f"coordinates 只能是 {list(COORDINATE_NEEDS)}，收到 {coordinates!r}",
+            where=f"{where}:coordinates",
         )
 
     package = block.get("package")
@@ -157,6 +181,7 @@ def _parse_definition(name: str, block: Any, path: Path) -> AnalysisDef:
         requires=tuple(requires),
         package=package,
         labels={lang: dict(table) for lang, table in labels.items()},
+        coordinates=str(coordinates),
     )
 
 

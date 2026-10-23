@@ -7,15 +7,18 @@ import json
 import os
 from pathlib import Path
 
+import MDAnalysis as mda
 import numpy as np
 import pandas as pd
 import pytest
+from MDAnalysis.analysis.msd import EinsteinMSD
 from PIL import Image
 
-from mdanal import cli
+from mdanal import cli, plotutil
 from mdanal import registry as registry_module
 from mdanal.errors import ValidationError
 from mdanal.registry import build_plan, check_packages, load_registry
+from mdanal.runner import prepare
 from mdanal.system import load_universe, read_system, resolve_group
 
 _SYSTEM_ENV = os.environ.get("MDANAL_SYSTEM")
@@ -26,8 +29,17 @@ pytestmark = pytest.mark.skipif(
     reason="未设置 MDANAL_SYSTEM，或该目录下没有 system.yaml",
 )
 
+START, STOP = 400, 402
 
-def _write_system(tmp_path: Path, data_lmp: Path, traj: Path, analyses: str, frames: str = "[400, 402]") -> Path:
+
+def _write_system(
+    tmp_path: Path,
+    data_lmp: Path,
+    traj: Path,
+    analyses: str,
+    frames: str = f"[{START}, {STOP}]",
+    extra: str = "",
+) -> Path:
     content = f"""\
 name: probe
 topology: {data_lmp}
@@ -35,14 +47,26 @@ trajectory: {traj}
 timestep_fs: 1.0
 dump_every: 10000
 frames: {frames}
-groups:
+{extra}groups:
   all_atoms: "all"
+  water: "type 17 18"
 analyses:
 {analyses}
 """
     path = tmp_path / "system.yaml"
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def _raw_universe(cfg) -> mda.Universe:
+    """不做任何变换的 Universe，用于对照。"""
+    return mda.Universe(
+        str(cfg.topology),
+        str(cfg.trajectory),
+        format="LAMMPSDUMP",
+        topology_format="data",
+        dt=cfg.dt_ps,
+    )
 
 
 @pytest.fixture(scope="module")
@@ -57,6 +81,9 @@ def test_registry_has_six_analyses(real):
     assert set(registry) == {"density", "lineardensity", "rdf", "hbond", "msd", "velocity"}
     assert registry["hbond"].slots == ("donor", "hydrogen", "acceptor")
     assert registry["velocity"].requires == ("velocities",)
+    assert registry["density"].coordinates == "in_box"
+    assert registry["msd"].coordinates == "continuous"
+    assert registry["rdf"].coordinates == "any"
 
 
 def test_plan_from_real_system(real):
@@ -67,6 +94,8 @@ def test_plan_from_real_system(real):
         expected = f"{item.name}-{item.tag}" if item.tag else item.name
         assert item.directory == expected
     assert len({item.directory for item in plan}) == len(plan)
+    assert {item.name: item.view for item in plan}["msd"] == "continuous"
+    assert {item.name: item.view for item in plan}["velocity"] == "in_box"
 
 
 def test_missing_system_yaml(tmp_path):
@@ -111,11 +140,91 @@ def test_duplicate_directory(real, tmp_path):
         build_plan(read_system(path), registry)
 
 
+def test_unknown_view_field(real, tmp_path):
+    cfg, _ = real
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: msd, sel: ["all"]}',
+        extra="view:\n  centre: [0, 0, 0]\n",
+    )
+    with pytest.raises(ValidationError, match="未知字段"):
+        read_system(path)
+
+
 def test_empty_selection_is_rejected(real):
     cfg, _ = real
     universe = load_universe(cfg)
     with pytest.raises(ValidationError, match="解析为空"):
         resolve_group(cfg, universe, "type 3-13")
+
+
+def test_input_state_matches_dump_header(real, capsys):
+    cfg, _ = real
+    assert cfg.input_state == "unwrapped"
+    assert cfg.input_evidence == "xu yu zu"
+
+    assert cli.main(["check", "--system", str(SYSTEM)]) == 0
+    out = capsys.readouterr().out
+    assert "未包裹坐标（xu yu zu）" in out
+    assert f"选择：按第 {cfg.frames[0]} 帧解析" in out
+
+
+def test_selection_frame_is_window_start(real):
+    cfg, registry = real
+    prepared = prepare(cfg, build_plan(cfg, registry))
+    assert prepared.selection_frame == cfg.frames[0]
+    assert prepared.views["in_box"].trajectory.ts.frame == cfg.frames[0]
+
+
+def test_coordinates_use_original_frame(real):
+    cfg, _ = real
+    universe = load_universe(cfg)
+    universe.trajectory[cfg.frames[0]]
+
+    z = universe.atoms.positions[:, 2]
+    # 平移后坐标落在 [盒下角, 盒下角 + L] 内
+    assert z.min() >= cfg.box_low[2] - 1e-6
+    assert z.max() <= cfg.box_low[2] + universe.dimensions[2] + 1e-6
+
+    low, high = (float(np.quantile(z, q)) for q in (0.4, 0.6))
+    expected = int(((z > low) & (z < high)).sum())
+    assert universe.select_atoms(f"prop z > {low} and prop z < {high}").n_atoms == expected
+
+
+def test_in_box_view_keeps_atoms_inside(real):
+    cfg, _ = real
+    universe = load_universe(cfg, coordinates="in_box")
+    low = np.asarray(cfg.view.lower)
+
+    for frame in (cfg.frames[0], cfg.frames[0] + 1):
+        universe.trajectory[frame]
+        length = np.asarray(universe.dimensions[:3])
+        positions = universe.atoms.positions
+        assert np.all(positions >= low - 1e-6)
+        assert np.all(positions <= low + length + 1e-6)
+
+
+def test_msd_matches_raw_coordinates(real):
+    cfg, _ = real
+    continuous = load_universe(cfg, coordinates="continuous")
+    raw = _raw_universe(cfg)
+
+    shift = np.asarray(cfg.view.shift)
+    for frame in range(START, STOP):
+        continuous.trajectory[frame]
+        raw.trajectory[frame]
+        assert np.allclose(
+            continuous.atoms.positions, raw.atoms.positions + shift, atol=1e-9
+        )
+
+    results = []
+    for universe in (continuous, raw):
+        analysis = EinsteinMSD(
+            universe.atoms, select="all", msd_type="xyz", fft=True
+        )
+        analysis.run(start=START, stop=STOP)
+        results.append(np.asarray(analysis.results.timeseries))
+    assert np.allclose(results[0], results[1], rtol=1e-6, atol=1e-9)
 
 
 def test_density_and_msd_end_to_end(real, tmp_path):
@@ -135,6 +244,15 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     assert list(table.columns) == ["x (Å)", "z (Å)", "数密度 (Å^-3)"]
 
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["input"] == {
+        "coordinates": "unwrapped",
+        "detected_from": "xu yu zu",
+    }
+    assert provenance["selection"]["frame"] == START
+    assert provenance["view"]["origin"] == [0.0, 0.0, 0.0]
+    assert provenance["view"]["shift"][2] == pytest.approx(cfg.box_low[2])
+    assert provenance["analyses"][0]["coordinates"] == "in_box"
+
     meta = provenance["analyses"][0]["meta"]
     extent = meta["grid_extent"]
     delta = float(meta["delta"])
@@ -148,6 +266,134 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     width, _ = Image.open(figure).size
     nominal = 4.2 * 300
     assert 0.85 <= width / nominal <= 1.05
+
+
+def test_view_origin_shifts_selection_and_tables(real, tmp_path):
+    cfg, _ = real
+    analyses = '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}'
+    origin = 5.0
+
+    paths = {}
+    for name, extra in (
+        ("plain", ""),
+        ("shifted", f"view:\n  origin: [0, 0, {origin}]\n"),
+    ):
+        directory = tmp_path / name
+        directory.mkdir()
+        paths[name] = _write_system(directory, cfg.topology, cfg.trajectory, analyses, extra=extra)
+        assert cli.main(["run", "--system", str(paths[name]), "--out", str(directory / "out")]) == 0
+
+    plain = pd.read_csv(tmp_path / "plain/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
+    shifted = pd.read_csv(tmp_path / "shifted/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
+    assert len(plain) == len(shifted)
+    assert np.allclose(plain["z (Å)"] - shifted["z (Å)"], origin)
+
+    # 选择串按视图坐标书写：同一批原子在新坐标下的区间随之平移
+    plain_u = load_universe(read_system(paths["plain"]))
+    shifted_u = load_universe(read_system(paths["shifted"]))
+    low, high = 20.0, 21.0
+    assert np.array_equal(
+        plain_u.select_atoms(f"prop z > {low} and prop z < {high}").indices,
+        shifted_u.select_atoms(
+            f"prop z > {low - origin} and prop z < {high - origin}"
+        ).indices,
+    )
+
+
+def test_window_only_affects_figure(real, tmp_path):
+    cfg, _ = real
+    analyses = '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}'
+
+    paths = {}
+    for name, extra in (
+        ("plain", ""),
+        ("windowed", "view:\n  window:\n    z: [20.0, 24.0]\n"),
+    ):
+        directory = tmp_path / name
+        directory.mkdir()
+        paths[name] = _write_system(directory, cfg.topology, cfg.trajectory, analyses, extra=extra)
+        assert cli.main(["run", "--system", str(paths[name]), "--out", str(directory / "out")]) == 0
+
+    plain = pd.read_csv(tmp_path / "plain/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
+    windowed = pd.read_csv(
+        tmp_path / "windowed/out/lineardensity/tables/lineardensity_z.csv",
+        encoding="utf-8-sig",
+    )
+    pd.testing.assert_frame_equal(plain, windowed)
+    assert (tmp_path / "windowed/out/lineardensity/figures/lineardensity_z.png").is_file()
+
+    provenance = json.loads(
+        (tmp_path / "windowed/out/provenance.json").read_text(encoding="utf-8")
+    )
+    assert provenance["view"]["window"] == {"z": [20.0, 24.0]}
+
+
+def test_window_limit_ignores_bounds_outside_data():
+    fig, ax = plotutil.figure((3.0, 2.0))
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
+
+    plotutil.limit(ax, "x", (-5.0, 1.5))  # 下界落在数据之外，忽略该边界
+    plotutil.limit(ax, "y", (0.5, 1.5))
+
+    assert ax.get_xlim() == pytest.approx((0.0, 1.5))
+    assert ax.get_ylim() == pytest.approx((0.5, 1.5))
+
+    fig, ax = plotutil.figure((3.0, 2.0))
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
+    plotutil.limit(ax, "x", (10.0, 20.0))  # 整个窗口在数据之外，保持数据范围
+
+    assert ax.get_xlim() == pytest.approx((0.0, 2.0))
+
+
+def test_velocity_axis_uses_view_coordinates(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}\n'
+        '  - {name: velocity, sel: ["type 17 18", "resid 1 or resid 90"], bin_width: 2.0}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    universe = load_universe(cfg)
+    universe.trajectory[START]
+    length = float(universe.dimensions[2])
+    low = cfg.view.lower[2]
+    reference = universe.select_atoms("resid 1 or resid 90").center_of_mass()[2]
+
+    velocity = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")
+    assert list(velocity.columns) == ["z (Å)", "vx (Å/ps)", "误差 (Å/ps)"]
+    z = velocity["z (Å)"]
+
+    # 剖面网格以参考组质心为中心，覆盖整个盒长
+    assert 0.5 * (z.min() + z.max()) == pytest.approx(reference, abs=1e-4)
+    assert z.max() - z.min() < length
+    assert z.min() >= low
+    assert z.max() <= low + length
+
+    meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))["analyses"][1]["meta"]
+    assert meta["ref_com"] == pytest.approx(reference, abs=1e-9)
+    assert meta["ref_frame"] == START
+
+    # 与 lineardensity 同框架：后者的网格起点就是视图坐标下的盒下角。
+    # 库给出的 bin 宽为 max(L)/n_bins，不正好等于 binsize，按实际间距反推。
+    lineardensity = pd.read_csv(
+        out / "lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig"
+    )
+    centers = lineardensity["z (Å)"].to_numpy()
+    spacing = float(centers[1] - centers[0])
+    assert centers[0] - spacing / 2 == pytest.approx(low, abs=1e-5)
+
+
+def test_rdf_range_beyond_half_box_is_rejected(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: rdf, sel: [all_atoms, all_atoms], range: [0.5, 40.0], nbins: 100}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+    assert not (out / "rdf").exists()
 
 
 def test_existing_output_refused(real, tmp_path):
@@ -182,24 +428,13 @@ def test_deterministic_tables(real, tmp_path):
     assert (first / "msd/tables/msd.csv").read_bytes() == (second / "msd/tables/msd.csv").read_bytes()
 
 
-def test_coordinates_use_original_frame(real):
-    cfg, _ = real
-    universe = load_universe(cfg)
-    z = universe.atoms.positions[:, 2]
-    # 平移后坐标落在 [origin, origin + L] 内
-    assert z.min() >= cfg.origin[2] - 1e-6
-    assert z.max() <= cfg.origin[2] + universe.dimensions[2] + 1e-6
-
-    low, high = (float(np.quantile(z, q)) for q in (0.4, 0.6))
-    expected = int(((z > low) & (z < high)).sum())
-    assert universe.select_atoms(f"prop z > {low} and prop z < {high}").n_atoms == expected
-
-
 def test_list_commands_run(real, capsys):
     assert cli.main(["list"]) == 0
     assert "density" in capsys.readouterr().out
     assert cli.main(["list", "--system", str(SYSTEM)]) == 0
-    assert "将要运行的分析" in capsys.readouterr().out
+    out = capsys.readouterr().out
+    assert "将要运行的分析" in out
+    assert "未包裹坐标" in out
 
 
 def test_missing_package_reported(real, monkeypatch):

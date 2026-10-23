@@ -57,6 +57,11 @@ timestep_fs: 1.0
 dump_every: 10000
 frames: [400, 500]
 
+view:
+  origin: [0, 0, 23.47]     # 可选：视图坐标的零点
+  window:
+    z: [17.0, 30.0]         # 可选：图件的坐标轴范围
+
 groups:
   water_o: "type 17"
   water_h: "type 18"
@@ -78,10 +83,20 @@ analyses:
 | `timestep_fs` | 时间步长（fs） |
 | `dump_every` | 输出间隔（步） |
 | `frames` | 帧窗口，左闭右开；省略时使用全部帧 |
+| `view` | 视图坐标零点与图件显示窗口；省略时坐标与 `data.lmp` 一致 |
 | `groups` | 具名原子选择，供 `sel` 引用 |
 | `analyses` | 要执行的分析列表 |
 
 `analyses` 每条只有 `name` 必填；`sel` 的长度须等于该分析的选择数；其余键覆盖 `analyses.yaml` 中的默认参数。`tag` 用于区分同一种分析的多次输出。
+
+### 坐标与视图
+
+选择串、数据表、图件使用同一套坐标。
+
+- 默认与 `data.lmp` 一致；写 `view.origin: [x, y, z]` 后以该点为零点，写 `view.origin: box_corner` 后以盒下角为零点（坐标范围 `0 … L`）。
+- 改 `origin` 后，`prop` 选择串里的坐标区间要同步改。
+- `view.window` 只裁剪图件的坐标轴范围，不改数据表；某个轴没写就不裁。
+- 轨迹为包裹坐标时，`msd` 会用 `NoJump` 重建连续性并给出提示。
 
 ### 按空间区域分组
 
@@ -93,9 +108,9 @@ groups:
   outer_water: "type 17 18 and not (prop z > 17.58 and prop z < 29.37)"
 ```
 
-- 坐标为原始坐标，与 `data.lmp` 及输出图表一致。
+- 坐标为视图坐标，默认与 `data.lmp` 及输出图表一致。
 - 支持 `<`、`>`、`<=`、`>=`、`==`、`!=`，可加 `abs`，如 `prop abs z < 5`。
-- 逐帧求值：分子跨越边界时归属会随之改变。
+- 选择是静态的：在帧窗口首帧求值一次，之后不再逐帧重选。
 
 完整示例见 `example/system.yaml`。
 
@@ -111,6 +126,8 @@ groups:
 | `velocity` | group, ref | `dim`、`vdim`、`bin_width`、`grouping` | 速度剖面表与图 |
 
 `mdanal list` 显示各分析的选择数与默认参数。
+
+`density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面零点为参考组质心，表中的坐标已加回该质心，与其他分析同框架。
 
 ## 输出
 
@@ -128,7 +145,7 @@ OUT/
 └── provenance.json
 ```
 
-`manifest.csv` 列出本次执行的分析、选择、原子数与参数；`provenance.json` 记录输入文件校验和、帧窗口、实际参数与库版本。
+`manifest.csv` 列出本次执行的分析、选择、原子数与参数；`provenance.json` 记录输入文件校验和、帧窗口、输入坐标状态、视图设置、选择求值帧、实际参数、每条分析的提示与库版本。
 
 ## 新增分析
 
