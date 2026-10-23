@@ -1,6 +1,4 @@
-"""分析注册表：读取 analyses.yaml、把 system.yaml 的分析条目变成可执行的计划。
-
-本模块只做解析与校验，不导入任何分析实现，也不做任何计算。
+"""分析注册表：读取 analyses.yaml，把 system.yaml 的分析条目解析为执行计划。
 """
 
 from __future__ import annotations

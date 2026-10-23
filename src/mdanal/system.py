@@ -1,7 +1,4 @@
-"""体系加载：定位 system.yaml、解析配置、构建 Universe、解析原子选择。
-
-system.yaml 是必需的：找不到就拒绝运行，不做任何自动推断。
-文件内的 topology / trajectory 可以省略，此时在 system.yaml 所在目录内查找。
+"""体系加载：定位并解析 system.yaml，构建 Universe，解析原子选择。
 """
 
 from __future__ import annotations
@@ -320,10 +317,9 @@ def _resolve_file(
 
 
 def _read_origin(trajectory: Path) -> tuple[float, float, float]:
-    """读取 dump 首个盒边界，得到盒下角坐标。
+    """读取 dump 首个盒边界，返回盒下角坐标。
 
-    MDAnalysis 的 dump reader 会把盒平移到原点，图上的 z 因此与 data.lmp 相差一个
-    常数偏移；输出坐标时用本函数把它加回去。
+    MDAnalysis 会把盒平移到原点，输出坐标时用它还原原始坐标。
     """
     lows: list[float] = []
     bounds: list[list[float]] = []

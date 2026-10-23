@@ -20,7 +20,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     lag = np.asarray(analysis.results.delta_t_values, dtype=float)
     msd = np.asarray(analysis.results.timeseries, dtype=float)
-    # delta_t_values 已按轨迹时间单位（ps）给出，不再乘帧间隔
+    # delta_t_values 已按轨迹时间单位（ps）给出
     table = pd.DataFrame({"Δt (ps)": lag, "MSD (Å^2)": msd})
     return {"msd": table}
 

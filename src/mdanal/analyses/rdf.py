@@ -1,4 +1,4 @@
-"""径向分布函数与累积配位数。"""
+"""径向分布函数。"""
 
 from __future__ import annotations
 

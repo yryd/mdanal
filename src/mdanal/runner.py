@@ -1,7 +1,4 @@
-"""编排：把计划展开成一次真实运行。
-
-职责只有：解析分组、导入分析模块、调用 run/figures、落盘、写清单与溯源。
-这里不出现任何物理量计算。
+"""执行计划：解析分组、调用各分析模块、落盘。
 """
 
 from __future__ import annotations
@@ -34,7 +31,7 @@ class RunOptions:
 
 @dataclass
 class RunContext:
-    """传给分析模块的上下文。分析只读这里，不读全局状态。"""
+    """传给分析模块的上下文。"""
 
     system: SystemConfig
     plan_item: PlanItem

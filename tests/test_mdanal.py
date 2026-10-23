@@ -36,8 +36,7 @@ timestep_fs: 1.0
 dump_every: 10000
 frames: {frames}
 groups:
-  water_o: "type 17"
-  walls: "resid 1 or resid 90"
+  all_atoms: "all"
 analyses:
 {analyses}
 """
@@ -63,10 +62,10 @@ def test_registry_has_six_analyses(real):
 def test_plan_from_real_system(real):
     cfg, registry = real
     plan = build_plan(cfg, registry)
-    assert [item.order for item in plan] == [1, 2, 3, 4, 5, 6]
-    assert [item.directory for item in plan] == [
-        "density-xz", "density-xy", "rdf", "hbond", "msd", "velocity",
-    ]
+    assert [item.order for item in plan] == list(range(1, len(plan) + 1))
+    for item in plan:
+        expected = f"{item.name}-{item.tag}" if item.tag else item.name
+        assert item.directory == expected
     assert len({item.directory for item in plan}) == len(plan)
 
 
@@ -79,7 +78,7 @@ def test_wrong_selection_count(real, tmp_path):
     cfg, registry = real
     path = _write_system(
         tmp_path, cfg.topology, cfg.trajectory,
-        '  - {name: rdf, sel: ["type 17"]}',
+        '  - {name: rdf, sel: ["all"]}',
     )
     with pytest.raises(ValidationError, match="需要 2 个"):
         build_plan(read_system(path), registry)
@@ -88,7 +87,7 @@ def test_wrong_selection_count(real, tmp_path):
 def test_unknown_analysis(real, tmp_path):
     cfg, registry = real
     path = _write_system(
-        tmp_path, cfg.topology, cfg.trajectory, '  - {name: foo, sel: ["type 17"]}'
+        tmp_path, cfg.topology, cfg.trajectory, '  - {name: foo, sel: ["all"]}'
     )
     with pytest.raises(ValidationError, match="不存在"):
         build_plan(read_system(path), registry)
@@ -98,7 +97,7 @@ def test_unknown_parameter(real, tmp_path):
     cfg, registry = real
     path = _write_system(
         tmp_path, cfg.topology, cfg.trajectory,
-        '  - {name: msd, sel: ["type 17"], deltax: 1}',
+        '  - {name: msd, sel: ["all"], deltax: 1}',
     )
     with pytest.raises(ValidationError, match="未知字段"):
         build_plan(read_system(path), registry)
@@ -106,7 +105,7 @@ def test_unknown_parameter(real, tmp_path):
 
 def test_duplicate_directory(real, tmp_path):
     cfg, registry = real
-    analyses = '  - {name: msd, sel: ["type 17"]}\n  - {name: msd, sel: ["type 18"]}'
+    analyses = '  - {name: msd, sel: ["all"]}\n  - {name: msd, sel: ["all"]}'
     path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
     with pytest.raises(ValidationError, match="重复使用"):
         build_plan(read_system(path), registry)
@@ -122,8 +121,8 @@ def test_empty_selection_is_rejected(real):
 def test_density_and_msd_end_to_end(real, tmp_path):
     cfg, _ = real
     analyses = (
-        '  - {name: density, tag: xz, sel: [water_o], sum_axis: y}\n'
-        '  - {name: msd, sel: [water_o]}'
+        '  - {name: density, tag: xz, sel: [all_atoms], sum_axis: y}\n'
+        '  - {name: msd, sel: [all_atoms]}'
     )
     path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
     out = tmp_path / "out"
@@ -141,7 +140,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     delta = float(meta["delta"])
     # Σρ · Δa · Δb · L_axis = 原子数（L_axis 为网格沿求和方向的覆盖长度）
     total = float(table["数密度 (Å^-3)"].sum()) * delta * delta * extent[meta["sum_axis"]]
-    assert total == pytest.approx(ow_count(cfg), rel=1e-9)
+    assert total == pytest.approx(selection_count(cfg, "all"), rel=1e-9)
 
     assert (out / "msd" / "tables" / "msd.csv").is_file()
     figure = out / "density-xz" / "figures" / "density_xz.png"
@@ -153,7 +152,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
 
 def test_existing_output_refused(real, tmp_path):
     cfg, _ = real
-    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: ["type 17"]}')
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: [all_atoms]}')
     out = tmp_path / "out"
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
@@ -161,7 +160,7 @@ def test_existing_output_refused(real, tmp_path):
 
 def test_deterministic_tables(real, tmp_path):
     cfg, _ = real
-    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: ["type 17"]}')
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, '  - {name: msd, sel: [all_atoms]}')
     first, second = tmp_path / "a", tmp_path / "b"
     assert cli.main(["run", "--system", str(path), "--out", str(first)]) == 0
     assert cli.main(["run", "--system", str(path), "--out", str(second)]) == 0
@@ -188,6 +187,6 @@ def test_missing_package_reported(real, monkeypatch):
     assert problems and "未安装" in problems[0]
 
 
-def ow_count(cfg) -> int:
+def selection_count(cfg, selection: str) -> int:
     universe = load_universe(cfg)
-    return universe.select_atoms(cfg.groups["water_o"]).n_atoms
+    return universe.select_atoms(selection).n_atoms

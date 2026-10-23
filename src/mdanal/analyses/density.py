@@ -43,7 +43,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     center_a, center_b, density, keep = project_grid(grid.grid, grid.edges, sum_axis)
     a, b = AXES[keep[0]], AXES[keep[1]]
-    # 回到 data.lmp 的坐标原点（reader 把盒平移到了原点）
+    # 回到原始坐标（reader 把盒平移到了原点）
     center_a = center_a + ctx.system.origin[AXES.index(a)]
     center_b = center_b + ctx.system.origin[AXES.index(b)]
 

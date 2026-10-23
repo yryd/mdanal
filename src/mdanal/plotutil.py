@@ -1,6 +1,4 @@
-"""绘图公共层：样式、画布、色标、标注、保存、标签。
-
-只有本模块调用 savefig；分析模块只负责“画什么”。
+"""绘图公共层：样式、画布、色标、标注、保存与标签。
 """
 
 from __future__ import annotations
@@ -19,7 +17,7 @@ from matplotlib.figure import Figure  # noqa: E402
 STYLE = ("science", "no-latex", "retro")
 CJK_FONT = "Noto Serif CJK SC"
 
-# 密度图用白→蓝的顺序色标，避免 rainbow 类色标造成的误读
+# 密度用白→深蓝的顺序色标
 _DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d5c"]
 
 _styled = False
