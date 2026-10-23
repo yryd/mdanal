@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
+import numpy as np
 import MDAnalysis as mda
 import MDAnalysis.transformations as tr
 import yaml
@@ -41,17 +42,43 @@ class SystemConfig:
     dump_every: int
     dt_ps: float
     frames: tuple[int, int] | None
-    groups: dict[str, str]
+    groups: dict[str, GroupSpec]
     analyses: tuple[dict[str, Any], ...]
     origin: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
 @dataclass(frozen=True)
+class Slab:
+    """沿某坐标轴的一段区间，用于把选择限制在空间上的一个区域。"""
+
+    axis: str
+    lo: float
+    hi: float
+
+    def describe(self) -> str:
+        return f"{self.axis} ∈ [{self.lo:g}, {self.hi:g}]"
+
+
+@dataclass(frozen=True)
+class GroupSpec:
+    """具名分组的定义：一个选择串，可选若干空间区间（并集）。"""
+
+    select: str
+    slabs: tuple[Slab, ...] = ()
+
+    def describe(self) -> str:
+        if not self.slabs:
+            return self.select
+        return f"{self.select} | " + " ∪ ".join(s.describe() for s in self.slabs)
+
+
+@dataclass(frozen=True)
 class Group:
-    """一个已解析的原子选择。key 为命中的具名分组，直传选择串时为 None。"""
+    """一个已解析的原子组。key 为命中的具名分组，直传选择串时为 None。"""
 
     key: str | None
     selection: str
+    label: str
     atoms: mda.AtomGroup
 
     @property
@@ -185,22 +212,69 @@ def frame_window(cfg: SystemConfig, universe: mda.Universe) -> tuple[int, int]:
     return start, stop
 
 
-def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Group:
-    """把配置里的一个选择值解析成原子组：先查具名分组，再当作选择串。"""
+def resolve_group(
+    cfg: SystemConfig, universe: mda.Universe, value: str, frame: int = 0
+) -> Group:
+    """把配置里的一个选择值解析成原子组。
+
+    具名分组若带 slab，用给定帧的分子质心判定分子属于哪个区域，再把结果固定下来。
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValidationError("原子选择必须是非空字符串", where=f"{cfg.yaml_path}:analyses")
 
     named = value in cfg.groups
-    selection = cfg.groups[value] if named else value
+    spec = cfg.groups[value] if named else GroupSpec(select=value)
 
-    atoms = universe.select_atoms(selection)
+    atoms = universe.select_atoms(spec.select)
     if atoms.n_atoms == 0:
         hint = "（具名分组）" if named else ""
         raise ValidationError(
-            f"选择 {value!r}{hint} 解析为空；对应的选择串为 {selection!r}",
+            f"选择 {value!r}{hint} 解析为空；对应的选择串为 {spec.select!r}",
             where=f"{cfg.yaml_path}:analyses",
         )
-    return Group(key=value if named else None, selection=selection, atoms=atoms)
+
+    selection = spec.select
+    if spec.slabs:
+        universe.trajectory[frame]
+        atoms = _apply_slabs(atoms, spec.slabs, cfg.origin)
+        if atoms.n_atoms == 0:
+            raise ValidationError(
+                f"选择 {value!r} 经空间区间过滤后为空；区间为 "
+                f"{'; '.join(s.describe() for s in spec.slabs)}",
+                where=f"{cfg.yaml_path}:groups.{value}",
+            )
+        selection = f"({spec.select}) and bynum " + " ".join(
+            str(i + 1) for i in atoms.indices
+        )
+
+    return Group(
+        key=value if named else None,
+        selection=selection,
+        label=spec.describe(),
+        atoms=atoms,
+    )
+
+
+def _apply_slabs(atoms: mda.AtomGroup, slabs: tuple[Slab, ...], origin: tuple[float, float, float]) -> mda.AtomGroup:
+    """按分子质心把原子组限制到给定区间；区间取并集，坐标用原始坐标（加回盒原点）。"""
+    molnums = atoms.molnums
+    unique, inverse = np.unique(molnums, return_inverse=True)
+
+    masses = atoms.masses
+    weighted = atoms.positions * masses[:, None]
+    total_mass = np.zeros(len(unique))
+    total = np.zeros((len(unique), 3))
+    np.add.at(total_mass, inverse, masses)
+    np.add.at(total, inverse, weighted)
+    centers = total / total_mass[:, None]
+
+    keep = np.zeros(len(unique), dtype=bool)
+    for slab in slabs:
+        index = "xyz".index(slab.axis)
+        coordinate = centers[:, index] + origin[index]
+        keep |= (coordinate >= slab.lo) & (coordinate <= slab.hi)
+
+    return atoms[np.isin(molnums, unique[keep])]
 
 
 # --------------------------------------------------------------------------- #
@@ -255,22 +329,76 @@ def _parse_frames(value: Any, where: str) -> tuple[int, int] | None:
     return int(start), int(stop)
 
 
-def _parse_groups(value: Any, where: str) -> dict[str, str]:
+def _parse_groups(value: Any, where: str) -> dict[str, GroupSpec]:
     if value is None:
         return {}
     if not isinstance(value, dict):
-        raise ValidationError("groups 必须是映射（名字 → 选择串）", where=f"{where}:groups")
-    groups: dict[str, str] = {}
-    for key, sel in value.items():
+        raise ValidationError("groups 必须是映射（名字 → 选择串或定义）", where=f"{where}:groups")
+
+    groups: dict[str, GroupSpec] = {}
+    for key, raw in value.items():
         if not isinstance(key, str) or not key:
             raise ValidationError(f"分组名必须是非空字符串，收到 {key!r}", where=f"{where}:groups")
-        if not isinstance(sel, str) or not sel.strip():
-            raise ValidationError(
-                f"分组 {key!r} 的选择串必须是非空字符串",
-                where=f"{where}:groups.{key}",
-            )
-        groups[key] = sel
+        groups[key] = _parse_group_spec(key, raw, f"{where}:groups.{key}")
     return groups
+
+
+def _parse_group_spec(key: str, raw: Any, where: str) -> GroupSpec:
+    if isinstance(raw, str):
+        if not raw.strip():
+            raise ValidationError("选择串必须是非空字符串", where=where)
+        return GroupSpec(select=raw)
+
+    if not isinstance(raw, dict):
+        raise ValidationError(
+            "分组值必须是选择串，或含 select / slab 的映射", where=where
+        )
+    unknown = set(raw) - {"select", "slab"}
+    if unknown:
+        raise ValidationError(
+            f"未知字段 {sorted(unknown)}；允许 select、slab", where=where
+        )
+
+    select = raw.get("select")
+    if not isinstance(select, str) or not select.strip():
+        raise ValidationError("select 必须是非空选择串", where=f"{where}.select")
+
+    slabs_raw = raw.get("slab")
+    if slabs_raw is None:
+        return GroupSpec(select=select)
+    if isinstance(slabs_raw, dict):
+        slabs_raw = [slabs_raw]
+    if not isinstance(slabs_raw, list) or not slabs_raw:
+        raise ValidationError(
+            "slab 必须是映射，或映射的列表", where=f"{where}.slab"
+        )
+    return GroupSpec(select=select, slabs=tuple(_parse_slab(item, f"{where}.slab") for item in slabs_raw))
+
+
+def _parse_slab(raw: Any, where: str) -> Slab:
+    if not isinstance(raw, dict):
+        raise ValidationError("slab 条目必须是映射", where=where)
+    unknown = set(raw) - {"axis", "lo", "hi"}
+    if unknown:
+        raise ValidationError(f"未知字段 {sorted(unknown)}；允许 axis、lo、hi", where=where)
+
+    axis = raw.get("axis", "z")
+    if axis not in "xyz" or not isinstance(axis, str) or len(axis) != 1:
+        raise ValidationError("axis 只能是 x、y 或 z", where=f"{where}.axis")
+
+    numbers = []
+    for name in ("lo", "hi"):
+        item = raw.get(name)
+        if isinstance(item, bool) or not isinstance(item, (int, float)):
+            raise ValidationError(
+                f"{name} 必须是数字（YAML 里 1e6 会被当作字符串，请写 1000 或 1.0e6）",
+                where=f"{where}.{name}",
+            )
+        numbers.append(float(item))
+    lo, hi = numbers
+    if lo >= hi:
+        raise ValidationError(f"要求 lo < hi，收到 [{lo:g}, {hi:g}]", where=where)
+    return Slab(axis=axis, lo=lo, hi=hi)
 
 
 def _parse_analyses(value: Any, where: str) -> tuple[dict[str, Any], ...]:

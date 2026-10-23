@@ -78,10 +78,32 @@ analyses:
 | `timestep_fs` | 时间步长（fs） |
 | `dump_every` | 输出间隔（步） |
 | `frames` | 帧窗口，左闭右开；省略时使用全部帧 |
-| `groups` | 具名原子选择，供 `sel` 引用 |
+| `groups` | 具名原子选择，供 `sel` 引用；可附加空间区间 |
 | `analyses` | 要执行的分析列表 |
 
 `analyses` 每条只有 `name` 必填；`sel` 的长度须等于该分析的选择数；其余键覆盖 `analyses.yaml` 中的默认参数。`tag` 用于区分同一种分析的多次输出。
+
+### 按空间区域分组
+
+选择串本身不能按坐标切片（MDAnalysis 没有 `z > ...` 语法），需要限定区域时给分组加 `slab`：
+
+```yaml
+groups:
+  slit_water:
+    select: "type 17 18"
+    slab: {axis: z, lo: 17.58, hi: 29.37}
+
+  outer_water:
+    select: "type 17 18"
+    slab:
+      - {axis: z, lo: -1000, hi: 17.58}
+      - {axis: z, lo: 29.37, hi: 1000}
+```
+
+- `slab` 按**分子质心**判定归属，取帧窗口的第一帧，之后固定不变——适用于不会跨过边界的组（如两块板之间的水）。
+- 坐标用原始坐标，与输出表一致（`z` 与 `data.lmp` 相同），不是 MDAnalysis 内部的 `[0, L)`。
+- 多个区间取并集；`lo < hi`。
+- 分组可用于任何分析；需要选择串的分析（如 `hbond`）会自动转换。
 
 完整示例见 `example/system.yaml`。
 

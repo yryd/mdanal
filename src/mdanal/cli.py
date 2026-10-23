@@ -115,7 +115,9 @@ def _prepare(path: str):
     resolved = []
     for item in plan:
         for slot, value in zip(item.definition.slots, item.selections):
-            resolved.append((item, slot, value, resolve_group(cfg, universe, value)))
+            resolved.append(
+                (item, slot, value, resolve_group(cfg, universe, value, frame=start))
+            )
     return cfg, plan, universe, start, stop, resolved, problems
 
 
@@ -130,7 +132,7 @@ def _print_inspection(cfg, plan, universe, start, stop, resolved) -> None:
     for item, slot, value, group in resolved:
         origin = f"分组 {group.key}" if group.key else "选择串"
         print(
-            f"  {item.directory:<18}{slot:<10}{value:<20}"
+            f"  {item.directory:<18}{slot:<10}{group.label:<34}"
             f"{group.n_atoms:>7} 原子   （{origin}）"
         )
 
@@ -160,8 +162,8 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
 
     print(f"\n具名分组（{len(cfg.groups)}）：")
     if cfg.groups:
-        for key, selection in cfg.groups.items():
-            print(f"  {key:<16} {selection}")
+        for key, spec in cfg.groups.items():
+            print(f"  {key:<16} {spec.describe()}")
     else:
         print("  （无）")
 

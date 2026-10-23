@@ -129,7 +129,7 @@ def execute(
                 "name": item.name,
                 "tag": item.tag or "",
                 "directory": item.directory,
-                "sels": " | ".join(groups[s].selection for s in item.definition.slots),
+                "sels": " | ".join(groups[s].label for s in item.definition.slots),
                 "atoms": " | ".join(str(n) for n in atoms),
                 "params": json.dumps(dict(item.params), ensure_ascii=False),
             }
@@ -141,7 +141,7 @@ def execute(
                 "tag": item.tag,
                 "directory": item.directory,
                 "slots": list(item.definition.slots),
-                "selections": [groups[s].selection for s in item.definition.slots],
+                "selections": [groups[s].label for s in item.definition.slots],
                 "atoms": atoms,
                 "params": dict(item.params),
                 "tables": [p.name for p in table_paths.values()],
