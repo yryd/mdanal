@@ -33,13 +33,17 @@ frames: [400, 500]          # 帧窗口，左闭右开；省略则用全部帧
 
 # 命名（可选）：给残基（分子）与原子补名字，之后可用 resname / name 选择。
 # from_data 读带注释的 data 文件（Atoms 段每行末尾 "# 原子名 分子名"）；
-# residues / atoms 按类型覆盖，覆盖会记一条警告；覆盖后必须每个都命名。
+# residues / atoms 按类型覆盖，覆盖会记一条警告。
+# 命名必须完整：每个残基有分子名、每个原子有原子名，否则报错。
 # naming:
-#   from_data: ../balance/data.lmp
-#   residues:
+#   from_data: initial/data.lmp      # 带注释的 data；本仓库里是 zgom/balance/data.lmp
+#   residues:                        # 按类型集合覆盖分子名，需覆盖全部残基
 #     - {name: WAT, types: [17, 18]}
 #     - {name: GRA, types: [1, 2]}
-#   atoms:
+#     - {name: MPC, types: [3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13]}
+#     - {name: EPO, types: [14]}
+#     - {name: OHG, types: [15, 16]}
+#   atoms:                           # 按类型覆盖原子名
 #     "17": OW
 #     "18": HW
 
@@ -101,9 +105,11 @@ analyses:
 
   # 流速剖面：槽位依次为计算组、参考组（决定剖面零点）。
   # dim 为分箱轴、vdim 为速度分量，都写轴名 x/y/z。
+  # sym: true 时以参考组质心为对称面把 ±坐标折叠平均，样本翻倍并强制对称。
   - name: velocity
     sel: [water, walls]
     bin_width: 1.0
     dim: z
     vdim: x
     grouping: molecules
+    sym: false

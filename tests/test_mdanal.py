@@ -10,6 +10,7 @@ from pathlib import Path
 import MDAnalysis as mda
 import numpy as np
 import pandas as pd
+import yaml
 import pytest
 from MDAnalysis.analysis.msd import EinsteinMSD
 from PIL import Image
@@ -19,7 +20,7 @@ from mdanal import registry as registry_module
 from mdanal.errors import MdanalError, ValidationError
 from mdanal.registry import build_plan, check_packages, load_registry
 from mdanal.runner import prepare
-from mdanal.system import load_universe, read_system, resolve_group
+from mdanal.system import ALLOWED_KEYS, load_universe, read_system, resolve_group
 
 _SYSTEM_ENV = os.environ.get("MDANAL_SYSTEM")
 SYSTEM = Path(_SYSTEM_ENV) if _SYSTEM_ENV else None
@@ -96,6 +97,23 @@ def test_plan_from_real_system(real):
     assert len({item.directory for item in plan}) == len(plan)
     assert {item.name: item.view for item in plan}["msd"] == "continuous"
     assert {item.name: item.view for item in plan}["velocity"] == "in_box"
+
+
+def test_example_config_matches_registry():
+    """模板示例的字段必须与当前程序一致，防止示例腐化。"""
+    example = cli.PROGRAM_DIR.parent.parent / "example" / "system.yaml"
+    data = yaml.safe_load(example.read_text(encoding="utf-8"))
+
+    assert set(data) <= ALLOWED_KEYS
+
+    registry = load_registry(cli.REGISTRY_PATH)
+    for entry in data["analyses"]:
+        assert entry["name"] in registry
+        allowed = {"name", "tag", "sel"} | set(registry[entry["name"]].params)
+        assert set(entry) <= allowed, f"{entry['name']} 含未知字段"
+
+    assert set(data["naming"]) <= {"from_data", "residues", "atoms"} if "naming" in data else True
+    assert set(data["view"]) <= {"origin", "window"} if "view" in data else True
 
 
 def test_missing_system_yaml(tmp_path):
