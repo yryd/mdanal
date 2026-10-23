@@ -29,6 +29,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         bin_width=float(ctx.params["bin_width"]),
         grouping=str(ctx.params["grouping"]),
         refgroup=ctx.groups["ref"].atoms,
+        sym=bool(ctx.params["sym"]),
         unwrap=True,
         pack=True,
         output=None,

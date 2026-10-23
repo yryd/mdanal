@@ -113,6 +113,7 @@ velocity:
     vdim: x
     bin_width: 1.0
     grouping: molecules
+    sym: false
   requires: [velocities]
   package:
     name: maicos

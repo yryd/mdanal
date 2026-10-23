@@ -415,6 +415,22 @@ def test_velocity_axis_accepts_axis_names(real, tmp_path):
     pd.testing.assert_frame_equal(by_index, by_name)
 
 
+def test_velocity_symmetric_profile(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: velocity, sel: ["type 17 18", "resid 1 or resid 90"],'
+        ' bin_width: 2.0, sym: true}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    table = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")
+    values = table["vx (Å/ps)"].to_numpy()
+    # 对称化把 ±z 折叠平均，剖面必须关于参考组质心镜像对称
+    assert np.allclose(values, values[::-1], equal_nan=True)
+
+
 def test_unknown_axis_is_rejected(real, tmp_path):
     cfg, _ = real
     analyses = (
