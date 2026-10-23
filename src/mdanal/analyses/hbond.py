@@ -12,19 +12,22 @@ COUNT_COLUMNS = ("帧", "时间 (ps)", "氢键数")
 OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
 
 
-def run(ctx) -> dict[str, pd.DataFrame]:
-    donor = ctx.groups["donor"]
-    hydrogen = ctx.groups["hydrogen"]
-    acceptor = ctx.groups["acceptor"]
-
-    analysis = HydrogenBondAnalysis(
+def build_analysis(ctx) -> HydrogenBondAnalysis:
+    """按三个槽位与两个判据构造分析。hbond_type 复用同一套构造。"""
+    return HydrogenBondAnalysis(
         ctx.universe,
-        donors_sel=donor.selection,
-        hydrogens_sel=hydrogen.selection,
-        acceptors_sel=acceptor.selection,
+        donors_sel=ctx.groups["donor"].selection,
+        hydrogens_sel=ctx.groups["hydrogen"].selection,
+        acceptors_sel=ctx.groups["acceptor"].selection,
         d_a_cutoff=float(ctx.params["d_a_cutoff"]),
         d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
     )
+
+
+def run(ctx) -> dict[str, pd.DataFrame]:
+    donor = ctx.groups["donor"]
+
+    analysis = build_analysis(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
     counts = np.asarray(analysis.count_by_time(), dtype=int)

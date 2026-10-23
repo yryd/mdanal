@@ -86,6 +86,24 @@ hbond:
       x: time (ps)
       y: hydrogen bonds
 
+hbond_type:
+  module: analyses.hbond_type
+  slots: [donor, hydrogen, acceptor]
+  params:
+    d_a_cutoff: 3.5
+    d_h_a_angle_cutoff: 150
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 氢键类型分布
+      count: 次数
+      rate: 每帧平均次数
+    en:
+      title: Hydrogen bond types
+      count: count
+      rate: per-frame average
+
 msd:
   module: analyses.msd
   slots: [group]

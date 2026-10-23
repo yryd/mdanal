@@ -97,6 +97,14 @@ analyses:
     d_a_cutoff: 3.5
     d_h_a_angle_cutoff: 150
 
+  # 氢键类型分布：需要先配置命名；标签形如 WAT-O → WAT-O
+  # 供体/受体的选择要覆盖所有可能成键的原子
+  - name: hbond_type
+    sel:
+      - "type 17 15"
+      - "type 18 16"
+      - "type 17 15 14 7 10"
+
   # 均方位移：msd_type 取 xyz / xy / x 等
   - name: msd
     sel: [water_o]

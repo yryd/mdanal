@@ -79,7 +79,9 @@ def real():
 
 def test_registry_has_six_analyses(real):
     _, registry = real
-    assert set(registry) == {"density", "lineardensity", "rdf", "hbond", "msd", "velocity"}
+    assert set(registry) == {
+        "density", "lineardensity", "rdf", "hbond", "hbond_type", "msd", "velocity"
+    }
     assert registry["hbond"].slots == ("donor", "hydrogen", "acceptor")
     assert registry["velocity"].requires == ("velocities",)
     assert registry["density"].coordinates == "in_box"
@@ -488,6 +490,43 @@ def test_naming_keyword_is_rejected(real, tmp_path):
     probe = read_system(path)
     with pytest.raises(ValidationError, match="关键字"):
         prepare(probe, build_plan(probe, registry))
+
+
+def test_hbond_type_output(real, tmp_path):
+    cfg, _ = real
+    source = _balance_data(cfg)
+    analyses = (
+        '  - {name: hbond_type, sel: ["type 17 15", "type 18 16", "type 17 15 14 7 10"]}'
+    )
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory, analyses,
+        extra=f"naming:\n  from_data: {source}\n",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    table = pd.read_csv(out / "hbond_type/tables/hbond_type.csv", encoding="utf-8-sig")
+    assert list(table.columns) == ["供体", "受体", "次数", "每帧平均", "占比"]
+    assert not table.empty
+    assert table["次数"].is_monotonic_decreasing
+    assert set(table["供体"].str.split("-").str[0]) == {"WAT", "OHG"}
+    assert set(table["受体"].str.split("-").str[0]) == {"WAT", "OHG", "EPO", "MPC"}
+    assert table["供体"].str.match(r"^[A-Z]{3}-[A-Z][a-z]?$").all()
+    assert np.allclose(table["每帧平均"], table["次数"] / 2)   # 窗口两帧
+    assert table["占比"].sum() == pytest.approx(1.0)
+    assert (out / "hbond_type/figures/hbond_type_count.png").is_file()
+    assert (out / "hbond_type/figures/hbond_type_rate.png").is_file()
+
+
+def test_hbond_type_requires_naming(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: hbond_type, sel: ["type 17 15", "type 18 16", "type 17 15 7"]}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+    assert not (out / "hbond_type/tables").exists()
 
 
 def test_velocity_axis_accepts_axis_names(real, tmp_path):
