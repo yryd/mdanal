@@ -63,11 +63,11 @@ def figures(ctx, tables):
     velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
     fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(velocity_plot, coordinate, lw=1.2)
-    ax.set_xlabel(ctx.label(f"v_{AXES[vdim]}"))
-    ax.set_ylabel(ctx.label(f"axis_{axis}"))
+    ax.plot(coordinate, velocity_plot, lw=1.2)
+    ax.set_xlabel(ctx.label(f"axis_{axis}"))
+    ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
     ax.set_title(ctx.label("title"))
-    plotutil.limit(ax, "y", ctx.window(axis))
+    plotutil.limit(ax, "x", ctx.window(axis))
     if ctx.annotate:
         plotutil.annotate(ax, ctx.annotation())
     return [(name, fig)]
