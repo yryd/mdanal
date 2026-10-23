@@ -1,0 +1,24 @@
+# 通用文案（中英两套）。分析专用文案在 analyses.yaml 各自的 labels 下。
+# 键名由绘图代码按需取用；缺失时回退到键名本身。
+
+common:
+  zh:
+    time: 时间 (ps)
+    frame: 帧
+    frames: 帧窗口
+    atoms: 原子数
+    density: 密度
+    velocity: 速度
+  en:
+    time: time (ps)
+    frame: frame
+    frames: frame window
+    atoms: atoms
+    density: density
+    velocity: velocity
+
+annotation:
+  zh:
+    window: 帧 {start}–{stop}（{t0:.2f}–{t1:.2f} ns）
+  en:
+    window: frames {start}–{stop} ({t0:.2f}–{t1:.2f} ns)

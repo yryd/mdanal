@@ -1,0 +1,126 @@
+api_version: 1
+
+# 每个键是一个分析名。system.yaml 的 analyses[].name 引用这里的键。
+# slots 决定该分析需要几个 -sel（在 system.yaml 里是 sel 列表的长度与顺序）。
+
+density:
+  module: analyses.density
+  slots: [group]
+  params:
+    delta: 1.0
+    sum_axis: y
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 密度投影
+      cbar: 数密度 (Å$^{-3}$)
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+    en:
+      title: Density projection
+      cbar: number density (Å$^{-3}$)
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+
+lineardensity:
+  module: analyses.lineardensity
+  slots: [group]
+  params:
+    binsize: 0.5
+    dim: z
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 线密度
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+      mass: 质量密度 (g cm$^{-3}$)
+      charge: 电荷密度 (e Å$^{-3}$)
+    en:
+      title: Linear density
+      axis_x: $x$ (Å)
+      axis_y: $y$ (Å)
+      axis_z: $z$ (Å)
+      mass: mass density (g cm$^{-3}$)
+      charge: charge density (e Å$^{-3}$)
+
+rdf:
+  module: analyses.rdf
+  slots: [a, b]
+  params:
+    range: [0.5, 6.0]
+    nbins: 60
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 径向分布函数
+      x: $r$ (Å)
+      y: $g(r)$
+    en:
+      title: Radial distribution function
+      x: $r$ (Å)
+      y: $g(r)$
+
+hbond:
+  module: analyses.hbond
+  slots: [donor, hydrogen, acceptor]
+  params:
+    d_a_cutoff: 3.5
+    d_h_a_angle_cutoff: 150
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 氢键数
+      x: 时间 (ps)
+      y: 氢键数
+    en:
+      title: Hydrogen bonds
+      x: time (ps)
+      y: hydrogen bonds
+
+msd:
+  module: analyses.msd
+  slots: [group]
+  params:
+    msd_type: xyz
+    fft: true
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 均方位移
+      x: $\Delta t$ (ps)
+      y: MSD (Å$^{2}$)
+    en:
+      title: Mean squared displacement
+      x: $\Delta t$ (ps)
+      y: MSD (Å$^{2}$)
+
+velocity:
+  module: analyses.velocity
+  slots: [group, ref]
+  params:
+    dim: 2
+    vdim: 0
+    bin_width: 1.0
+    grouping: molecules
+  requires: [velocities]
+  package:
+    name: maicos
+    min_version: "0.12"
+  labels:
+    zh:
+      title: 流速剖面
+      x: $v_x$ (Å ps$^{-1}$)
+      y: $z$ (Å)
+    en:
+      title: Velocity profile
+      x: $v_x$ (Å ps$^{-1}$)
+      y: $z$ (Å)

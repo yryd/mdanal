@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# mdanal 体系配置示例
+#
+# 用法：把本文件复制到某个算例目录，改掉下面的文件名、分组与要跑的分析，
+# 然后在该目录执行：
+#
+#     python <程序目录>/main.py check --system .
+#     python <程序目录>/main.py run   --system . --out results/mdanal
+#
+# 本文件是必需文件：找不到 system.yaml 时程序直接退出，不做任何推断。
+# 所有相对路径都相对于本文件所在目录。
+# ---------------------------------------------------------------------------
+
+name: my_run                 # 体系名，仅用于日志与溯源；省略时取目录名
+
+# 拓扑与轨迹：可以省略，省略时在本目录内查找唯一的 *.lmp（或 *.data）
+# 与唯一的 *.lammpstrj。文件多于一个时会报错并列出候选，此时必须写明。
+topology: data.lmp
+trajectory: run_flow.lammpstrj
+
+timestep_fs: 1.0            # LAMMPS 时间步长，单位 fs；时间 = 步数 × 本值
+dump_every: 10000           # dump 间隔（步）；相邻两帧相差 dump_every × timestep_fs
+frames: [400, 500]          # 帧窗口，左闭右开；省略则用全部帧
+
+# 具名分组：名字 → MDAnalysis 选择串。
+# 分析里的 sel 可以写这些名字，也可以直接写选择串。
+# 注意：type 只接受空格分隔的枚举（"type 17 18"），
+#       "type 3-13" 这种范围写法不报错但会选中 0 个原子；
+#       resid、bynum 支持范围（"resid 1-90"）。
+groups:
+  water_o: "type 17"                 # 水氧
+  water_h: "type 18"                 # 水氢
+  water:   "type 17 18"              # 整个水分子
+  walls:   "resid 1 or resid 90"     # 上下两块板
+
+# 要跑的分析：按顺序执行，一个分析一条。
+# 每条只有 name 必填；sel 的长度必须等于该分析声明的槽位数；
+# 其余键覆盖 analyses.yaml 中的默认参数。
+# 同一种分析可以写多条，用 tag 区分输出子目录（name-tag）。
+analyses:
+  # 密度：沿 y 求和投影到 x–z（δ = 1 Å 的网格）
+  - name: density
+    tag: xz
+    sel: [water_o]
+    sum_axis: y
+    delta: 1.0
+
+  # 密度：沿 z 求和投影到 x–y
+  - name: density
+    tag: xy
+    sel: [water_o]
+    sum_axis: z
+
+  # 线密度：沿 z 的质量密度与电荷密度
+  - name: lineardensity
+    sel: [water_o]
+    binsize: 0.5
+    dim: z
+
+  # 径向分布：两组原子之间的 g(r)，槽位依次为 a、b
+  - name: rdf
+    sel: [water_o, walls]
+    range: [0.5, 6.0]
+    nbins: 60
+
+  # 氢键：槽位依次为供体重原子、氢、受体重原子
+  - name: hbond
+    sel: [water_o, water_h, water_o]
+    d_a_cutoff: 3.5
+    d_h_a_angle_cutoff: 150
+
+  # 均方位移：msd_type 取 xyz / xy / x 等
+  - name: msd
+    sel: [water_o]
+    msd_type: xyz
+    fft: true
+
+  # 流速剖面：槽位依次为计算组、参考组（决定剖面原点）
+  - name: velocity
+    sel: [water, walls]
+    bin_width: 1.0
+    vdim: 0
+    dim: 2
+    grouping: molecules

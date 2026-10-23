@@ -1,0 +1,11 @@
+# 运行依赖（下限）。当前验证环境：MDAnalysis 2.10.0 / numpy 2.x /
+# pandas 2.x / matplotlib 3.11.1 / PyYAML 6.0.3 / scienceplots 2.2.2 / maicos 0.12
+MDAnalysis>=2.8
+numpy>=1.24
+pandas>=2.0
+matplotlib>=3.7
+PyYAML>=6.0
+scienceplots>=2.1
+
+# 仅 velocity 分析需要；不做流动分析时可不装
+maicos>=0.12

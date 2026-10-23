@@ -1,0 +1,9 @@
+# 全局默认：与体系无关的呈现设置
+language: zh          # zh | en
+dpi: 300              # 图片分辨率，可用 --dpi 覆盖
+annotate: false       # 默认不在图内标注帧窗口与参数
+
+figure:               # 标准画布（英寸），宽 × 高
+  single: [3.5, 2.6]
+  wide:   [7.0, 3.2]
+  map:    [4.2, 3.0]
