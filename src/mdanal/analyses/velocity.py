@@ -22,7 +22,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     # 剖面坐标以参考组质心为零点；把该质心加回去即视图坐标
     ctx.universe.trajectory[ctx.selection_frame]
-    ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim])
+    lower = ctx.system.view.lower[dim]
+    ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim]) + lower
     ctx.extras["velocity_ref"] = ref
 
     analysis = VelocityPlanar(

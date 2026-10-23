@@ -9,6 +9,7 @@ from typing import Any
 
 import MDAnalysis as mda
 import MDAnalysis.transformations as tr
+import numpy as np
 import yaml
 
 from .errors import ValidationError
@@ -43,7 +44,7 @@ ALLOWED_KEYS = {
 class ViewConfig:
     """视图坐标的设置。
 
-    origin 是视图坐标的零点（绝对坐标），shift 是加到读取器坐标上的平移量，
+    origin 是视图坐标的零点（绝对坐标），shift 是盒坐标到视图坐标的偏移，
     二者与盒下角 box_low 满足 shift = box_low - origin。
     shift 同时就是视图坐标下的盒下角。
     """
@@ -183,8 +184,8 @@ def load_universe(
 ) -> mda.Universe:
     """按视图构建 Universe。
 
-    in_box 视图把每个原子折回主盒，坐标落在 [origin, origin + L] 内；
-    continuous 视图保持坐标连续。
+    两种视图都使用盒坐标：读取器坐标加上盒下角折回，范围 0…L。
+    视图平移只作用于选择串与输出坐标，不改变 Universe 内的坐标。
     """
     if coordinates not in VIEWS:
         raise ValidationError(
@@ -219,7 +220,6 @@ def load_universe(
         transforms.append(tr.wrap(universe.atoms))
     if coordinates == "continuous" and wrapped_input:
         transforms.append(tr.NoJump())
-    transforms.append(_translate(cfg.view.shift))
     if scale_velocity:
         transforms.append(_scale_velocity)
 
@@ -249,14 +249,23 @@ def seek_frame(universe: mda.Universe, frame: int) -> None:
 
 
 def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Group:
-    """把配置里的一个选择值解析成原子组：先查具名分组，再当作选择串。"""
+    """把配置里的一个选择值解析成原子组：先查具名分组，再当作选择串。
+
+    选择串里的坐标按视图坐标书写，这里临时把坐标平移一个视图偏移再求值。
+    """
     if not isinstance(value, str) or not value.strip():
         raise ValidationError("原子选择必须是非空字符串", where=f"{cfg.yaml_path}:analyses")
 
     named = value in cfg.groups
     selection = cfg.groups[value] if named else value
 
-    atoms = universe.select_atoms(selection)
+    shift = np.asarray(cfg.view.shift, dtype=np.float32)
+    universe.atoms.positions += shift
+    try:
+        atoms = universe.select_atoms(selection)
+    finally:
+        universe.atoms.positions -= shift
+
     if atoms.n_atoms == 0:
         hint = "（具名分组）" if named else ""
         raise ValidationError(
@@ -514,16 +523,6 @@ def _box_low(bounds: list[list[float]]) -> tuple[float, float, float]:
     else:
         lows = [row[0] for row in bounds]
     return (float(lows[0]), float(lows[1]), float(lows[2]))
-
-
-def _translate(offset: tuple[float, float, float]):
-    """把读取器坐标平移到视图坐标，使选择、图、表同一框架。"""
-
-    def apply(ts):
-        ts.positions = ts.positions + offset
-        return ts
-
-    return apply
 
 
 def _scale_velocity(ts):

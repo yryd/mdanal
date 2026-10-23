@@ -182,26 +182,28 @@ def test_coordinates_use_original_frame(real):
     universe.trajectory[cfg.frames[0]]
 
     z = universe.atoms.positions[:, 2]
-    # 平移后坐标落在 [盒下角, 盒下角 + L] 内
-    assert z.min() >= cfg.box_low[2] - 1e-6
-    assert z.max() <= cfg.box_low[2] + universe.dimensions[2] + 1e-6
+    # Universe 内为盒坐标，范围 0…L
+    assert z.min() >= -1e-6
+    assert z.max() <= universe.dimensions[2] + 1e-6
 
+    # prop 选择按视图坐标求值：盒坐标加视图偏移
     low, high = (float(np.quantile(z, q)) for q in (0.4, 0.6))
-    expected = int(((z > low) & (z < high)).sum())
+    low += cfg.view.shift[2]
+    high += cfg.view.shift[2]
+    expected = int(((z + cfg.view.shift[2] > low) & (z + cfg.view.shift[2] < high)).sum())
     assert universe.select_atoms(f"prop z > {low} and prop z < {high}").n_atoms == expected
 
 
 def test_in_box_view_keeps_atoms_inside(real):
     cfg, _ = real
     universe = load_universe(cfg, coordinates="in_box")
-    low = np.asarray(cfg.view.lower)
 
     for frame in (cfg.frames[0], cfg.frames[0] + 1):
         universe.trajectory[frame]
         length = np.asarray(universe.dimensions[:3])
         positions = universe.atoms.positions
-        assert np.all(positions >= low - 1e-6)
-        assert np.all(positions <= low + length + 1e-6)
+        assert np.all(positions >= -1e-6)
+        assert np.all(positions <= length + 1e-6)
 
 
 def test_msd_matches_raw_coordinates(real):
@@ -209,13 +211,10 @@ def test_msd_matches_raw_coordinates(real):
     continuous = load_universe(cfg, coordinates="continuous")
     raw = _raw_universe(cfg)
 
-    shift = np.asarray(cfg.view.shift)
     for frame in range(START, STOP):
         continuous.trajectory[frame]
         raw.trajectory[frame]
-        assert np.allclose(
-            continuous.atoms.positions, raw.atoms.positions + shift, atol=1e-9
-        )
+        assert np.allclose(continuous.atoms.positions, raw.atoms.positions, atol=1e-9)
 
     results = []
     for universe in (continuous, raw):
@@ -287,16 +286,23 @@ def test_view_origin_shifts_selection_and_tables(real, tmp_path):
     shifted = pd.read_csv(tmp_path / "shifted/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
     assert len(plain) == len(shifted)
     assert np.allclose(plain["z (Å)"] - shifted["z (Å)"], origin)
+    # 改 origin 只平移坐标，剖面数值必须逐行不变
+    assert np.allclose(plain["质量密度 (g/cm^3)"], shifted["质量密度 (g/cm^3)"])
+    assert np.allclose(plain["电荷密度 (e/Å^3)"], shifted["电荷密度 (e/Å^3)"])
 
     # 选择串按视图坐标书写：同一批原子在新坐标下的区间随之平移
-    plain_u = load_universe(read_system(paths["plain"]))
-    shifted_u = load_universe(read_system(paths["shifted"]))
+    plain_cfg = read_system(paths["plain"])
+    shifted_cfg = read_system(paths["shifted"])
     low, high = 20.0, 21.0
     assert np.array_equal(
-        plain_u.select_atoms(f"prop z > {low} and prop z < {high}").indices,
-        shifted_u.select_atoms(
-            f"prop z > {low - origin} and prop z < {high - origin}"
-        ).indices,
+        resolve_group(
+            plain_cfg, load_universe(plain_cfg), f"prop z > {low} and prop z < {high}"
+        ).atoms.indices,
+        resolve_group(
+            shifted_cfg,
+            load_universe(shifted_cfg),
+            f"prop z > {low - origin} and prop z < {high - origin}",
+        ).atoms.indices,
     )
 
 
@@ -355,10 +361,11 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     out = tmp_path / "out"
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
 
-    universe = load_universe(cfg)
+    probe = read_system(path)
+    universe = load_universe(probe)
     universe.trajectory[START]
     length = float(universe.dimensions[2])
-    low = cfg.view.lower[2]
+    low = probe.view.lower[2]
     reference = universe.select_atoms("resid 1 or resid 90").center_of_mass()[2]
 
     velocity = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")
@@ -366,6 +373,7 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     z = velocity["z (Å)"]
 
     # 剖面网格以参考组质心为中心，覆盖整个盒长
+    reference += low
     assert 0.5 * (z.min() + z.max()) == pytest.approx(reference, abs=1e-4)
     assert z.max() - z.min() < length
     assert z.min() >= low

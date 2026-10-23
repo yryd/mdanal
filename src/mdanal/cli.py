@@ -124,8 +124,8 @@ def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
     )
     print(f"输入：{_input_text(cfg)}")
     print(
-        f"视图：原点 {_point(cfg.view.origin)}    "
-        f"平移 {_point(cfg.view.shift)} Å"
+        f"视图：零点 {_point(cfg.view.origin)}（绝对坐标）    "
+        f"盒下角 {_point(cfg.view.shift)}（视图坐标）"
     )
     if cfg.view.window:
         window = "、".join(
@@ -185,7 +185,8 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
     )
     print(f"输入：{_input_text(cfg)}")
     print(
-        f"视图：原点 {_point(cfg.view.origin)}    平移 {_point(cfg.view.shift)} Å"
+        f"视图：零点 {_point(cfg.view.origin)}（绝对坐标）    "
+        f"盒下角 {_point(cfg.view.shift)}（视图坐标）"
     )
 
     print(f"\n具名分组（{len(cfg.groups)}）：")
