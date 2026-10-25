@@ -100,9 +100,9 @@ def figures(ctx, tables):
         va="bottom", ha="left", fontsize=6, color="0.35",
     )
 
-    for key, curve, color in (
-        ("tau_cont", table["连续"].to_numpy(), "#4165c0"),
-        ("tau_inter", table["间歇"].to_numpy(), "#c05040"),
+    for key, color, height in (
+        ("tau_cont", "#4165c0", 0.66),
+        ("tau_inter", "#c05040", 0.46),
     ):
         value = info.get(key)
         if value is None or not np.isfinite(value):
@@ -110,7 +110,7 @@ def figures(ctx, tables):
         ax.axvline(value, ls=":", lw=0.8, color=color)
         ax.annotate(
             f"{value:.2f} ps",
-            xy=(value, 0.55),
+            xy=(value, height),
             xytext=(3, 0),
             textcoords="offset points",
             fontsize=6,

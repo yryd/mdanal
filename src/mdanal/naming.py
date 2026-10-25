@@ -305,9 +305,9 @@ def _apply_residue_rules(
             continue
         new = matched[0]
         old = resnames[ri]
-        if old != new:
-            counts[(old or "（无名）", new)] += 1
-            resnames[ri] = new
+        if old and old != new:          # 只有覆盖已有名字才算覆盖
+            counts[(old, new)] += 1
+        resnames[ri] = new
 
     return [
         f"分子名 {count} 个（{old}→{new}）" for (old, new), count in sorted(counts.items())
@@ -328,10 +328,12 @@ def _apply_atom_rules(
                 f"naming.atoms 里的 type {type_value} 在拓扑中不存在",
                 where="naming.atoms",
             )
-        changed = int((atom_names[mask] != new).sum())
-        if changed:
-            previous = sorted({name for name in atom_names[mask] if name and name != new})
-            label = "、".join(previous) if previous else "（无名）"
+        changed = int(((atom_names[mask] != new) & (atom_names[mask] != "")).sum())
+        if changed:                     # 只有覆盖已有名字才算覆盖
+            previous = sorted(
+                {name for name in atom_names[mask] if name and name != new}
+            )
+            label = "、".join(previous)
             overrides.append(f"原子名 {changed} 个（{label}→{new}，type {type_value}）")
         atom_names[mask] = new
     return overrides
