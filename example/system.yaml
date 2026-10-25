@@ -106,6 +106,14 @@ analyses:
       - "type 17 15 14 7 10"
     figure_axis: rate        # rate = 每帧平均；total = 总次数
 
+  # 氢键寿命：给连续型与间歇型两条存活曲线；1/e 交点即寿命
+  # 帧间隔应远小于水的氢键寿命（约 1 ps），否则结果不可信
+  - name: hbond_lifetime
+    sel: [water_o, water_h, water_o]
+    tau_max_ps: 20
+    intermittency: 1
+    window_step: 1
+
   # 均方位移：msd_type 取 xyz / xy / x 等
   - name: msd
     sel: [water_o]

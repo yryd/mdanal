@@ -80,7 +80,8 @@ def real():
 def test_registry_has_six_analyses(real):
     _, registry = real
     assert set(registry) == {
-        "density", "lineardensity", "rdf", "hbond", "hbond_type", "msd", "velocity"
+        "density", "lineardensity", "rdf", "hbond", "hbond_type",
+        "hbond_lifetime", "msd", "velocity",
     }
     assert registry["hbond"].slots == ("donor", "hydrogen", "acceptor")
     assert registry["velocity"].requires == ("velocities",)
@@ -490,6 +491,47 @@ def test_naming_keyword_is_rejected(real, tmp_path):
     probe = read_system(path)
     with pytest.raises(ValidationError, match="关键字"):
         prepare(probe, build_plan(probe, registry))
+
+
+def test_hbond_lifetime_output(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: hbond_lifetime, sel: ["type 17", "type 18", "type 17"],'
+        ' tau_max_ps: 20}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses, frames="[400, 420]")
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    table = pd.read_csv(
+        out / "hbond_lifetime/tables/hbond_lifetime.csv", encoding="utf-8-sig"
+    )
+    assert list(table.columns) == ["滞后 (ps)", "连续", "间歇"]
+    assert table["滞后 (ps)"].iloc[0] == 0
+    assert table["连续"].iloc[0] == 1 and table["间歇"].iloc[0] == 1
+    # 该体系每帧 10 ps，tau_max_ps=20 -> 2 帧
+    assert table["滞后 (ps)"].iloc[-1] == pytest.approx(20.0)
+
+    summary = pd.read_csv(
+        out / "hbond_lifetime/tables/hbond_lifetime_summary.csv", encoding="utf-8-sig"
+    )
+    assert list(summary["判据"]) == ["连续", "间歇"]
+    assert (out / "hbond_lifetime/figures/hbond_lifetime.png").is_file()
+
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    warnings = provenance["analyses"][0]["warnings"]
+    assert any("不可信" in message for message in warnings)
+
+
+def test_hbond_lifetime_rejects_tau_below_one_frame(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: hbond_lifetime, sel: ["type 17", "type 18", "type 17"],'
+        ' tau_max_ps: 1}'
+    )
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
 
 
 def test_hbond_type_output(real, tmp_path):

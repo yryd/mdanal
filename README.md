@@ -4,7 +4,7 @@
 
 ## 特性
 
-- 七种内置分析：密度投影、线密度、径向分布、氢键数量、氢键类型分布、均方位移、流速剖面
+- 八种内置分析：密度投影、线密度、径向分布、氢键数量、氢键类型分布、氢键寿命、均方位移、流速剖面
 - 一次运行处理一个体系，可同时执行多条分析
 - 每个分析独立输出目录，互不覆盖
 - 输出可复现：相同输入得到逐字节一致的结果
@@ -132,6 +132,7 @@ groups:
 - 坐标为视图坐标，默认与 `data.lmp` 及输出图表一致。
 - 支持 `<`、`>`、`<=`、`>=`、`==`、`!=`，可加 `abs`，如 `prop abs z < 5`。
 - 选择是静态的：在帧窗口首帧求值一次，之后不再逐帧重选。
+- `and` / `or` **从左到右求值、没有优先级**，混用必须加括号：`(A and B) or (C and D)`。
 
 完整示例见 `example/system.yaml`。
 
@@ -144,6 +145,7 @@ groups:
 | `rdf` | a, b | `range`、`nbins` | g(r) 表与图 |
 | `hbond` | donor, hydrogen, acceptor | `d_a_cutoff`、`d_h_a_angle_cutoff` | 每帧计数、汇总、占有率，计数图 |
 | `hbond_type` | donor, hydrogen, acceptor | 同上、`figure_axis`（`rate`/`total`）；需先配置 `naming` | 按分子-元素分类的类型表，一张条形图 |
+| `hbond_lifetime` | donor, hydrogen, acceptor | 同上、`tau_max_ps`、`intermittency`、`window_step` | 存活曲线表、寿命汇总表、双曲线图 |
 | `msd` | group | `msd_type`、`fft` | MSD 表与图 |
 | `velocity` | group, ref | `dim`、`vdim`（写 `x`/`y`/`z`）、`bin_width`、`grouping` | 速度剖面表与图 |
 

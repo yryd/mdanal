@@ -105,6 +105,31 @@ hbond_type:
       count: count
       rate: per-frame average
 
+hbond_lifetime:
+  module: analyses.hbond_lifetime
+  slots: [donor, hydrogen, acceptor]
+  params:
+    d_a_cutoff: 3.5
+    d_h_a_angle_cutoff: 150
+    tau_max_ps: 20          # 最大滞后时间（ps），按帧间隔换算成帧
+    intermittency: 1        # 间歇判据容忍的断帧数
+    window_step: 1          # 时间原点取样步长；调大可加速
+  requires: []
+  package: null
+  labels:
+    zh:
+      title: 氢键寿命
+      x: 滞后 (ps)
+      y: $C(\tau)$
+      cont: 连续
+      inter: 间歇（容忍 {n} 帧）
+    en:
+      title: Hydrogen bond lifetime
+      x: lag (ps)
+      y: $C(\tau)$
+      cont: continuous
+      inter: intermittent ({n} frame tolerance)
+
 msd:
   module: analyses.msd
   slots: [group]
