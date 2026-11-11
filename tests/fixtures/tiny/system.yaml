@@ -1,0 +1,45 @@
+# 测试用小体系：24 个 TMA 分子（504 原子），真空，20 帧
+# 数据来自 process/runs/006-md-vacuum-honeycomb-test-c0/raw 的前 20 帧，原样截取
+name: tiny
+topology: data.lmp
+trajectory: run.lammpstrj
+timestep_fs: 1.0
+dump_every: 5000
+frames: [0, 20]
+
+naming:
+  from_data: data.lmp
+
+groups:
+  tma: "all"
+  tma_o: "type 1 3"
+  tma_h: "type 5 6"
+  carbonyl_o: "type 1"
+  hydroxyl_o: "type 3"
+
+analyses:
+  - name: density
+    tag: xy
+    sel: [tma]
+    sum_axis: z
+  - name: lineardensity
+    sel: [tma]
+    dim: z
+  - name: rdf
+    sel: [hydroxyl_o, carbonyl_o]
+    range: [2.0, 12.0]
+    nbins: 50
+  - name: hbond
+    sel: [tma_o, tma_h, tma_o]
+  - name: hbond_type
+    sel: [tma_o, tma_h, tma_o]
+  - name: hbond_lifetime
+    sel: [tma_o, tma_h, tma_o]
+    tau_max_ps: 20
+  - name: msd
+    sel: [tma]
+  - name: velocity
+    sel: [tma, tma]
+    dim: z
+    vdim: z
+    bin_width: 2.0
