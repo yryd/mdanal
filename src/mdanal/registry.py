@@ -11,11 +11,12 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
+from .annotations import parse as parse_annotations
 from .errors import ValidationError
 from .system import SystemConfig
 
 API_VERSION = 1
-RESERVED_KEYS = {"name", "tag", "sel"}
+RESERVED_KEYS = {"name", "tag", "sel", "annotate"}
 TAG_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 KNOWN_REQUIREMENTS = {"velocities"}
 COORDINATE_NEEDS = ("in_box", "continuous", "any")
@@ -46,6 +47,7 @@ class PlanItem:
     selections: tuple[str, ...]
     params: Mapping[str, Any]
     definition: AnalysisDef
+    annotations: tuple[dict[str, Any], ...] = ()
 
     @property
     def needs_velocity(self) -> bool:
@@ -247,6 +249,14 @@ def build_plan(
         params = dict(definition.params)
         params.update({k: v for k, v in entry.items() if k not in RESERVED_KEYS})
 
+        try:
+            annotations = parse_annotations(
+                entry.get("annotate"), f"analyses[{index}]"
+            )
+        except ValidationError as exc:
+            problems.append(str(exc))
+            continue
+
         items.append(
             PlanItem(
                 order=index,
@@ -256,6 +266,7 @@ def build_plan(
                 selections=tuple(str(s) for s in selections),
                 params=params,
                 definition=definition,
+                annotations=annotations,
             )
         )
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import chart
+from .. import annotations, chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
@@ -127,6 +127,7 @@ def figures(ctx, tables):
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
     chart.legend(ax)
+    annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [("hbond_lifetime", fig)]

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import chart
+from .. import annotations, chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
@@ -118,6 +118,7 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
     )
     ax.set_xlabel(ctx.label(suffix))
     ax.set_title(ctx.label("title"))
+    annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return fig

@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.lineardensity import LinearDensity
 
-from .. import chart, plotutil
+from .. import annotations, chart, plotutil
 
 AXES = ("x", "y", "z")
 
@@ -48,6 +48,7 @@ def figures(ctx, tables):
     ax.set_ylabel(ctx.label("mass"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "x", ctx.window(axis))
+    annotations.draw(ax, ctx, axes={"x": axis})
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

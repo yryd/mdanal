@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from .. import chart
+from .. import annotations, chart
 
 COUNT_COLUMNS = ("帧", "时间 (ps)", "氢键数")
 OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
@@ -60,6 +60,7 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
+    annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [("hbond_count", fig)]

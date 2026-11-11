@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.msd import EinsteinMSD
 
-from .. import chart
+from .. import annotations, chart
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -33,6 +33,7 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
+    annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

@@ -87,6 +87,11 @@ class RunContext:
         return self.plan_item.params
 
     @property
+    def annotations(self) -> tuple[dict[str, Any], ...]:
+        """该条分析上的图内标注声明。"""
+        return self.plan_item.annotations
+
+    @property
     def frame_dt_ps(self) -> float:
         return self.system.dump_every * self.system.dt_ps
 

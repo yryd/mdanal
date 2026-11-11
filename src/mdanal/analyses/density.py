@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.density import DensityAnalysis
 
-from .. import chart, plotutil
+from .. import annotations, chart, plotutil
 from ..errors import ValidationError
 from ..writers import project_grid
 
@@ -102,6 +102,7 @@ def figures(ctx, tables):
     ax.set_ylabel(ctx.label(f"axis_{b}"))
     ax.set_title(ctx.label("title"))
     chart.colorbar(fig, ax, mesh, ctx.label("cbar"))
+    annotations.draw(ax, ctx, axes={"x": a, "y": b})
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

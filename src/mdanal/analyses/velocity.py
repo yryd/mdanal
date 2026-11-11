@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import chart, plotutil
+from .. import annotations, chart, plotutil
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
@@ -69,6 +69,7 @@ def figures(ctx, tables):
     ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "x", ctx.window(axis))
+    annotations.draw(ax, ctx, axes={"x": axis})
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]
