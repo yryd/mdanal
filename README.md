@@ -9,6 +9,8 @@
 - 每个分析独立输出目录，互不覆盖
 - 输出可复现：相同输入得到逐字节一致的结果
 - 图为静态 PNG，分辨率可调
+- 图内标注：竖线、参考线、区间阴影、文字，写在 `system.yaml` 里
+- 公共绘图层 `mdanal.chart`：不读轨迹，直接用自己的数据出图
 
 ## 环境要求
 
@@ -44,6 +46,22 @@ mdanal run --system DIR --out OUT              # 执行分析
 | `--force` | 清空并重写已存在的输出目录（仅限本程序的输出） | 关闭 |
 
 源码运行时把 `mdanal` 换成 `python main.py`。
+
+## 自己画图
+
+`mdanal.chart` 是公共绘图层：程序内出图与你自己出图走同一套样式与语汇，不需要体系目录。
+
+```python
+from mdanal import chart
+
+fig, ax = chart.figure("single")          # single / wide / map，或 (宽, 高)
+chart.line(ax, x, y, label="5 ns")        # 也可 line/bars/heatmap/refline/vline/span/note
+ax.set_xlabel("z (Å)")
+chart.save(fig, "profile.png", dpi=300)
+```
+
+完整示例见 `example/plot_from_data.py`。
+
 
 ## 配置
 
@@ -89,6 +107,24 @@ analyses:
 | `analyses` | 要执行的分析列表 |
 
 `analyses` 每条只有 `name` 必填；`sel` 的长度须等于该分析的选择数；其余键覆盖 `analyses.yaml` 中的默认参数。`tag` 用于区分同一种分析的多次输出。
+
+### 图内标注（可选）
+
+每条分析可以带 `annotate`，标注**属于这一条分析**，`axis` 必填——`density-xz` 的横轴是 x、
+`lineardensity` 的横轴是 z，同一个位置在两处含义不同：
+
+```yaml
+  - name: lineardensity
+    sel: [water_o]
+    dim: z
+    annotate:
+      - {kind: vline, axis: z, at: 22.0, text: 界面}
+      - {kind: span,  axis: z, at: [17.0, 29.0], text: 缝内}
+      - {kind: hline, at: 0.5, text: 参考}
+      - {kind: text,  at: [5.0, 0.8], text: bulk}
+```
+
+`vline` / `span` 只在该图横轴等于所写 `axis` 时生效，其余情况跳过；`hline` / `text` 按图的数值坐标放置。
 
 ### 坐标与视图
 
@@ -201,10 +237,11 @@ def figures(ctx, tables):
 ## 测试
 
 ```bash
-MDANAL_SYSTEM=/path/to/system python -m pytest tests -q
+python -m pytest tests -q
 ```
 
-`MDANAL_SYSTEM` 指向包含 `system.yaml` 与轨迹的目录；未设置时测试跳过。
+测试跑在 `tests/fixtures/tiny`——真实 LAMMPS 输出的 20 帧截取（24 个 TMA、504 原子），
+不需要外部算例，也不需要设置环境变量。
 
 ## 限制
 
