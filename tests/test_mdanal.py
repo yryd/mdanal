@@ -431,6 +431,8 @@ def test_all_analyses_render_both_languages(tmp_path):
         ) == 0
         provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
         assert len(provenance["analyses"]) == 8
+        # 夹具含 velocity：MAICoS 会就地改坐标，故整轮不读入内存
+        assert provenance["memory"]["enabled"] is False
         figures = list(out.glob("*/figures/*.png"))
         assert len(figures) == 8
         assert all(path.stat().st_size > 1000 for path in figures)
@@ -770,3 +772,122 @@ def test_missing_package_reported(real, monkeypatch):
     monkeypatch.setattr(registry_module.importlib.metadata, "version", missing)
     problems = check_packages(plan)
     assert problems and "未安装" in problems[0]
+
+
+# --------------------------------------------------------------------------- #
+# 多段轨迹
+# --------------------------------------------------------------------------- #
+
+
+def _split_trajectory(directory: Path) -> tuple[Path, Path, int]:
+    """把夹具轨迹从中间切成两段，返回 (第一段, 第二段, 总帧数)。"""
+    lines = (SYSTEM / "run.lammpstrj").read_text(encoding="utf-8").splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.startswith("ITEM: TIMESTEP")]
+    cut = starts[len(starts) // 2]
+    first = directory / "a.lammpstrj"
+    second = directory / "b.lammpstrj"
+    first.write_text("".join(lines[:cut]), encoding="utf-8")
+    second.write_text("".join(lines[cut:]), encoding="utf-8")
+    return first, second, len(starts)
+
+
+def _segmented_system(directory: Path, trajectory: str) -> Path:
+    """照抄夹具体系，只换轨迹与绝对路径。"""
+    content = (SYSTEM / "system.yaml").read_text(encoding="utf-8")
+    content = content.replace("topology: data.lmp", f"topology: {SYSTEM / 'data.lmp'}")
+    content = content.replace("trajectory: run.lammpstrj", f"trajectory: {trajectory}")
+    content = content.replace(
+        "from_data: data.lmp", f"from_data: {SYSTEM / 'data.lmp'}"
+    )
+    path = directory / "system.yaml"
+    path.write_text(content, encoding="utf-8")
+    return path
+
+
+def test_merged_segments_match_single_file(tmp_path):
+    """两段合并后的八条分析，必须与单文件跑出来的表逐字节一致。"""
+    first, second, total = _split_trajectory(tmp_path)
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    path = _segmented_system(merged, f"[{first}, {second}]")
+
+    out_merged = tmp_path / "out-merged"
+    out_single = tmp_path / "out-single"
+    assert cli.main(["run", "--system", str(path), "--out", str(out_merged)]) == 0
+    assert cli.main(["run", "--system", str(SYSTEM), "--out", str(out_single)]) == 0
+
+    provenance = json.loads((out_merged / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["trajectory"]["segments"]["count"] == 2
+    assert provenance["trajectory"]["segments"]["frames"] == [total // 2, total - total // 2]
+    assert len(provenance["frames"]) == 4  # start/stop/n_frames/frame_dt_ps
+
+    for table in out_single.glob("*/tables/*.csv"):
+        relative = table.relative_to(out_single)
+        assert (out_merged / relative).read_bytes() == table.read_bytes(), relative
+
+
+def test_segment_state_mismatch_is_rejected(tmp_path):
+    first, second, _ = _split_trajectory(tmp_path)
+    text = second.read_text(encoding="utf-8")
+    second.write_text(
+        text.replace("xu yu zu", "x y z", 1), encoding="utf-8"
+    )
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    path = _segmented_system(merged, f"[{first}, {second}]")
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+
+
+def test_seam_time_backward_is_reported(tmp_path):
+    first, second, _ = _split_trajectory(tmp_path)
+    text = second.read_text(encoding="utf-8")
+    # 把第二段首帧的步数改成 0：续跑常见的时间倒退
+    lines = text.splitlines(keepends=True)
+    for index, line in enumerate(lines):
+        if line.startswith("ITEM: TIMESTEP"):
+            lines[index + 1] = "0\n"
+            break
+    second.write_text("".join(lines), encoding="utf-8")
+
+    merged = tmp_path / "merged"
+    merged.mkdir()
+    path = _segmented_system(merged, f"[{first}, {second}]")
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    notes = provenance["trajectory"]["segments"]["seam_notes"]
+    assert any("不大于" in note for note in notes)
+
+
+# --------------------------------------------------------------------------- #
+# 轨迹读入内存
+# --------------------------------------------------------------------------- #
+
+
+def test_memory_and_disk_runs_agree(tmp_path):
+    """默认读入内存与 --no-memory 的结果必须逐字节一致。"""
+    cfg = read_system(SYSTEM)
+    path = _write_system(
+        tmp_path, cfg.topology, cfg.trajectory,
+        '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}\n'
+        '  - {name: hbond, sel: ["type 1 3", "type 5 6", "type 1 3"]}',
+    )
+    memory, disk = tmp_path / "memory", tmp_path / "disk"
+    assert cli.main(["run", "--system", str(path), "--out", str(memory)]) == 0
+    assert cli.main(
+        ["run", "--system", str(path), "--out", str(disk), "--no-memory"]
+    ) == 0
+
+    for relative in (
+        "lineardensity/tables/lineardensity_z.csv",
+        "hbond/tables/hbond_count.csv",
+        "hbond/figures/hbond_count.png",
+    ):
+        assert (memory / relative).read_bytes() == (disk / relative).read_bytes()
+
+    enabled = json.loads((memory / "provenance.json").read_text(encoding="utf-8"))
+    disabled = json.loads((disk / "provenance.json").read_text(encoding="utf-8"))
+    assert enabled["memory"]["enabled"] is True
+    assert disabled["memory"]["enabled"] is False

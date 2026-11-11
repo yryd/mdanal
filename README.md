@@ -44,6 +44,7 @@ mdanal run --system DIR --out OUT              # 执行分析
 | `--dpi N` | 图片分辨率 | 300 |
 | `--annotate` | 在图内标注帧窗口与参数 | 关闭 |
 | `--force` | 清空并重写已存在的输出目录（仅限本程序的输出） | 关闭 |
+| `--no-memory` | 不把轨迹读入内存，按需读盘 | 关闭（默认自动读入） |
 
 源码运行时把 `mdanal` 换成 `python main.py`。
 
@@ -97,7 +98,7 @@ analyses:
 | 字段 | 说明 |
 |---|---|
 | `name` | 体系名，用于日志与溯源；省略时取目录名 |
-| `topology` / `trajectory` | 拓扑与轨迹文件；省略时在文件所在目录内唯一查找 |
+| `topology` / `trajectory` | 拓扑与轨迹文件；`trajectory` 可写列表（多段合并）；省略时在文件所在目录内唯一查找 |
 | `timestep_fs` | 时间步长（fs） |
 | `dump_every` | 输出间隔（步） |
 | `frames` | 帧窗口，左闭右开；省略时使用全部帧 |
@@ -135,6 +136,20 @@ analyses:
 - `view.window` 只裁剪图件的坐标轴范围，不改数据表；某个轴没写就不裁。
 - 轨迹为包裹坐标时，`msd` 会用 `NoJump` 重建连续性并给出提示。
 - 程序内部按盒坐标（`0 … L`）计算，视图偏移只影响选择串的求值与输出表图的坐标。
+
+### 多段轨迹（续跑）
+
+`trajectory` 可以写列表，按顺序拼成一条轨迹：
+
+```yaml
+trajectory: [run.lammpstrj, run.step2.lammpstrj]
+```
+
+- 帧号与时间轴按合并后的整体计算（`t = 帧序号 × dump_every × timestep_fs`）；
+- dump 里的 TIMESTEP 列不参与时间换算——续跑常把它重置为 0；
+- 各段的坐标列必须一致（`x y z` 或 `xu yu zu`），不一致直接报错；
+- 接缝处的时间倒退、盒下角变化会写进 `provenance.json` 并作为提示打印；
+- 段与段之间若重复写了一帧，程序**不会**自动去重，请在生成轨迹时裁掉。
 
 ### 命名（可选）
 

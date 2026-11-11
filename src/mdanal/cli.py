@@ -64,7 +64,9 @@ def cmd_check(args: argparse.Namespace) -> int:
 
 
 def cmd_run(args: argparse.Namespace) -> int:
-    prepared, problems, warnings = _prepare(args.system)
+    prepared, problems, warnings = _prepare(
+        args.system, memory=not args.no_memory
+    )
     _print_inspection(prepared, warnings)
     _raise_if_problems(problems)
 
@@ -100,16 +102,17 @@ def cmd_help(args: argparse.Namespace) -> int:
 # --------------------------------------------------------------------------- #
 
 
-def _prepare(path: str) -> tuple[Prepared, list[str], list[str]]:
+def _prepare(path: str, *, memory: bool = True) -> tuple[Prepared, list[str], list[str]]:
     """读配置 → 建计划 → 查依赖 → 建视图 → 解析分组，返回 (输入, 问题, 提示)。"""
     cfg = read_system(path)
     registry = load_registry(REGISTRY_PATH)
     plan = build_plan(cfg, registry)
 
     problems: list[str] = list(check_packages(plan))
-    prepared = prepare(cfg, plan)
+    prepared = prepare(cfg, plan, memory=memory)
     problems.extend(check_requirements(plan, prepared.views["in_box"]))
     warnings = [UNKNOWN_INPUT_WARNING] if cfg.input_state == "unknown" else []
+    warnings.extend(cfg.seam_notes)
     if prepared.naming is not None and prepared.naming.warning:
         warnings.append(prepared.naming.warning)
     return prepared, problems, warnings
@@ -120,8 +123,10 @@ def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
     in_box = prepared.views["in_box"]
     print(f"体系：{cfg.name}（{cfg.directory}）")
     print(f"配置：{cfg.yaml_path.name}    分析：{len(prepared.plan)} 条")
+    segments = len(cfg.all_trajectories)
+    prefix = f"轨迹：{segments} 段合并，" if segments > 1 else "轨迹："
     print(
-        f"轨迹：{len(in_box.trajectory)} 帧    "
+        f"{prefix}{len(in_box.trajectory)} 帧    "
         f"窗口：[{prepared.start}, {prepared.stop})    原子：{in_box.atoms.n_atoms}"
     )
     print(f"输入：{_input_text(cfg)}")
@@ -183,7 +188,8 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
     print(f"体系：{cfg.name}")
     print(f"目录：{cfg.directory}")
     print(f"配置：{cfg.yaml_path}")
-    print(f"拓扑：{cfg.topology.name}    轨迹：{cfg.trajectory.name}")
+    names = " + ".join(path.name for path in cfg.all_trajectories)
+    print(f"拓扑：{cfg.topology.name}    轨迹：{names}")
     print(
         f"时间步长：{cfg.timestep_fs} fs    "
         f"每帧时间：{cfg.dump_every * cfg.dt_ps:g} ps"
@@ -292,6 +298,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--dpi", type=int, help="图片分辨率（默认取 defaults.yaml）")
     run.add_argument("--annotate", action="store_true", help="在图内标注帧窗口与参数")
     run.add_argument("--force", action="store_true", help="允许覆盖已存在的输出目录")
+    run.add_argument(
+        "--no-memory", action="store_true", help="不把轨迹读入内存，按需读盘"
+    )
     run.set_defaults(func=cmd_run)
 
     check = subparsers.add_parser("check", help="只校验，不计算")

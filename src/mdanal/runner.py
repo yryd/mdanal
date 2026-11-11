@@ -52,6 +52,8 @@ class Prepared:
     stop: int
     selection_frame: int
     naming: NamingSummary | None = None
+    materialized: Mapping[str, bool] = field(default_factory=dict)
+    segment_frames: tuple[int, ...] = ()
 
     def item_groups(self, item: PlanItem) -> dict[str, Group]:
         """在分析所用视图上按原子索引重建该分析的选择。"""
@@ -125,8 +127,18 @@ class RunContext:
 # --------------------------------------------------------------------------- #
 
 
-def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
-    """构建计划所需的视图，并在帧窗口首帧一次性解析全部分析的选择。"""
+MEMORY_LIMIT = 1 << 30  # 单次读入内存的上限（字节）
+MEMORY_MIN_FRAMES = 5
+
+
+def prepare(
+    cfg: SystemConfig, plan: Sequence[PlanItem], *, memory: bool = True
+) -> Prepared:
+    """构建计划所需的视图，并在帧窗口首帧一次性解析全部分析的选择。
+
+    `memory=True` 时若估算内存放得下，就把轨迹一次读入内存：各分析随后扫内存，
+    不再各自重读一遍文件。
+    """
     if not plan:
         raise ValidationError("没有要运行的分析", where=str(cfg.yaml_path))
 
@@ -148,6 +160,14 @@ def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
 
     in_box = views["in_box"]
     start, stop = frame_window(cfg, in_box)
+    segment_frames = tuple(_segment_frames(in_box))
+    # MAICoS 会就地改写坐标（unwrap/pack），内存读取下这些改写会留给同一次运行的下一条分析，
+    # 故只要有 velocity 就不读入内存。
+    allow_memory = memory and not any(item.name == "velocity" for item in plan)
+    materialized = {
+        key: _materialize(universe) if allow_memory else False
+        for key, universe in views.items()
+    }
     seek_frame(in_box, start)
     groups = {
         item.order: {
@@ -165,6 +185,8 @@ def prepare(cfg: SystemConfig, plan: Sequence[PlanItem]) -> Prepared:
         stop=stop,
         selection_frame=start,
         naming=naming_summary,
+        materialized=materialized,
+        segment_frames=segment_frames,
     )
 
 
@@ -261,6 +283,16 @@ def execute(
             "trajectory": {
                 "path": str(cfg.trajectory),
                 "sha256": sha256(cfg.trajectory),
+                "parts": [
+                    {"path": str(path), "sha256": sha256(path)}
+                    for path in cfg.all_trajectories
+                ],
+                "segments": {
+                    "count": len(cfg.all_trajectories),
+                    "frames": list(prepared.segment_frames),
+                    "steps": [list(pair) for pair in cfg.segment_steps],
+                    "seam_notes": list(cfg.seam_notes),
+                },
             },
             "input": {
                 "coordinates": cfg.input_state,
@@ -280,6 +312,10 @@ def execute(
                 "stop": prepared.stop,
                 "n_frames": len(prepared.views["in_box"].trajectory),
                 "frame_dt_ps": prepared.cfg.dump_every * prepared.cfg.dt_ps,
+            },
+            "memory": {
+                "enabled": any(prepared.materialized.values()),
+                "views": dict(prepared.materialized),
             },
             "render": {
                 "language": options.lang,
@@ -408,6 +444,26 @@ def _collect_meta(module, ctx: RunContext, tables, item: PlanItem) -> dict:
         raise MdanalError(
             f"{item.directory} 生成元数据失败：{exc}", where=str(ctx.system.yaml_path)
         ) from exc
+
+
+def _materialize(universe) -> bool:
+    """估算内存后把轨迹一次读入；放不下则保持按需读盘。"""
+    n_frames = len(universe.trajectory)
+    n_atoms = universe.atoms.n_atoms
+    has_velocity = bool(universe.trajectory.ts.has_velocities)
+    estimate = n_frames * n_atoms * (6 if has_velocity else 3) * 4
+    if n_frames < MEMORY_MIN_FRAMES or estimate > MEMORY_LIMIT:
+        return False
+    universe.transfer_to_memory()
+    return True
+
+
+def _segment_frames(universe) -> list[int]:
+    """各段轨迹的帧数；单段时就是一个元素。"""
+    readers = getattr(universe.trajectory, "readers", None)
+    if readers:
+        return [int(reader.n_frames) for reader in readers]
+    return [int(len(universe.trajectory))]
 
 
 def _library_versions() -> dict[str, str]:
