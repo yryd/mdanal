@@ -76,6 +76,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         dpi=args.dpi or int(defaults["dpi"]),
         annotate=bool(args.annotate or defaults["annotate"]),
         force=bool(args.force),
+        aligned=bool(args.aligned),
         figure_sizes={
             key: tuple(float(v) for v in size)
             for key, size in defaults["figure"].items()
@@ -300,6 +301,9 @@ def build_parser() -> argparse.ArgumentParser:
     run.add_argument("--force", action="store_true", help="允许覆盖已存在的输出目录")
     run.add_argument(
         "--no-memory", action="store_true", help="不把轨迹读入内存，按需读盘"
+    )
+    run.add_argument(
+        "--aligned", action="store_true", help="另写一份施加视图平移后的数据表"
     )
     run.set_defaults(func=cmd_run)
 

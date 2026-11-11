@@ -26,7 +26,13 @@ from .system import (
     resolve_group,
     seek_frame,
 )
-from .writers import sha256, write_manifest, write_provenance, write_tables
+from .writers import (
+    sha256,
+    write_aligned,
+    write_manifest,
+    write_provenance,
+    write_tables,
+)
 
 
 @dataclass
@@ -35,6 +41,7 @@ class RunOptions:
     dpi: int = 300
     annotate: bool = False
     force: bool = False
+    aligned: bool = False
     figure_sizes: Mapping[str, tuple[float, float]] = field(
         default_factory=lambda: {"single": (3.5, 2.6), "wide": (7.0, 3.2), "map": (4.2, 3.0)}
     )
@@ -233,6 +240,8 @@ def execute(
         tables = _run_module(module, ctx, item)
         target = outdir / item.directory
         table_paths = write_tables(target, tables)
+        if options.aligned:
+            write_aligned(target, tables, cfg.view.shift)
         figure_paths = _draw_figures(module, ctx, item, tables, target, options.dpi)
 
         meta = _collect_meta(module, ctx, tables, item)
@@ -298,6 +307,10 @@ def execute(
                 "coordinates": cfg.input_state,
                 "detected_from": cfg.input_evidence,
             },
+            "box": {
+                "length": _box_length(prepared),
+                "at_frame": prepared.start,
+            },
             "view": {
                 "origin": list(cfg.view.origin),
                 "shift": list(cfg.view.shift),
@@ -321,6 +334,7 @@ def execute(
                 "language": options.lang,
                 "dpi": options.dpi,
                 "annotate": options.annotate,
+                "aligned": options.aligned,
             },
             "analyses": details,
             "libraries": _library_versions(),
@@ -444,6 +458,13 @@ def _collect_meta(module, ctx: RunContext, tables, item: PlanItem) -> dict:
         raise MdanalError(
             f"{item.directory} 生成元数据失败：{exc}", where=str(ctx.system.yaml_path)
         ) from exc
+
+
+def _box_length(prepared: Prepared) -> list[float]:
+    """记录帧窗口首帧的盒长，供对比层对齐使用。"""
+    universe = prepared.views["in_box"]
+    universe.trajectory[prepared.start]
+    return [float(value) for value in universe.dimensions[:3]]
 
 
 def _materialize(universe) -> bool:

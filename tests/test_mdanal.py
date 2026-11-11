@@ -318,7 +318,8 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     assert 0.85 <= width / nominal <= 1.05
 
 
-def test_view_origin_shifts_selection_and_tables(real, tmp_path):
+def test_view_origin_shifts_selection_and_aligned_tables(real, tmp_path):
+    """表恒为盒坐标；改 origin 只影响选择串与 --aligned 副本。"""
     cfg, _ = real
     analyses = '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}'
     origin = 5.0
@@ -331,15 +332,22 @@ def test_view_origin_shifts_selection_and_tables(real, tmp_path):
         directory = tmp_path / name
         directory.mkdir()
         paths[name] = _write_system(directory, cfg.topology, cfg.trajectory, analyses, extra=extra)
-        assert cli.main(["run", "--system", str(paths[name]), "--out", str(directory / "out")]) == 0
+        assert cli.main(
+            ["run", "--system", str(paths[name]), "--out", str(directory / "out"), "--aligned"]
+        ) == 0
 
     plain = pd.read_csv(tmp_path / "plain/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
     shifted = pd.read_csv(tmp_path / "shifted/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
-    assert len(plain) == len(shifted)
-    assert np.allclose(plain["z (Å)"] - shifted["z (Å)"], origin)
-    # 改 origin 只平移坐标，剖面数值必须逐行不变
-    assert np.allclose(plain["质量密度 (g/cm^3)"], shifted["质量密度 (g/cm^3)"])
-    assert np.allclose(plain["电荷密度 (e/Å^3)"], shifted["电荷密度 (e/Å^3)"])
+    pd.testing.assert_frame_equal(plain, shifted)  # 正表与呈现无关
+
+    plain_aligned = pd.read_csv(
+        tmp_path / "plain/out/lineardensity/tables/lineardensity_z.aligned.csv", encoding="utf-8-sig"
+    )
+    shifted_aligned = pd.read_csv(
+        tmp_path / "shifted/out/lineardensity/tables/lineardensity_z.aligned.csv", encoding="utf-8-sig"
+    )
+    assert np.allclose(plain_aligned["z (Å)"] - shifted_aligned["z (Å)"], origin)
+    assert np.allclose(plain_aligned["质量密度 (g/cm^3)"], shifted_aligned["质量密度 (g/cm^3)"])
 
     # 选择串按视图坐标书写：同一批原子在新坐标下的区间随之平移
     plain_cfg = read_system(paths["plain"])
@@ -470,30 +478,28 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     universe.trajectory[START]
     length = float(universe.dimensions[2])
     low = probe.view.lower[2]
-    reference = universe.select_atoms("type 1 3").center_of_mass()[2]
+    reference = universe.select_atoms("type 1 3").center_of_mass()[2]  # 盒坐标
 
     velocity = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")
     assert list(velocity.columns) == ["z (Å)", "vx (Å/ps)", "误差 (Å/ps)"]
     z = velocity["z (Å)"]
 
-    # 剖面网格覆盖盒长，且落在视图坐标内
-    reference += low
+    # 剖面网格覆盖盒长，坐标是盒坐标
     assert z.max() - z.min() < length
-    assert z.min() >= low
-    assert z.max() <= low + length
+    assert z.min() >= 0.0
+    assert z.max() <= length
 
     meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))["analyses"][1]["meta"]
     assert meta["ref_com"] == pytest.approx(reference, abs=1e-9)
     assert meta["ref_frame"] == START
 
-    # 与 lineardensity 同框架：后者的网格起点就是视图坐标下的盒下角。
-    # 库给出的 bin 宽为 max(L)/n_bins，不正好等于 binsize，按实际间距反推。
+    # 与 lineardensity 同框架：网格起点就是盒下角（0）。
     lineardensity = pd.read_csv(
         out / "lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig"
     )
     centers = lineardensity["z (Å)"].to_numpy()
     spacing = float(centers[1] - centers[0])
-    assert centers[0] - spacing / 2 == pytest.approx(low, abs=1e-5)
+    assert centers[0] - spacing / 2 == pytest.approx(0.0, abs=1e-5)
 
 
 def test_velocity_axis_accepts_axis_names(real, tmp_path):
@@ -891,3 +897,48 @@ def test_memory_and_disk_runs_agree(tmp_path):
     disabled = json.loads((disk / "provenance.json").read_text(encoding="utf-8"))
     assert enabled["memory"]["enabled"] is True
     assert disabled["memory"]["enabled"] is False
+
+
+# --------------------------------------------------------------------------- #
+# 表坐标与 aligned 副本
+# --------------------------------------------------------------------------- #
+
+
+def test_aligned_tables_equal_plain_plus_shift(tmp_path):
+    """正表是盒坐标；--aligned 副本的坐标列恰好加上视图平移。"""
+    out = tmp_path / "out"
+    assert cli.main(
+        ["run", "--system", str(SYSTEM), "--out", str(out), "--aligned"]
+    ) == 0
+    cfg = read_system(SYSTEM)
+
+    checked = 0
+    for plain_path in out.glob("*/tables/*.csv"):
+        if plain_path.name.endswith(".aligned.csv"):
+            continue
+        aligned_path = plain_path.with_name(
+            plain_path.name.replace(".csv", ".aligned.csv")
+        )
+        assert aligned_path.is_file(), aligned_path
+        plain = pd.read_csv(plain_path, encoding="utf-8-sig")
+        aligned = pd.read_csv(aligned_path, encoding="utf-8-sig")
+
+        coordinate_columns = [
+            column for column in plain.columns
+            if column in ("x (Å)", "y (Å)", "z (Å)")
+        ]
+        for column in plain.columns:
+            if column in coordinate_columns:
+                axis = column.split(" ")[0]
+                delta = aligned[column] - plain[column]
+                assert np.allclose(delta, cfg.view.shift["xyz".index(axis)]), column
+                checked += 1
+            else:
+                pd.testing.assert_series_equal(
+                    aligned[column], plain[column], check_names=False
+                )
+    assert checked > 0
+
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["render"]["aligned"] is True
+    assert len(provenance["box"]["length"]) == 3

@@ -41,11 +41,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         for i, axis in enumerate(AXES)
     }
 
+    # 表里是盒坐标（0…L）；视图平移只在出图时施加
     center_a, center_b, density, keep = project_grid(grid.grid, grid.edges, sum_axis)
     a, b = AXES[keep[0]], AXES[keep[1]]
-    lower = ctx.system.view.lower
-    center_a = center_a + lower[keep[0]]
-    center_b = center_b + lower[keep[1]]
 
     # 平面场要摊平成 (坐标, 坐标, 值) 三列；density[i, j] 对应 (a_i, b_j)
     grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")
@@ -79,11 +77,14 @@ def figures(ctx, tables):
     keep = [axis for axis in AXES if axis != sum_axis]
     a, b = keep[0], keep[1]
 
+    shift = ctx.system.view.shift
+    shift_a, shift_b = shift[AXES.index(a)], shift[AXES.index(b)]
+
     fig, ax = chart.figure(ctx.size("map"))
     mesh = chart.heatmap(
         ax,
-        pivot.columns.to_numpy(),
-        pivot.index.to_numpy(),
+        pivot.columns.to_numpy() + shift_a,
+        pivot.index.to_numpy() + shift_b,
         pivot.to_numpy(),
         shading="auto",
         cmap=chart.density_cmap(),

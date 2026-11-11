@@ -77,8 +77,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         n_bins = int(
             np.searchsorted(bin_edges, lengths[AXES.index(axis)], side="right") - 1
         )
+        # 表里是盒坐标（0…L）；视图平移只在出图时施加
         centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])[:n_bins]
-        centers = centers + ctx.system.view.lower[AXES.index(axis)]
         tables[f"lineardensity_{axis}"] = pd.DataFrame(
             {
                 f"{axis} (Å)": centers,
@@ -95,8 +95,9 @@ def figures(ctx, tables):
     table = tables[name]
     cols = list(table.columns)
 
+    shift = ctx.system.view.shift[AXES.index(axis)]
     fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, table[cols[0]], table[cols[1]], lw=1.2)
+    chart.line(ax, np.asarray(table[cols[0]]) + shift, table[cols[1]], lw=1.2)
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label("mass"))
     ax.set_title(ctx.label("title"))

@@ -16,10 +16,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     dim, vdim, axis = _axes(ctx)
 
-    # 剖面坐标以参考组质心为零点；把该质心加回去即视图坐标
+    # 剖面坐标以参考组质心为零点；把该质心加回去即盒坐标
     ctx.universe.trajectory[ctx.selection_frame]
-    lower = ctx.system.view.lower[dim]
-    ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim]) + lower
+    ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim])
     ctx.extras["velocity_ref"] = ref
 
     analysis = VelocityPlanar(
@@ -63,8 +62,9 @@ def figures(ctx, tables):
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
     velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
+    shift = ctx.system.view.shift[dim]
     fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, coordinate, velocity_plot, lw=1.2)
+    chart.line(ax, coordinate + shift, velocity_plot, lw=1.2)
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
     ax.set_title(ctx.label("title"))
