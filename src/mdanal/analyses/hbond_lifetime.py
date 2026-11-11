@@ -14,6 +14,14 @@ LEVEL = 1.0 / np.e
 MAX_FRAME_PS = 1.0
 
 
+COMPARE = {
+    "table": "hbond_lifetime",
+    "x": "滞后 (ps)",
+    "y": ["连续", "间歇"],
+    "box_axis": False,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     tau_max_ps = float(ctx.params["tau_max_ps"])
     intermittency = int(ctx.params["intermittency"])

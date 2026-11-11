@@ -11,6 +11,7 @@
 - 图为静态 PNG，分辨率可调
 - 图内标注：竖线、参考线、区间阴影、文字，写在 `system.yaml` 里
 - 公共绘图层 `mdanal.chart`：不读轨迹，直接用自己的数据出图
+- 多体系对比：读已有输出叠图，按盒对齐或锚点对齐
 
 ## 环境要求
 
@@ -63,6 +64,33 @@ chart.save(fig, "profile.png", dpi=300)
 
 完整示例见 `example/plot_from_data.py`。
 
+
+## 多体系对比
+
+把多个体系的同类一维结果叠在一张图上；只读已有输出（表 + 溯源），不重读轨迹。
+
+```yaml
+# compare.yaml
+items:
+  - {root: runs/test5/out, label: 5 ns}
+  - {root: runs/test075/out, label: 75%, anchor: {z: 22.0}, t_offset: 5.0}
+figure:
+  analysis: lineardensity     # 各运行里的分析目录名
+  align: center               # left / center / {z: 22.0}
+  xlim: [-20, 20]
+out: compare
+```
+
+```bash
+mdanal compare --config compare.yaml [--out DIR]
+```
+
+- 只叠一维曲线（`lineardensity`、`velocity`、`rdf`、`msd`、`hbond`、`hbond_lifetime`）；
+  二维密度图没法叠在一张等值图上，各自出图；
+- 横轴是盒坐标的分析参与对齐：`left`（盒下角 → 0）、`center`（盒心 → 0，默认）、
+  或直接写数值当锚点；每个体系可用 `anchor` 单独覆盖；
+- 缺省横轴范围取各体系该轴平移后的并集；`t_offset` 用来平移时间轴的零点；
+- 输出：一张 PNG、合并后的对齐表 `tables/<表名>.csv`、`provenance.json`（每个体系的平移量）。
 
 ## 配置
 

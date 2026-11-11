@@ -10,6 +10,14 @@ from .. import annotations, chart
 from ..errors import ValidationError
 
 
+COMPARE = {
+    "table": "rdf",
+    "x": "r (Å)",
+    "y": ["g(r)"],
+    "box_axis": False,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     group_a = ctx.groups["a"]
     group_b = ctx.groups["b"]

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import importlib.metadata
 import json
+import shutil
 from pathlib import Path
 
 import MDAnalysis as mda
@@ -942,3 +943,81 @@ def test_aligned_tables_equal_plain_plus_shift(tmp_path):
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["render"]["aligned"] is True
     assert len(provenance["box"]["length"]) == 3
+
+
+# --------------------------------------------------------------------------- #
+# 多体系对比
+# --------------------------------------------------------------------------- #
+
+
+@pytest.fixture(scope="module")
+def compare_runs(tmp_path_factory):
+    """两个体系：同一份数据，视图零点不同（5 Å）。"""
+    base = tmp_path_factory.mktemp("compare")
+    for name in ("a", "b"):
+        shutil.copytree(SYSTEM, base / name)
+    config = base / "b" / "system.yaml"
+    config.write_text(
+        config.read_text(encoding="utf-8").replace(
+            "frames: [0, 20]", "frames: [0, 20]\n\nview:\n  origin: [0, 0, 5.0]"
+        ),
+        encoding="utf-8",
+    )
+    for name in ("a", "b"):
+        assert cli.main(
+            ["run", "--system", str(base / name), "--out", str(base / name / "out")]
+        ) == 0
+    return base
+
+
+def _compare_config(
+    directory: Path, align: str, runs: Path, analysis: str = "lineardensity"
+) -> Path:
+    config = directory / "compare.yaml"
+    config.write_text(
+        f"""items:
+  - {{root: {runs / 'a' / 'out'}, label: 零点 0}}
+  - {{root: {runs / 'b' / 'out'}, label: 零点 5}}
+figure:
+  analysis: {analysis}
+  align: {align}
+""",
+        encoding="utf-8",
+    )
+    return config
+
+
+def test_compare_aligns_box_axis(compare_runs, tmp_path):
+    box = json.loads(
+        (compare_runs / "a/out/provenance.json").read_text(encoding="utf-8")
+    )["box"]["length"]
+    length = float(box[2])  # 剖面沿 z
+
+    cases = {
+        "left": (0.0, length),
+        "center": (-0.5 * length, 0.5 * length),
+        "{z: 22.0}": (-22.0, length - 22.0),
+    }
+    for align, (low, high) in cases.items():
+        out = tmp_path / f"cmp-{align}"
+        config = _compare_config(tmp_path, align, compare_runs)
+        assert cli.main(["compare", "--config", str(config), "--out", str(out)]) == 0
+
+        provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+        assert provenance["xlim"] == pytest.approx([low, high])
+        expected_shift = {
+            "left": 0.0, "center": -0.5 * length, "{z: 22.0}": -22.0,
+        }[align]
+        assert all(
+            item["shift"]["z"] == pytest.approx(expected_shift)
+            for item in provenance["items"]
+        )
+
+        table = pd.read_csv(out / "tables" / "lineardensity_z.csv", encoding="utf-8-sig")
+        assert table["x"].min() >= low
+        assert table["x"].max() <= high
+
+
+def test_compare_rejects_two_dimensional_analysis(compare_runs, tmp_path):
+    config = _compare_config(tmp_path, "center", compare_runs, analysis="density-xy")
+    assert cli.main(["compare", "--config", str(config), "--out", str(tmp_path / "x")]) == 3

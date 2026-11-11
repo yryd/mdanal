@@ -11,6 +11,14 @@ from ..errors import ValidationError
 AXES = ("x", "y", "z")
 
 
+COMPARE = {
+    "table": "velocity",
+    "x": "{axis} (Å)",
+    "y": ["v{vdim} (Å/ps)"],
+    "box_axis": True,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     from maicos.modules.velocityplanar import VelocityPlanar
 

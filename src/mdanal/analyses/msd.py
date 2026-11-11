@@ -9,6 +9,14 @@ from MDAnalysis.analysis.msd import EinsteinMSD
 from .. import annotations, chart
 
 
+COMPARE = {
+    "table": "msd",
+    "x": "Δt (ps)",
+    "y": ["MSD (Å^2)"],
+    "box_axis": False,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     analysis = EinsteinMSD(
         ctx.groups["group"].atoms,

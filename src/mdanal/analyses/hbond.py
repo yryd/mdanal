@@ -24,6 +24,14 @@ def build_analysis(ctx) -> HydrogenBondAnalysis:
     )
 
 
+COMPARE = {
+    "table": "hbond_count",
+    "x": "时间 (ps)",
+    "y": ["氢键数"],
+    "box_axis": False,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     donor = ctx.groups["donor"]
 

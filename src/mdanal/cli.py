@@ -93,6 +93,14 @@ def cmd_run(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_compare(args: argparse.Namespace) -> int:
+    from .compare import run_compare
+
+    out = run_compare(args.config, args.out)
+    print(f"输出：{out}")
+    return EXIT_OK
+
+
 def cmd_help(args: argparse.Namespace) -> int:
     args.parser.print_help()
     return EXIT_OK
@@ -314,6 +322,13 @@ def build_parser() -> argparse.ArgumentParser:
     listing = subparsers.add_parser("list", help="列出分析或体系信息")
     listing.add_argument("--system", metavar="PATH", help="查看某个体系的分组与计划")
     listing.set_defaults(func=cmd_list)
+
+    compare = subparsers.add_parser(
+        "compare", help="按 compare.yaml 叠加多个体系的结果（只读已有输出）"
+    )
+    compare.add_argument("--config", required=True, metavar="FILE", help="对比配置")
+    compare.add_argument("--out", metavar="DIR", help="输出目录（默认取配置的 out）")
+    compare.set_defaults(func=cmd_compare)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")
     help_cmd.set_defaults(func=cmd_help, parser=parser)

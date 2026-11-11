@@ -19,6 +19,14 @@ AVOGADRO = constants["N_Avogadro"]
 VOLUME_CONVERSION = 1e-24  # Å^3 → cm^3
 
 
+COMPARE = {
+    "table": "lineardensity_{dim}",
+    "x": "{axis} (Å)",
+    "y": ["质量密度 (g/cm^3)"],
+    "box_axis": True,
+}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     binsize = float(ctx.params["binsize"])
     if binsize <= 0:
