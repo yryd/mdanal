@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import plotutil
+from .. import chart, plotutil
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
@@ -63,14 +63,14 @@ def figures(ctx, tables):
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
     velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
-    fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(coordinate, velocity_plot, lw=1.2)
+    fig, ax = chart.figure(ctx.size("single"))
+    chart.line(ax, coordinate, velocity_plot, lw=1.2)
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "x", ctx.window(axis))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [(name, fig)]
 
 

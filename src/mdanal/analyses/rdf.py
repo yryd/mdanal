@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.rdf import InterRDF
 
-from .. import plotutil
+from .. import chart
 from ..errors import ValidationError
 
 
@@ -37,12 +37,12 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 def figures(ctx, tables):
     name, table = next(iter(tables.items()))
     cols = list(table.columns)
-    fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(table[cols[0]], table[cols[1]], lw=1.2)
-    ax.axhline(1.0, ls="--", lw=0.6, color="0.6")
+    fig, ax = chart.figure(ctx.size("single"))
+    chart.line(ax, table[cols[0]], table[cols[1]], lw=1.2)
+    chart.refline(ax, 1.0, ls="--", lw=0.6, color="0.6")
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [(name, fig)]

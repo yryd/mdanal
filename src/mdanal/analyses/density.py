@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.density import DensityAnalysis
 
-from .. import plotutil
+from .. import chart, plotutil
 from ..errors import ValidationError
 from ..writers import project_grid
 
@@ -79,13 +79,14 @@ def figures(ctx, tables):
     keep = [axis for axis in AXES if axis != sum_axis]
     a, b = keep[0], keep[1]
 
-    fig, ax = plotutil.figure(ctx.size("map"))
-    mesh = ax.pcolormesh(
+    fig, ax = chart.figure(ctx.size("map"))
+    mesh = chart.heatmap(
+        ax,
         pivot.columns.to_numpy(),
         pivot.index.to_numpy(),
         pivot.to_numpy(),
         shading="auto",
-        cmap=plotutil.density_cmap(),
+        cmap=chart.density_cmap(),
     )
 
     x_range = plotutil.clip_window(ctx.window(a), plotutil.data_range(ax, "x"))
@@ -100,7 +101,7 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label(f"axis_{a}"))
     ax.set_ylabel(ctx.label(f"axis_{b}"))
     ax.set_title(ctx.label("title"))
-    plotutil.colorbar(fig, ax, mesh, ctx.label("cbar"))
+    chart.colorbar(fig, ax, mesh, ctx.label("cbar"))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [(name, fig)]

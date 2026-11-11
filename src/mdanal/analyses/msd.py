@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.msd import EinsteinMSD
 
-from .. import plotutil
+from .. import chart
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -28,11 +28,11 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 def figures(ctx, tables):
     name, table = next(iter(tables.items()))
     cols = list(table.columns)
-    fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(table[cols[0]], table[cols[1]], "o-", ms=2, lw=1.0)
+    fig, ax = chart.figure(ctx.size("single"))
+    chart.line(ax, table[cols[0]], table[cols[1]], marker="o", ms=2, lw=1.0)
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [(name, fig)]

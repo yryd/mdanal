@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import plotutil
+from .. import chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
@@ -88,33 +88,37 @@ def figures(ctx, tables):
     lag = table["滞后 (ps)"].to_numpy()
     intermittency = int(info.get("intermittency", 0))
 
-    fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(lag, table["连续"], lw=1.3, color="#4165c0", label=ctx.label("cont"))
-    ax.plot(
-        lag, table["间歇"], lw=1.3, ls="--", color="#c05040",
+    fig, ax = chart.figure(ctx.size("single"))
+    chart.line(
+        ax, lag, table["连续"], lw=1.3, color=chart.COLORS["primary"],
+        label=ctx.label("cont"),
+    )
+    chart.line(
+        ax, lag, table["间歇"], lw=1.3, ls="--", color=chart.COLORS["secondary"],
         label=ctx.label("inter", n=intermittency),
     )
-    ax.axhline(LEVEL, ls=":", lw=0.8, color="0.45")
-    ax.text(
-        lag[0] + 0.02 * (lag[-1] - lag[0]), LEVEL, "1/e",
-        va="bottom", ha="left", fontsize=6, color="0.35",
+    chart.refline(ax, LEVEL, ls=":", lw=0.8, color=chart.COLORS["guide"])
+    chart.text(
+        ax,
+        lag[0] + 0.02 * (lag[-1] - lag[0]),
+        LEVEL,
+        "1/e",
+        va="bottom",
+        ha="left",
+        fontsize=6,
+        color=chart.COLORS["label"],
     )
 
     for key, color, height in (
-        ("tau_cont", "#4165c0", 0.66),
-        ("tau_inter", "#c05040", 0.46),
+        ("tau_cont", chart.COLORS["primary"], 0.66),
+        ("tau_inter", chart.COLORS["secondary"], 0.46),
     ):
         value = info.get(key)
         if value is None or not np.isfinite(value):
             continue
-        ax.axvline(value, ls=":", lw=0.8, color=color)
-        ax.annotate(
-            f"{value:.2f} ps",
-            xy=(value, height),
-            xytext=(3, 0),
-            textcoords="offset points",
-            fontsize=6,
-            color=color,
+        chart.vline(ax, value, ls=":", lw=0.8, color=color)
+        chart.point_label(
+            ax, value, height, f"{value:.2f} ps", offset=(3, 0), fontsize=6, color=color
         )
 
     ax.set_xlim(0, lag[-1])
@@ -122,9 +126,9 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
-    ax.legend(loc="upper right", fontsize=6, frameon=False)
+    chart.legend(ax)
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [("hbond_lifetime", fig)]
 
 

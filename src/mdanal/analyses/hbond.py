@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from .. import plotutil
+from .. import chart
 
 COUNT_COLUMNS = ("帧", "时间 (ps)", "氢键数")
 OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
@@ -51,15 +51,17 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
 def figures(ctx, tables):
     table = tables["hbond_count"]
-    fig, ax = plotutil.figure(ctx.size("single"))
-    ax.plot(table["时间 (ps)"], table["氢键数"], lw=0.9, color="#4165c0")
+    fig, ax = chart.figure(ctx.size("single"))
+    chart.line(
+        ax, table["时间 (ps)"], table["氢键数"], lw=0.9, color=chart.COLORS["primary"]
+    )
     mean = float(table["氢键数"].mean())
-    ax.axhline(mean, ls="--", lw=0.7, color="0.5")
+    chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return [("hbond_count", fig)]
 
 

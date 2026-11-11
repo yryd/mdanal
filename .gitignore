@@ -13,3 +13,6 @@ htmlcov/
 # 虚拟环境
 .venv/
 venv/
+
+# 基线快照（本地生成，不入库）
+tests/baseline/

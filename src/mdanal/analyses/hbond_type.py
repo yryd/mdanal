@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import plotutil
+from .. import chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
@@ -103,24 +103,23 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
     labels = (table["供体"] + " → " + table["受体"]).tolist()
     values = table[column].to_numpy(dtype=float)
 
-    fig, ax = plotutil.figure(ctx.size("wide"))
-    positions = np.arange(len(labels))
-    bars = ax.barh(positions, values, height=0.7, color="#4165c0")
-    ax.set_yticks(positions, labels)
-    ax.invert_yaxis()
+    fig, ax = chart.figure(ctx.size("wide"))
     # 数值与占比标在条末：占比极小的类型在条形图上几乎看不见，靠数字读
     shares = table["占比"].to_numpy(dtype=float)
-    ax.bar_label(
-        bars,
-        labels=[f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)],
-        padding=2,
-        fontsize=6,
+    chart.bars(
+        ax,
+        labels,
+        values,
+        notes=[f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)],
+        height=0.7,
+        color=chart.COLORS["primary"],
+        note_fontsize=6,
+        headroom=1.35,
     )
-    ax.set_xlim(0, float(values.max()) * 1.35 if values.size else 1.0)
     ax.set_xlabel(ctx.label(suffix))
     ax.set_title(ctx.label("title"))
     if ctx.annotate:
-        plotutil.annotate(ax, ctx.annotation())
+        chart.note(ax, ctx.annotation())
     return fig
 
 
