@@ -637,11 +637,17 @@ def _seam_notes(paths: tuple[Path, ...], scans: list[DumpScan]) -> tuple[str, ..
             and previous.last_step is not None
             and current.first_step <= previous.last_step
         ):
-            notes.append(
-                f"{paths[index].name} 的起始步 {current.first_step} 不大于 "
-                f"{paths[index - 1].name} 的结束步 {previous.last_step}："
-                "两段可能重叠或时间倒退"
-            )
+            if current.first_step == previous.last_step:
+                notes.append(
+                    f"{paths[index].name} 的起始步与 {paths[index - 1].name} 的结束步"
+                    f"相同（{current.first_step}）：接缝处可能是同一帧写了两遍，建议裁掉"
+                )
+            else:
+                notes.append(
+                    f"{paths[index].name} 的起始步 {current.first_step} 小于 "
+                    f"{paths[index - 1].name} 的结束步 {previous.last_step}："
+                    "两段时间倒退，按帧序拼接"
+                )
         if current.box_low != previous.box_low:
             notes.append(
                 f"{paths[index].name} 的盒下角 {current.box_low} 与上一段 "

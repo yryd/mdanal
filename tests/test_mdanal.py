@@ -865,7 +865,7 @@ def test_seam_time_backward_is_reported(tmp_path):
 
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
     notes = provenance["trajectory"]["segments"]["seam_notes"]
-    assert any("不大于" in note for note in notes)
+    assert any("时间倒退" in note for note in notes)
 
 
 # --------------------------------------------------------------------------- #
