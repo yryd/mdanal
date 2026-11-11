@@ -879,7 +879,9 @@ def test_memory_and_disk_runs_agree(tmp_path):
     path = _write_system(
         tmp_path, cfg.topology, cfg.trajectory,
         '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}\n'
-        '  - {name: hbond, sel: ["type 1 3", "type 5 6", "type 1 3"]}',
+        '  - {name: hbond, sel: ["type 1 3", "type 5 6", "type 1 3"]}\n'
+        '  - {name: msd, sel: [all_atoms]}',
+        frames="[0, 20]",
     )
     memory, disk = tmp_path / "memory", tmp_path / "disk"
     assert cli.main(["run", "--system", str(path), "--out", str(memory)]) == 0
@@ -891,6 +893,7 @@ def test_memory_and_disk_runs_agree(tmp_path):
         "lineardensity/tables/lineardensity_z.csv",
         "hbond/tables/hbond_count.csv",
         "hbond/figures/hbond_count.png",
+        "msd/tables/msd.csv",  # 时间轴必须与磁盘读一致
     ):
         assert (memory / relative).read_bytes() == (disk / relative).read_bytes()
 

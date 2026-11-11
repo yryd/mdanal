@@ -170,7 +170,17 @@ def prepare(
     segment_frames = tuple(_segment_frames(in_box))
     # MAICoS 会就地改写坐标（unwrap/pack），内存读取下这些改写会留给同一次运行的下一条分析，
     # 故只要有 velocity 就不读入内存。
-    allow_memory = memory and not any(item.name == "velocity" for item in plan)
+    # 读入要扫完整个文件，只有当"重复读的帧数"确实超过文件总帧数时才划算。
+    total_frames = len(in_box.trajectory)
+    window = stop - start
+    reuse = (len(plan) - 1) * window
+    allow_memory = (
+        memory
+        and len(plan) >= 2
+        and window * 2 >= total_frames
+        and reuse >= total_frames
+        and not any(item.name == "velocity" for item in plan)
+    )
     materialized = {
         key: _materialize(universe) if allow_memory else False
         for key, universe in views.items()
@@ -475,8 +485,26 @@ def _materialize(universe) -> bool:
     estimate = n_frames * n_atoms * (6 if has_velocity else 3) * 4
     if n_frames < MEMORY_MIN_FRAMES or estimate > MEMORY_LIMIT:
         return False
+
+    step = _frame_step(universe)
     universe.transfer_to_memory()
+    # 内存读取器把 ts.time 记成 帧号 × dt，dt 默认是构造函数里的值；
+    # MSD 之类按帧间隔换算时间的分析会因此算错，这里恢复成实际的相邻帧时间差。
+    if step is not None:
+        universe.trajectory.ts.dt = step
     return True
+
+
+def _frame_step(universe) -> float | None:
+    """相邻两帧的时间差（ps）；取不到时返回 None。"""
+    trajectory = universe.trajectory
+    if len(trajectory) < 2:
+        return None
+    trajectory[0]
+    start = float(trajectory.ts.time)
+    trajectory[1]
+    step = float(trajectory.ts.time) - start
+    return step if step > 0 else None
 
 
 def _segment_frames(universe) -> list[int]:
