@@ -7,10 +7,12 @@
 
 from __future__ import annotations
 
+import ast
 import importlib
 import importlib.metadata
 import re
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -30,7 +32,7 @@ SUPPORTED_TYPES = (bool, int, float, str, list, tuple)
 COMPARE_KEYS = {"table", "x", "y", "box_axis"}
 
 
-@dataclass(frozen=True)
+@dataclass
 class ImportFailure:
     """一个模块无法加载或声明不合法。"""
 
@@ -38,6 +40,7 @@ class ImportFailure:
     path: str
     category: str
     detail: str
+    declaration: AnalysisDef | None = None
 
 
 @dataclass(frozen=True)
@@ -150,7 +153,66 @@ def discover() -> Discovery:
         except ValidationError as exc:
             failures.append(ImportFailure(name, path.name, "声明错误", str(exc)))
 
+    for failure in failures:
+        if failure.declaration is None:
+            failure.declaration = _definition_from_source(
+                ANALYSES_DIR / failure.path, failure.name
+            )
     return Discovery(definitions, tuple(failures))
+
+
+_TYPE_NAMES = {
+    "float": float,
+    "int": int,
+    "str": str,
+    "bool": bool,
+    "list": list,
+    "tuple": tuple,
+}
+
+
+def _eval_constant(node: ast.AST) -> Any:
+    """读字面量常量；额外允许 float/int/str/bool/list/tuple 这些类型名。"""
+    if isinstance(node, ast.Name) and node.id in _TYPE_NAMES:
+        return _TYPE_NAMES[node.id]
+    if isinstance(node, ast.Dict):
+        result = {}
+        for key, value in zip(node.keys, node.values):
+            if key is None:
+                raise ValueError("不支持字典展开")
+            result[_eval_constant(key)] = _eval_constant(value)
+        return result
+    if isinstance(node, ast.List):
+        return [_eval_constant(item) for item in node.elts]
+    if isinstance(node, ast.Tuple):
+        return tuple(_eval_constant(item) for item in node.elts)
+    return ast.literal_eval(node)
+
+
+def _definition_from_source(path: Path, name: str) -> AnalysisDef | None:
+    """不导入模块，用 AST 读取字面量常量；语法错或常量不全时返回 None。"""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except (SyntaxError, OSError):
+        return None
+
+    values: dict[str, Any] = {}
+    for node in tree.body:
+        if (
+            isinstance(node, ast.Assign)
+            and len(node.targets) == 1
+            and isinstance(node.targets[0], ast.Name)
+        ):
+            try:
+                values[node.targets[0].id] = _eval_constant(node.value)
+            except (ValueError, TypeError, SyntaxError):
+                continue
+    if not {"SLOTS", "PARAMS", "LABELS"} <= set(values):
+        return None
+    try:
+        return _definition_from_module(name, SimpleNamespace(**values), path)
+    except ValidationError:
+        return None
 
 
 def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:

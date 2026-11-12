@@ -8,6 +8,7 @@ import shutil
 import yaml
 
 from mdanal import cli
+from mdanal.config.check import check_analysis
 from mdanal.config.registry import RESERVED_KEYS, discover
 from mdanal.config.system import ALLOWED_KEYS
 
@@ -101,3 +102,10 @@ figure:
     assert cli.main(["compare", "--config", str(compare), "--out", str(out)]) == 0
     assert (out / "tables" / "lineardensity_z.csv").is_file()
     assert (out / "lineardensity.png").is_file()
+
+
+def test_check_analysis_builtin():
+    discovery = discover()
+    assert check_analysis(discovery) == []
+    # 实跑选两条分析，避免冒烟测试太慢；静态检查已覆盖全部八个
+    assert check_analysis(discovery, system=SYSTEM, names=("density", "rdf")) == []

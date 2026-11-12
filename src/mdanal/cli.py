@@ -11,6 +11,7 @@ import yaml
 
 from . import __version__
 from .errors import MdanalError, ValidationError
+from .config.check import check_analysis
 from .config.registry import (
     AnalysisDef,
     Discovery,
@@ -92,6 +93,23 @@ def cmd_run(args: argparse.Namespace) -> int:
         options=options,
         common_labels=_load_labels(),
     )
+    return EXIT_OK
+
+
+def cmd_check_analysis(args: argparse.Namespace) -> int:
+    discovery = discover()
+    problems = check_analysis(
+        discovery,
+        system=args.system,
+        keep=args.keep,
+        names=tuple(args.names),
+    )
+    if problems:
+        print("\n发现的问题：", file=sys.stderr)
+        for problem in problems:
+            print(f"  - {problem}", file=sys.stderr)
+        return EXIT_VALIDATION
+    print("契约检查通过")
     return EXIT_OK
 
 
@@ -377,6 +395,14 @@ def build_parser() -> argparse.ArgumentParser:
     listing.add_argument("name", nargs="?", help="查看某个分析的输入契约")
     listing.add_argument("--system", metavar="PATH", help="查看某个体系的分组与计划")
     listing.set_defaults(func=cmd_list)
+
+    check_plugin = subparsers.add_parser(
+        "check-analysis", help="检查已安装分析的声明，按需实跑并出图"
+    )
+    check_plugin.add_argument("names", nargs="*", help="只检查这些分析")
+    check_plugin.add_argument("--system", metavar="PATH", help="按该体系实跑一遍")
+    check_plugin.add_argument("--keep", metavar="DIR", help="保留实跑输出（默认用临时目录）")
+    check_plugin.set_defaults(func=cmd_check_analysis)
 
     compare = subparsers.add_parser(
         "compare", help="按 compare.yaml 叠加多个体系的结果（只读已有输出）"
