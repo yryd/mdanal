@@ -32,9 +32,12 @@ pip install -e .        # 可选，安装后提供 mdanal 命令
 
 ```bash
 mdanal list                                    # 列出可用分析
+mdanal list density                            # 查看某个分析的输入契约（参数/单位/默认值）
 mdanal list --system DIR                       # 列出体系的分组与将要执行的分析
 mdanal check --system DIR                      # 校验配置与依赖，不计算
 mdanal run --system DIR --out OUT              # 执行分析
+mdanal check-analysis                          # 检查已安装分析的声明是否完整
+mdanal check-analysis --system DIR             # 再按该体系实跑中英各一遍并检查出图
 ```
 
 | 选项 | 说明 | 默认 |
@@ -105,9 +108,7 @@ dump_every: 10000
 frames: [400, 500]
 
 view:
-  origin: [0, 0, 23.47]     # 可选：视图坐标的零点
-  window:
-    z: [17.0, 30.0]         # 可选：图件的坐标轴范围
+  origin: [0, 0, 23.47]     # 可选：视图坐标的零点（图件窗口属于分析级，见下）
 
 groups:
   water_o: "type 17"
@@ -119,8 +120,11 @@ analyses:
     tag: xz
     sel: [water_o]
     sum_axis: y
+    plot:
+      window: {x: [17.0, 30.0]}   # 可选：只裁这张图的坐标轴
   - name: hbond
     sel: [water_o, water_h, water_o]
+    section: [50, 100]            # 可选：在体系帧窗口内再切一段（相对偏移）
 ```
 
 | 字段 | 说明 |
@@ -130,12 +134,17 @@ analyses:
 | `timestep_fs` | 时间步长（fs） |
 | `dump_every` | 输出间隔（步） |
 | `frames` | 帧窗口，左闭右开；省略时使用全部帧 |
-| `view` | 视图坐标零点与图件显示窗口；省略时坐标与 `data.lmp` 一致 |
+| `view` | 视图坐标零点；省略时坐标与 `data.lmp` 一致 |
 | `naming` | 给残基与原子补名字与元素；省略时只能用类型编号选择 |
 | `groups` | 具名原子选择，供 `sel` 引用 |
 | `analyses` | 要执行的分析列表 |
 
-`analyses` 每条只有 `name` 必填；`sel` 的长度须等于该分析的选择数；其余键覆盖 `analyses.yaml` 中的默认参数。`tag` 用于区分同一种分析的多次输出。
+`analyses` 每条只有 `name` 必填；`sel` 的长度须等于该分析声明的槽位数；其余键覆盖该分析模块 `PARAMS` 里的默认参数（用 `mdanal list <name>` 查看）。`tag` 用于区分同一种分析的多次输出。
+
+两个额外键：
+
+- `section: [起, 止]`：在体系帧窗口内再切一段（相对偏移），只影响该分析；分组仍在体系窗口首帧解析一次。
+- `plot:`：图件选项，目前支持 `window: {轴: [下界, 上界]}`，只裁坐标轴、不改数据表。
 
 ### 图内标注（可选）
 
@@ -162,7 +171,7 @@ analyses:
 - 默认与 `data.lmp` 一致；写 `view.origin: [x, y, z]` 后以该点为零点，写 `view.origin: box_corner` 后以盒下角为零点（坐标范围 `0 … L`）。
 - 改 `origin` 后，`prop` 选择串里的坐标区间要同步改；**数据表不变**，改图不必重跑分析。
 - 需要平移后的数值时加 `--aligned`，程序会另写一份 `*.aligned.csv`；正表仍是盒坐标。
-- `view.window` 只裁剪图件的坐标轴范围，不改数据表；某个轴没写就不裁。
+- 图件窗口写在每条分析的 `plot.window` 里（如 `plot: {window: {z: [17.0, 30.0]}}`），只裁坐标轴、不改数据表；体系级不再有窗口。
 - 轨迹为包裹坐标时，`msd` 会用 `NoJump` 重建连续性并给出提示。
 - 程序内部按盒坐标（`0 … L`）计算，视图偏移只影响选择串的求值与出图。
 
@@ -229,7 +238,7 @@ groups:
 | `msd` | group | `msd_type`、`fft` | MSD 表与图 |
 | `velocity` | group, ref | `dim`、`vdim`（写 `x`/`y`/`z`）、`bin_width`、`grouping` | 速度剖面表与图 |
 
-`mdanal list` 显示各分析的选择数与默认参数。
+`mdanal list` 显示各分析的选择数与默认参数；`mdanal list <name>` 打印完整契约（类型、单位、默认值、取值范围与说明）。
 
 ### 输出单位
 
@@ -269,36 +278,78 @@ OUT/
 
 ## 新增分析
 
-1. 在 `src/mdanal/analyses.yaml` 中添加定义：
-
-```yaml
-interaction:
-  slots: [a, b]
-  params: {cutoff: 12.0}
-  requires: []
-  package: null
-  labels:
-    zh: {x: 时间 (ps), y: 能量 (kJ/mol), title: 相互作用能}
-    en: {x: time (ps), y: energy (kJ/mol), title: Interaction energy}
-```
-
-2. 在 `src/mdanal/analyses/` 中创建同名模块：
+分析是插件：**一个文件就是一个分析**，放进 `src/mdanal/analyses/` 即被发现，不需要改注册表。
+文件名就是分析名。
 
 ```python
+"""示例：两组原子间的距离统计。"""
+
+from ..plot import annotations, chart
+
+SLOTS = ("a", "b")                      # 必填：选择槽位，顺序与 sel 对应
+PARAMS = {                              # 必填：带类型与说明的参数
+    "cutoff": {"type": float, "default": 12.0, "unit": "Å", "min": 0.0,
+               "help": "超过该距离不计"},
+    "nbins": {"type": int, "default": 50, "min": 2},
+}
+LABELS = {                              # 必填：图内文字，中英各一份
+    "zh": {"title": "距离分布", "x": "$r$ (Å)", "y": "计数"},
+    "en": {"title": "Distance distribution", "x": "$r$ (Å)", "y": "count"},
+}
+
+COORDINATES = "any"                     # 可选：in_box / continuous / any
+REQUIRES = ()                           # 可选：("velocities",)
+PACKAGE = None                          # 可选：{"name": "maicos", "min_version": "0.12"}
+COMPARE = None                          # 可选：{"table": ..., "x": ..., "y": [...], "box_axis": bool}
+MUTATES_POSITIONS = False               # 可选：分析会就地改坐标
+
+
 def run(ctx):
-    """返回 {表名: pandas.DataFrame}"""
+    """返回 {表名: pandas.DataFrame}。"""
+
 
 def figures(ctx, tables):
-    """返回 [(图名, matplotlib Figure)]，可省略"""
+    """可选：返回 [(图名, matplotlib Figure)]；核心负责保存。"""
+
+
+def meta(ctx, tables):
+    """可选：返回 dict，写进 provenance。"""
 ```
 
-`ctx` 提供 `groups`、`start`、`stop`、`params`、`view`、`selection_frame`、`window()`、`warn()`、`label()`、`size()`、`universe`。
+`ctx` 提供 `groups`、`start`、`stop`、`params`、`view`、`selection_frame`、`window(axis)`、
+`warn()`、`label()`、`size()`、`universe`。图件窗口用 `ctx.window(axis)`；切片后的帧窗口由
+`ctx.start/stop` 给出。
+
+**分析之间不互相 import，也不共享辅助函数**；需要复用就各自写一份。`mdanal list <name>`
+可检查契约，`mdanal check-analysis <name>` 会做静态校验，加 `--system DIR` 时还会实跑一遍。
+
+## 目录结构
+
+```
+src/mdanal/
+├── cli.py            命令行入口
+├── errors.py         共用异常
+├── config/           配置与发现（system、registry、naming、check、defaults/labels.yaml）
+├── run/              执行（context、runner、writers）
+├── plot/             绘图（chart、plotutil、annotations）
+├── compare/          多体系对比
+└── analyses/         分析插件：一个文件一个分析
+```
 
 ## 测试
 
+测试分三层，默认只跑前两层（`testpaths` 已配置）：
+
 ```bash
-python -m pytest tests -q
+python -m pytest                 # 框架（假分析）+ 内置插件烟测
+python -m pytest tests/analyses  # 科学断言（密度守恒、氢键计数、RDF、MSD、速度剖面）
 ```
+
+- `tests/framework/`：用 `tests/fake_analysis.py` 跑通配置、注册、执行、落盘与绘图层，
+  不依赖任何真实分析；
+- `tests/smoke/`：内置插件的健康检查——可发现、可导入、声明有效、中英端到端出图，
+  只验证"插件还活着"，不断言数值；
+- `tests/analyses/`：真实分析的科学断言，标了 `analysis` marker，默认不跑。
 
 测试跑在 `tests/fixtures/tiny`——真实 LAMMPS 输出的 20 帧截取（24 个 TMA、504 原子），
 不需要外部算例，也不需要设置环境变量。
