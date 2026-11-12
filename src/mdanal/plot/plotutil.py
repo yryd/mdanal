@@ -11,7 +11,7 @@ from typing import Any, Mapping
 import numpy as np
 
 from . import chart
-from .errors import MdanalError
+from ..errors import MdanalError
 
 def apply_style() -> None:
     chart.apply_style()

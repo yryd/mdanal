@@ -14,7 +14,7 @@ from typing import Any, Mapping
 
 import numpy as np
 
-from .errors import ValidationError
+from ..errors import ValidationError
 
 # 常见元素的平均原子质量（u）。元素按质量推断，可覆盖 C1 / Cl1 这类名字歧义。
 ELEMENT_MASSES = {

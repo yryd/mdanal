@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.rdf import InterRDF
 
-from .. import annotations, chart
+from ..plot import annotations, chart
 from ..errors import ValidationError
 
 

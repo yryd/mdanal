@@ -11,8 +11,8 @@ from typing import Any, Mapping, Sequence
 
 import yaml
 
-from .annotations import parse as parse_annotations
-from .errors import ValidationError
+from ..plot.annotations import parse as parse_annotations
+from ..errors import ValidationError
 from .system import SystemConfig
 
 API_VERSION = 1

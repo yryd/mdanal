@@ -11,7 +11,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.units import constants
 
-from .. import annotations, chart, plotutil
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")

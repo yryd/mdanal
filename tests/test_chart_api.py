@@ -2,7 +2,7 @@
 
 import pytest
 
-from mdanal import annotations, chart
+from mdanal.plot import annotations, chart
 from mdanal.errors import MdanalError, ValidationError
 
 

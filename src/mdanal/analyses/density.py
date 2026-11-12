@@ -6,9 +6,9 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.density import DensityAnalysis
 
-from .. import annotations, chart, plotutil
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
-from ..writers import project_grid
+from ..run.writers import project_grid
 
 AXES = ("x", "y", "z")
 

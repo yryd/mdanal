@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import annotations, chart
+from ..plot import annotations, chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 

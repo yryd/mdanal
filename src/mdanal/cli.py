@@ -11,15 +11,15 @@ import yaml
 
 from . import __version__
 from .errors import MdanalError, ValidationError
-from .registry import (
+from .config.registry import (
     AnalysisDef,
     build_plan,
     check_packages,
     check_requirements,
     load_registry,
 )
-from .runner import Prepared, RunOptions, execute, prepare
-from .system import (
+from .run.runner import Prepared, RunOptions, execute, prepare
+from .config.system import (
     SystemConfig,
     UNKNOWN_INPUT_WARNING,
     read_system,
@@ -27,8 +27,8 @@ from .system import (
 
 PROGRAM_DIR = Path(__file__).resolve().parent
 REGISTRY_PATH = PROGRAM_DIR / "analyses.yaml"
-DEFAULTS_PATH = PROGRAM_DIR / "defaults.yaml"
-LABELS_PATH = PROGRAM_DIR / "labels.yaml"
+DEFAULTS_PATH = PROGRAM_DIR / "config" / "defaults.yaml"
+LABELS_PATH = PROGRAM_DIR / "config" / "labels.yaml"
 
 EXIT_OK = 0
 EXIT_USAGE = 2
@@ -94,7 +94,7 @@ def cmd_run(args: argparse.Namespace) -> int:
 
 
 def cmd_compare(args: argparse.Namespace) -> int:
-    from .compare import run_compare
+    from .compare.compare import run_compare
 
     out = run_compare(args.config, args.out)
     print(f"输出：{out}")

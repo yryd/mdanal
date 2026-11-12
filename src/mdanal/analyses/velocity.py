@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .. import annotations, chart, plotutil
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")

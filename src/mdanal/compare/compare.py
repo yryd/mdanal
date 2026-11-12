@@ -14,9 +14,9 @@ from typing import Any, Mapping
 import pandas as pd
 import yaml
 
-from . import chart
-from .errors import MdanalError, ValidationError
-from .writers import write_provenance
+from ..plot import chart
+from ..errors import MdanalError, ValidationError
+from ..run.writers import write_provenance
 
 MODES = ("left", "center")
 AXES = ("x", "y", "z")

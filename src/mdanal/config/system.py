@@ -12,7 +12,7 @@ import MDAnalysis.transformations as tr
 import numpy as np
 import yaml
 
-from .errors import ValidationError
+from ..errors import ValidationError
 from .naming import NamingConfig, parse_naming
 
 SYSTEM_FILENAME = "system.yaml"

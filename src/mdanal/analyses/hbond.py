@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from .. import annotations, chart
+from ..plot import annotations, chart
 
 OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
 

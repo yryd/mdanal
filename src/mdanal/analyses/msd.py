@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.msd import EinsteinMSD
 
-from .. import annotations, chart
+from ..plot import annotations, chart
 
 
 COMPARE = {

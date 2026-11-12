@@ -19,12 +19,13 @@ import yaml
 from MDAnalysis.analysis.msd import EinsteinMSD
 from PIL import Image
 
-from mdanal import chart, cli, plotutil
-from mdanal import registry as registry_module
+from mdanal import cli
+from mdanal.plot import chart, plotutil
+from mdanal.config import registry as registry_module
 from mdanal.errors import MdanalError, ValidationError
-from mdanal.registry import RESERVED_KEYS, build_plan, check_packages, load_registry
-from mdanal.runner import prepare
-from mdanal.system import ALLOWED_KEYS, load_universe, read_system, resolve_group
+from mdanal.config.registry import RESERVED_KEYS, build_plan, check_packages, load_registry
+from mdanal.run.runner import prepare
+from mdanal.config.system import ALLOWED_KEYS, load_universe, read_system, resolve_group
 
 SYSTEM = Path(__file__).resolve().parent / "fixtures" / "tiny"
 START, STOP = 0, 5  # 五帧窗口：够算寿命（4 帧滞后），且跑得快

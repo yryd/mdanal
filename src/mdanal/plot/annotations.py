@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import Any, Mapping, Sequence
 
 from . import chart
-from .errors import ValidationError
+from ..errors import ValidationError
 
 KINDS = ("vline", "hline", "span", "text")
 AXES = ("x", "y", "z")

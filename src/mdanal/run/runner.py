@@ -12,11 +12,11 @@ from typing import Any, Mapping, Sequence
 
 import MDAnalysis as mda
 
-from . import __version__, plotutil
-from .errors import MdanalError, ValidationError
-from .naming import NamingSummary, apply_naming, build_plan
-from .registry import PlanItem
-from .system import (
+from .. import __version__
+from ..config.naming import NamingSummary, apply_naming, build_plan
+from ..errors import MdanalError, ValidationError
+from ..config.registry import PlanItem
+from ..config.system import (
     NOJUMP_WARNING,
     Group,
     SystemConfig,
@@ -26,6 +26,8 @@ from .system import (
     resolve_group,
     seek_frame,
 )
+from ..plot import plotutil
+from .context import RunContext
 from .writers import (
     sha256,
     write_aligned,
@@ -71,62 +73,6 @@ class Prepared:
         }
 
 
-@dataclass
-class RunContext:
-    """传给分析模块的上下文。"""
-
-    system: SystemConfig
-    plan_item: PlanItem
-    universe: mda.Universe
-    groups: Mapping[str, Group]
-    start: int
-    stop: int
-    lang: str
-    dpi: int
-    annotate: bool
-    labels: plotutil.Labels
-    figure_sizes: Mapping[str, tuple[float, float]]
-    view: str
-    selection_frame: int
-    warnings: list[str] = field(default_factory=list)
-    extras: dict[str, Any] = field(default_factory=dict)
-
-    @property
-    def params(self) -> Mapping[str, Any]:
-        return self.plan_item.params
-
-    @property
-    def annotations(self) -> tuple[dict[str, Any], ...]:
-        """该条分析上的图内标注声明。"""
-        return self.plan_item.annotations
-
-    @property
-    def frame_dt_ps(self) -> float:
-        return self.system.dump_every * self.system.dt_ps
-
-    def label(self, key: str, **fmt: Any) -> str:
-        return self.labels(key, **fmt)
-
-    def size(self, name: str = "single") -> tuple[float, float]:
-        return self.figure_sizes.get(name, (3.5, 2.6))
-
-    def window(self, axis: str) -> tuple[float, float] | None:
-        """该轴的显示窗口；未设置时为 None。"""
-        return self.system.view.window.get(axis)
-
-    def warn(self, message: str) -> None:
-        self.warnings.append(message)
-
-    def annotation(self) -> str:
-        """帧窗口与关键参数，供 --annotate 使用。"""
-        # 帧窗口左闭右开；标注里显示实际用到的最后一帧，时间换算为 ns
-        t0 = self.start * self.frame_dt_ps / 1000.0
-        t1 = max(self.stop - 1, 0) * self.frame_dt_ps / 1000.0
-        window = self.label(
-            "window", start=self.start, stop=self.stop - 1, t0=t0, t1=t1
-        )
-        params = ", ".join(f"{k}={v}" for k, v in self.params.items())
-        return f"{window}\n{params}"
 
 
 # --------------------------------------------------------------------------- #
@@ -396,7 +342,7 @@ def _prepare_outdir(outdir: Path, force: bool) -> None:
 
 
 def _import_module(item: PlanItem):
-    module_path = f"{__package__}.{item.definition.module}"
+    module_path = f"mdanal.{item.definition.module}"
     try:
         return importlib.import_module(module_path)
     except ImportError as exc:
