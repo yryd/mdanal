@@ -125,7 +125,7 @@ def prepare(
         and len(plan) >= 2
         and window * 2 >= total_frames
         and reuse >= total_frames
-        and not any(item.name == "velocity" for item in plan)
+        and not any(item.mutates_positions for item in plan)
     )
     materialized = {
         key: _materialize(universe) if allow_memory else False

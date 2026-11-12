@@ -7,7 +7,7 @@ import pandas as pd
 
 from ..plot import annotations, chart
 from ..errors import ValidationError
-from .hbond import build_analysis
+from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -79,6 +79,22 @@ COMPARE = {
 }
 
 
+def _build(ctx) -> HydrogenBondAnalysis:
+    """按三个槽位与两个判据构造分析。
+
+    判据与 hbond.py / hbond_type.py 必须一致；改动需三处同步
+    （由 tests/analyses 的一致性测试守护）。
+    """
+    return HydrogenBondAnalysis(
+        ctx.universe,
+        donors_sel=ctx.groups["donor"].selection,
+        hydrogens_sel=ctx.groups["hydrogen"].selection,
+        acceptors_sel=ctx.groups["acceptor"].selection,
+        d_a_cutoff=float(ctx.params["d_a_cutoff"]),
+        d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
+    )
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     tau_max_ps = float(ctx.params["tau_max_ps"])
     intermittency = int(ctx.params["intermittency"])
@@ -100,7 +116,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             "寿命结果不可信；请用更密的 dump"
         )
 
-    analysis = build_analysis(ctx)
+    analysis = _build(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
     # 单位：lifetime() 返回 (tau, C(tau))，tau 以「帧」为单位，乘 frame_dt 才是 ps

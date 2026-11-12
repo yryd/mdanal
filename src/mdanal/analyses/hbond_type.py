@@ -7,7 +7,7 @@ import pandas as pd
 
 from ..plot import annotations, chart
 from ..errors import ValidationError
-from .hbond import build_analysis
+from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -53,13 +53,29 @@ COLUMNS = ("供体", "受体", "次数", "每帧平均", "占比")
 FIGURE_ROWS = 12
 
 
+def _build(ctx) -> HydrogenBondAnalysis:
+    """按三个槽位与两个判据构造分析。
+
+    判据与 hbond.py / hbond_lifetime.py 必须一致；改动需三处同步
+    （由 tests/analyses 的一致性测试守护）。
+    """
+    return HydrogenBondAnalysis(
+        ctx.universe,
+        donors_sel=ctx.groups["donor"].selection,
+        hydrogens_sel=ctx.groups["hydrogen"].selection,
+        acceptors_sel=ctx.groups["acceptor"].selection,
+        d_a_cutoff=float(ctx.params["d_a_cutoff"]),
+        d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
+    )
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     if not hasattr(ctx.universe.atoms, "resnames"):
         raise ValidationError(
             "hbond_type 需要分子名与元素；请先在 system.yaml 配置 naming"
         )
 
-    analysis = build_analysis(ctx)
+    analysis = _build(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
     # 单位：count_by_type() 返回 (供体类型, 受体类型, 次数)，次数为整数计数

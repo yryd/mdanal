@@ -8,7 +8,6 @@ from MDAnalysis.analysis.density import DensityAnalysis
 
 from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
-from ..run.writers import project_grid
 
 AXES = ("x", "y", "z")
 
@@ -51,6 +50,34 @@ LABELS = {
 COORDINATES = "in_box"
 
 
+def _project_grid(
+    counts, edges, sum_axis: str
+) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[int, int]]:
+    """沿 sum_axis 求和，投影到另外两轴，返回 (轴1中心, 轴2中心, 数密度, 保留的轴号)。
+
+    数密度 = Σ_axis n / (Δa · Δb · L_axis)，单位 Å⁻³，即沿求和方向的平均。
+    """
+    counts = np.asarray(counts, dtype=float)
+    if counts.ndim != 3:
+        raise ValueError(f"网格必须是三维，收到 shape={counts.shape}")
+
+    axis = sum_axis.lower()
+    if axis not in AXES:
+        raise ValueError(f"sum_axis 只能是 x/y/z，收到 {sum_axis!r}")
+
+    index = AXES.index(axis)
+    centers = [0.5 * (np.asarray(e[1:]) + np.asarray(e[:-1])) for e in edges]
+    widths = [float(np.asarray(e)[1] - np.asarray(e)[0]) for e in edges]
+    lengths = [float(np.asarray(e)[-1] - np.asarray(e)[0]) for e in edges]
+
+    keep = tuple(i for i in range(3) if i != index)
+    summed = counts.sum(axis=index)
+    volume = widths[keep[0]] * widths[keep[1]] * lengths[index]
+    density = summed / volume
+
+    return centers[keep[0]], centers[keep[1]], density, keep
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     params = ctx.params
     sum_axis = str(params["sum_axis"]).lower()
@@ -81,7 +108,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     }
 
     # 表里是盒坐标（0…L）；视图平移只在出图时施加
-    center_a, center_b, density, keep = project_grid(grid.grid, grid.edges, sum_axis)
+    center_a, center_b, density, keep = _project_grid(grid.grid, grid.edges, sum_axis)
     a, b = AXES[keep[0]], AXES[keep[1]]
 
     # 平面场要摊平成 (坐标, 坐标, 值) 三列；density[i, j] 对应 (a_i, b_j)
