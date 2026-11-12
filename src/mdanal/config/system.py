@@ -52,7 +52,6 @@ class ViewConfig:
 
     origin: tuple[float, float, float]
     shift: tuple[float, float, float]
-    window: dict[str, tuple[float, float]] = field(default_factory=dict)
 
 @dataclass(frozen=True)
 class SystemConfig:
@@ -407,19 +406,18 @@ def _parse_view(value: Any, box_low: tuple[float, ...], where: str) -> ViewConfi
 
     if not isinstance(value, dict):
         raise ValidationError(
-            "view 必须是映射（可含 origin 与 window）", where=f"{where}:view"
+            "view 必须是映射（只有一个 origin 字段）", where=f"{where}:view"
         )
-    unknown = set(value) - {"origin", "window"}
+    unknown = set(value) - {"origin"}
     if unknown:
         raise ValidationError(
-            f"view 含未知字段 {sorted(unknown)}；允许 origin、window",
+            f"view 含未知字段 {sorted(unknown)}；窗口已下放到每条分析的 plot.window",
             where=f"{where}:view",
         )
 
     origin = _parse_origin(value.get("origin"), box_low, where)
-    window = _parse_window(value.get("window"), where)
     shift = tuple(float(b - o) for b, o in zip(box_low, origin))
-    return ViewConfig(origin, shift, window)
+    return ViewConfig(origin, shift)
 
 
 def _parse_origin(
@@ -441,43 +439,6 @@ def _parse_origin(
         f"view.origin 只能是 [x, y, z] 或 box_corner，收到 {value!r}",
         where=f"{where}:view.origin",
     )
-
-
-def _parse_window(value: Any, where: str) -> dict[str, tuple[float, float]]:
-    if value is None:
-        return {}
-    if not isinstance(value, dict):
-        raise ValidationError(
-            "view.window 必须是映射（轴 → [下界, 上界]）", where=f"{where}:view.window"
-        )
-    unknown = set(value) - set(AXES)
-    if unknown:
-        raise ValidationError(
-            f"view.window 含未知轴 {sorted(unknown)}；允许 {list(AXES)}",
-            where=f"{where}:view.window",
-        )
-
-    window: dict[str, tuple[float, float]] = {}
-    for axis, bounds in value.items():
-        if (
-            not isinstance(bounds, (list, tuple))
-            or len(bounds) != 2
-            or not all(
-                isinstance(v, (int, float)) and not isinstance(v, bool) for v in bounds
-            )
-        ):
-            raise ValidationError(
-                f"view.window.{axis} 必须是两个数 [下界, 上界]，收到 {bounds!r}",
-                where=f"{where}:view.window.{axis}",
-            )
-        low, high = (float(v) for v in bounds)
-        if high <= low:
-            raise ValidationError(
-                f"view.window.{axis} 要求下界小于上界，收到 {[low, high]}",
-                where=f"{where}:view.window.{axis}",
-            )
-        window[axis] = (low, high)
-    return window
 
 
 def _resolve_file(

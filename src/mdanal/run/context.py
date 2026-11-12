@@ -53,7 +53,7 @@ class RunContext:
 
     def window(self, axis: str) -> tuple[float, float] | None:
         """该轴的显示窗口；未设置时为 None。"""
-        return self.system.view.window.get(axis)
+        return self.plan_item.window.get(axis)
 
     def warn(self, message: str) -> None:
         self.warnings.append(message)

@@ -63,6 +63,11 @@ class Prepared:
     naming: NamingSummary | None = None
     materialized: Mapping[str, bool] = field(default_factory=dict)
     segment_frames: tuple[int, ...] = ()
+    frames: Mapping[int, tuple[int, int]] = field(default_factory=dict)
+
+    def item_frames(self, item: PlanItem) -> tuple[int, int]:
+        """该分析实际使用的帧窗口（体系窗口 + section 偏移）。"""
+        return self.frames.get(item.order, (self.start, self.stop))
 
     def item_groups(self, item: PlanItem) -> dict[str, Group]:
         """在分析所用视图上按原子索引重建该分析的选择。"""
@@ -131,6 +136,25 @@ def prepare(
         key: _materialize(universe) if allow_memory else False
         for key, universe in views.items()
     }
+    frames: dict[int, tuple[int, int]] = {}
+    frame_problems: list[str] = []
+    for item in plan:
+        if item.section is None:
+            frames[item.order] = (start, stop)
+            continue
+        offset_start, offset_stop = item.section
+        if offset_stop > stop - start:
+            frame_problems.append(
+                f"{item.directory}: section {list(item.section)} 超出体系窗口 "
+                f"[0, {stop - start})"
+            )
+            continue
+        frames[item.order] = (start + offset_start, start + offset_stop)
+    if frame_problems:
+        raise ValidationError(
+            "\n".join(frame_problems), where=f"{cfg.yaml_path}:analyses"
+        )
+
     seek_frame(in_box, start)
     groups = {
         item.order: {
@@ -150,6 +174,7 @@ def prepare(
         naming=naming_summary,
         materialized=materialized,
         segment_frames=segment_frames,
+        frames=frames,
     )
 
 
@@ -175,13 +200,14 @@ def execute(
             item.definition.labels.get(options.lang),
             common_labels.get(options.lang),
         )
+        item_start, item_stop = prepared.item_frames(item)
         ctx = RunContext(
             system=cfg,
             plan_item=item,
             universe=prepared.views[item.view],
             groups=groups,
-            start=prepared.start,
-            stop=prepared.stop,
+            start=item_start,
+            stop=item_stop,
             lang=options.lang,
             dpi=options.dpi,
             annotate=options.annotate,
@@ -225,6 +251,8 @@ def execute(
                 "params": dict(item.params),
                 "coordinates": item.definition.coordinates,
                 "view": item.view,
+                "window": {axis: list(bounds) for axis, bounds in item.window.items()},
+                "section": list(item.section) if item.section else None,
                 "warnings": list(ctx.warnings),
                 "tables": [p.name for p in table_paths.values()],
                 "figures": [p.name for p in figure_paths],
@@ -270,9 +298,6 @@ def execute(
             "view": {
                 "origin": list(cfg.view.origin),
                 "shift": list(cfg.view.shift),
-                "window": {
-                    axis: list(bounds) for axis, bounds in cfg.view.window.items()
-                },
             },
             "selection": {"frame": prepared.selection_frame},
             "naming": _naming_payload(prepared.naming),

@@ -369,17 +369,25 @@ def test_view_origin_shifts_selection_and_aligned_tables(real, tmp_path):
 
 def test_window_only_affects_figure(real, tmp_path):
     cfg, _ = real
-    analyses = '  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}'
+    plain_analysis = (
+        "  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5}\n"
+    )
+    windowed_analysis = (
+        "  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 0.5, "
+        "plot: {window: {z: [20.0, 24.0]}}}\n"
+    )
 
     paths = {}
-    for name, extra in (
-        ("plain", ""),
-        ("windowed", "view:\n  window:\n    z: [20.0, 24.0]\n"),
-    ):
+    for name, analyses in (("plain", plain_analysis), ("windowed", windowed_analysis)):
         directory = tmp_path / name
         directory.mkdir()
-        paths[name] = _write_system(directory, cfg.topology, cfg.trajectory, analyses, extra=extra)
-        assert cli.main(["run", "--system", str(paths[name]), "--out", str(directory / "out")]) == 0
+        paths[name] = _write_system(
+            directory, cfg.topology, cfg.trajectory, analyses
+        )
+        assert (
+            cli.main(["run", "--system", str(paths[name]), "--out", str(directory / "out")])
+            == 0
+        )
 
     plain = pd.read_csv(tmp_path / "plain/out/lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig")
     windowed = pd.read_csv(
@@ -392,7 +400,33 @@ def test_window_only_affects_figure(real, tmp_path):
     provenance = json.loads(
         (tmp_path / "windowed/out/provenance.json").read_text(encoding="utf-8")
     )
-    assert provenance["view"]["window"] == {"z": [20.0, 24.0]}
+    assert provenance["analyses"][0]["window"] == {"z": [20.0, 24.0]}
+    assert "window" not in provenance["view"]
+
+
+def test_section_narrows_frames(real, tmp_path):
+    cfg, _ = real
+    analyses = "  - {name: hbond, sel: [tma_o, tma_h, tma_o], section: [1, 4]}"
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+
+    counts = pd.read_csv(out / "hbond/tables/hbond_count.csv", encoding="utf-8-sig")
+    assert len(counts) == 3
+    assert counts["时间 (ps)"].iloc[0] == pytest.approx(1 * 5.0)
+    assert counts["时间 (ps)"].iloc[-1] == pytest.approx(3 * 5.0)
+
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["analyses"][0]["section"] == [1, 4]
+
+
+def test_section_out_of_range_is_rejected(real, tmp_path, capsys):
+    cfg, _ = real
+    analyses = "  - {name: hbond, sel: [tma_o, tma_h, tma_o], section: [0, 100]}"
+    path = _write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+    assert "超出体系窗口" in capsys.readouterr().err
 
 
 def test_window_limit_ignores_bounds_outside_data():

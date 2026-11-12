@@ -22,14 +22,12 @@ timestep_fs: 1.0            # LAMMPS 时间步长，单位 fs；时间 = 步数 
 dump_every: 10000           # dump 间隔（步）；相邻两帧相差 dump_every × timestep_fs
 frames: [400, 500]          # 帧窗口，左闭右开；省略则用全部帧
 
-# 视图坐标与显示窗口（可选）：省略时坐标与 data.lmp 一致。
+# 视图坐标（可选）：省略时坐标与 data.lmp 一致。
 # origin 写 box_corner 时以盒下角为零点（坐标范围 0…L）；写 [x, y, z] 时以该点为零点，
 # 此时下面的 prop 区间要按新零点同步改。
-# window 只裁图件的坐标轴范围，不改数据表；某个轴不写就不裁。
+# 图件的坐标轴裁剪属于分析级输入，写在对应分析的 plot.window 里，不在这里。
 # view:
 #   origin: [0, 0, 23.47]
-#   window:
-#     z: [17.0, 30.0]
 
 # 命名（可选）：给残基（分子）与原子补名字，之后可用 resname / name 选择。
 # from_data 读带注释的 data 文件（Atoms 段每行末尾 "# 原子名 分子名"）；
@@ -63,8 +61,11 @@ groups:
 
 # 要跑的分析：按顺序执行，一个分析一条。
 # 每条只有 name 必填；sel 的长度必须等于该分析声明的槽位数；
-# 其余键覆盖 analyses.yaml 中的默认参数。
+# 其余键覆盖该分析 PARAMS 中的默认参数（可用 `mdanal list <name>` 查看契约）。
 # 同一种分析可以写多条，用 tag 区分输出子目录（name-tag）。
+# 另外两个可选键：
+#   section: [起, 止]   在体系帧窗口内再切一段（相对偏移），只影响该分析
+#   plot:               图件选项，目前支持 window: {轴: [下界, 上界]}
 analyses:
   # 密度：沿 y 求和投影到 x–z（δ = 1 Å 的网格）
   - name: density
@@ -84,6 +85,13 @@ analyses:
     sel: [water_o]
     binsize: 0.5
     dim: z
+    plot:
+      window: {z: [17.0, 30.0]}   # 只裁这张图的 z 轴，不改数据表
+
+  # 只要后半段时，用 section 在体系窗口内切一段（相对偏移）
+  # - name: msd
+  #   sel: [water_o]
+  #   section: [50, 100]
 
   # 径向分布：两组原子之间的 g(r)，槽位依次为 a、b
   - name: rdf

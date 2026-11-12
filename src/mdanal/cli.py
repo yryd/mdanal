@@ -145,11 +145,6 @@ def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
         f"视图：零点 {_point(cfg.view.origin)}（绝对坐标）    "
         f"盒下角 {_point(cfg.view.shift)}（视图坐标）"
     )
-    if cfg.view.window:
-        window = "、".join(
-            f"{axis}=[{low:g}, {high:g}]" for axis, (low, high) in cfg.view.window.items()
-        )
-        print(f"      窗口 {window}")
     print(f"选择：按第 {prepared.selection_frame} 帧解析")
     if prepared.naming is not None:
         counts = "、".join(

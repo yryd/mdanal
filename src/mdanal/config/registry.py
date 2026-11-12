@@ -10,7 +10,7 @@ from __future__ import annotations
 import importlib
 import importlib.metadata
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -21,7 +21,7 @@ from .system import SystemConfig
 ANALYSES_PACKAGE = "mdanal.analyses"
 ANALYSES_DIR = Path(__file__).resolve().parent.parent / "analyses"
 
-RESERVED_KEYS = {"name", "tag", "sel", "annotate"}
+RESERVED_KEYS = {"name", "tag", "sel", "annotate", "section", "plot"}
 TAG_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 KNOWN_REQUIREMENTS = {"velocities"}
 COORDINATE_NEEDS = ("in_box", "continuous", "any")
@@ -76,6 +76,8 @@ class PlanItem:
     params: Mapping[str, Any]
     definition: AnalysisDef
     annotations: tuple[dict[str, Any], ...] = ()
+    section: tuple[int, int] | None = None
+    window: Mapping[str, tuple[float, float]] = field(default_factory=dict)
 
     @property
     def needs_velocity(self) -> bool:
@@ -462,6 +464,13 @@ def build_plan(
             )
             continue
 
+        try:
+            section = _parse_section(entry.get("section"), where)
+            window = _parse_plot(entry.get("plot"), where)
+        except ValidationError as exc:
+            problems.append(str(exc))
+            continue
+
         params = {key: spec["default"] for key, spec in definition.params.items()}
         for key, value in entry.items():
             if key in RESERVED_KEYS:
@@ -492,6 +501,8 @@ def build_plan(
                 params=params,
                 definition=definition,
                 annotations=annotations,
+                section=section,
+                window=window,
             )
         )
 
@@ -505,6 +516,76 @@ def build_plan(
         raise ValidationError("\n".join(problems), where=str(cfg.yaml_path))
 
     return items
+
+
+def _parse_section(value: Any, where: str) -> tuple[int, int] | None:
+    if value is None:
+        return None
+    if (
+        not isinstance(value, (list, tuple))
+        or len(value) != 2
+        or not all(isinstance(item, int) and not isinstance(item, bool) for item in value)
+    ):
+        raise ValidationError(
+            "section 必须是 [起, 止] 两个整数（相对体系窗口）", where=f"{where}.section"
+        )
+    start, stop = value
+    if start < 0 or stop <= start:
+        raise ValidationError(
+            f"section 需满足 0 ≤ 起 < 止，收到 {[start, stop]}", where=f"{where}.section"
+        )
+    return (start, stop)
+
+
+def _parse_plot(value: Any, where: str) -> dict[str, tuple[float, float]]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError(
+            "plot 必须是映射（目前只支持 window）", where=f"{where}.plot"
+        )
+    unknown = set(value) - {"window"}
+    if unknown:
+        raise ValidationError(
+            f"plot 含未知字段 {sorted(unknown)}；允许 window", where=f"{where}.plot"
+        )
+
+    window = value.get("window")
+    if window is None:
+        return {}
+    if not isinstance(window, Mapping):
+        raise ValidationError(
+            "plot.window 必须是映射（轴 → [下界, 上界]）", where=f"{where}.plot.window"
+        )
+    unknown = set(window) - set("xyz")
+    if unknown:
+        raise ValidationError(
+            f"plot.window 含未知轴 {sorted(unknown)}；允许 ['x', 'y', 'z']",
+            where=f"{where}.plot.window",
+        )
+
+    parsed: dict[str, tuple[float, float]] = {}
+    for axis, bounds in window.items():
+        if (
+            not isinstance(bounds, (list, tuple))
+            or len(bounds) != 2
+            or not all(
+                isinstance(item, (int, float)) and not isinstance(item, bool)
+                for item in bounds
+            )
+        ):
+            raise ValidationError(
+                f"plot.window.{axis} 必须是两个数 [下界, 上界]，收到 {bounds!r}",
+                where=f"{where}.plot.window.{axis}",
+            )
+        low, high = (float(item) for item in bounds)
+        if high <= low:
+            raise ValidationError(
+                f"plot.window.{axis} 要求下界小于上界，收到 {[low, high]}",
+                where=f"{where}.plot.window.{axis}",
+            )
+        parsed[axis] = (low, high)
+    return parsed
 
 
 def _duplicate_directories(items: Sequence[PlanItem]) -> dict[str, list[int]]:
