@@ -10,7 +10,7 @@ from typing import Any, Mapping, Sequence
 import yaml
 
 from . import __version__
-from .errors import MdanalError, UsageError, ValidationError
+from .errors import MdanalError, ValidationError
 from .registry import (
     AnalysisDef,
     build_plan,
@@ -345,9 +345,6 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     try:
         return args.func(args)
-    except UsageError as exc:
-        print(f"用法错误：{exc}", file=sys.stderr)
-        return EXIT_USAGE
     except ValidationError as exc:
         print(f"校验失败：{exc}", file=sys.stderr)
         return EXIT_VALIDATION

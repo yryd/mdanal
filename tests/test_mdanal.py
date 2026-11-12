@@ -395,7 +395,7 @@ def test_window_only_affects_figure(real, tmp_path):
 
 
 def test_window_limit_ignores_bounds_outside_data():
-    fig, ax = plotutil.figure((3.0, 2.0))
+    fig, ax = chart.figure((3.0, 2.0))
     ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
 
     plotutil.limit(ax, "x", (-5.0, 1.5))  # 下界落在数据之外，忽略该边界
@@ -404,7 +404,7 @@ def test_window_limit_ignores_bounds_outside_data():
     assert ax.get_xlim() == pytest.approx((0.0, 1.5))
     assert ax.get_ylim() == pytest.approx((0.5, 1.5))
 
-    fig, ax = plotutil.figure((3.0, 2.0))
+    fig, ax = chart.figure((3.0, 2.0))
     ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
     plotutil.limit(ax, "x", (10.0, 20.0))  # 整个窗口在数据之外，保持数据范围
 
@@ -478,7 +478,6 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     universe = load_universe(probe)
     universe.trajectory[START]
     length = float(universe.dimensions[2])
-    low = probe.view.lower[2]
     reference = universe.select_atoms("type 1 3").center_of_mass()[2]  # 盒坐标
 
     velocity = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")

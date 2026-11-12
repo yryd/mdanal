@@ -10,9 +10,5 @@ class MdanalError(Exception):
         super().__init__(f"{where}：{message}" if where else message)
 
 
-class UsageError(MdanalError):
-    """命令行用法错误。"""
-
-
 class ValidationError(MdanalError):
     """输入校验错误：文件、分组、槽位、参数、依赖。"""

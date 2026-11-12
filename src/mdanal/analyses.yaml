@@ -41,14 +41,12 @@ lineardensity:
       axis_y: $y$ (Å)
       axis_z: $z$ (Å)
       mass: 质量密度 (g cm$^{-3}$)
-      charge: 电荷密度 (e mol cm$^{-3}$)   # MDAnalysis LinearDensity 口径，不是 e Å^-3
     en:
       title: Linear density
       axis_x: $x$ (Å)
       axis_y: $y$ (Å)
       axis_z: $z$ (Å)
       mass: mass density (g cm$^{-3}$)
-      charge: charge density (e mol cm^-3)  # MDAnalysis LinearDensity units, not e A^-3
 
 rdf:
   module: analyses.rdf

@@ -20,7 +20,6 @@ TOPOLOGY_SUFFIXES = (".lmp", ".data")
 TRAJECTORY_SUFFIXES = (".lammpstrj",)
 AXES = ("x", "y", "z")
 VIEWS = ("in_box", "continuous")
-INPUT_STATES = ("unwrapped", "wrapped", "unknown")
 
 UNKNOWN_INPUT_WARNING = "无法从轨迹表头判断坐标是否包裹，按未包裹坐标处理。"
 NOJUMP_WARNING = (
@@ -54,12 +53,6 @@ class ViewConfig:
     origin: tuple[float, float, float]
     shift: tuple[float, float, float]
     window: dict[str, tuple[float, float]] = field(default_factory=dict)
-
-    @property
-    def lower(self) -> tuple[float, float, float]:
-        """视图坐标下的盒下角。"""
-        return self.shift
-
 
 @dataclass(frozen=True)
 class SystemConfig:

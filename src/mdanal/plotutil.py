@@ -13,32 +13,12 @@ import numpy as np
 from . import chart
 from .errors import MdanalError
 
-STYLE = chart.STYLE
-CJK_FONT = chart.CJK_FONT
-
-
 def apply_style() -> None:
     chart.apply_style()
 
 
-def figure(size: Any) -> Any:
-    return chart.figure(size)
-
-
 def save(fig, path, dpi: int):
     return chart.save(fig, path, dpi)
-
-
-def colorbar(fig, ax, mappable, label: str):
-    return chart.colorbar(fig, ax, mappable, label)
-
-
-def annotate(ax, text: str) -> None:
-    chart.note(ax, text)
-
-
-def density_cmap():
-    return chart.density_cmap()
 
 
 def limit(ax, axis: str, bounds: tuple[float, float] | None) -> None:

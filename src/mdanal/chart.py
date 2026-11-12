@@ -280,37 +280,3 @@ def legend(ax, **kwargs: Any):
     options.update(kwargs)
     return ax.legend(**options)
 
-
-def fit_line(
-    ax,
-    x,
-    y,
-    *,
-    window: tuple[float, float] | None = None,
-    color: str | None = None,
-    ls: str = "--",
-    lw: float = 1.0,
-) -> dict[str, float]:
-    """在 window 范围内做一次线性拟合并画线，返回斜率、截距与拟合区间。
-
-    拟合本身属于分析；这里只提供画法与参数回传，供调用者在图上标注。
-    """
-    x = np.asarray(x, dtype=float)
-    y = np.asarray(y, dtype=float)
-    mask = np.isfinite(x) & np.isfinite(y)
-    if window is not None:
-        mask &= (x >= window[0]) & (x <= window[1])
-    if int(mask.sum()) < 2:
-        raise MdanalError("拟合区间的有效点少于 2 个")
-    slope, intercept = np.polyfit(x[mask], y[mask], 1)
-    low = float(window[0]) if window else float(x[mask].min())
-    high = float(window[1]) if window else float(x[mask].max())
-    xs = np.array([low, high])
-    ax.plot(xs, slope * xs + intercept, ls=ls, lw=lw, color=color or COLORS["reference"])
-    return {
-        "slope": float(slope),
-        "intercept": float(intercept),
-        "x_min": low,
-        "x_max": high,
-        "n_points": int(mask.sum()),
-    }
