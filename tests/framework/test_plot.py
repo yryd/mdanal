@@ -1,9 +1,11 @@
-"""公共绘图接口与标注解析的测试：不依赖轨迹、不需要 system.yaml。"""
+"""绘图层：公共 API、标注解析、窗口裁剪、标签与字体。"""
+
+from __future__ import annotations
 
 import pytest
 
-from mdanal.plot import annotations, chart
 from mdanal.errors import MdanalError, ValidationError
+from mdanal.plot import annotations, chart, plotutil
 
 
 def test_chart_draws_from_arrays(tmp_path):
@@ -56,3 +58,29 @@ def test_annotations_axis_mismatch_is_skipped():
 
     annotations.draw(ax, Ctx(), axes={"x": "z"})
     assert len(ax.lines) == 1  # 只有数据线，没有竖线
+
+
+def test_window_limit_ignores_bounds_outside_data():
+    fig, ax = chart.figure((3.0, 2.0))
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
+
+    plotutil.limit(ax, "x", (-5.0, 1.5))
+    plotutil.limit(ax, "y", (0.5, 1.5))
+
+    assert ax.get_xlim() == pytest.approx((0.0, 1.5))
+    assert ax.get_ylim() == pytest.approx((0.5, 1.5))
+
+    fig, ax = chart.figure((3.0, 2.0))
+    ax.plot([0.0, 1.0, 2.0], [0.0, 1.0, 2.0])
+    plotutil.limit(ax, "x", (10.0, 20.0))
+    assert ax.get_xlim() == pytest.approx((0.0, 2.0))
+
+
+def test_missing_label_is_rejected():
+    labels = plotutil.Labels({"zh": {"title": "t"}}, {})
+    with pytest.raises(MdanalError, match="缺少标签"):
+        labels("axis_x")
+
+
+def test_font_is_available():
+    assert chart.missing_fonts() == []

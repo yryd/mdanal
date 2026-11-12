@@ -249,7 +249,8 @@ def _print_registry(discovery: Discovery) -> None:
 
     headers = ("分析", "槽位", "默认参数", "依赖", "坐标需求", "模块")
     widths = [
-        max(len(headers[i]), *(len(row[i]) for row in rows)) for i in range(len(headers))
+        max(len(headers[i]), max((len(row[i]) for row in rows), default=0))
+        for i in range(len(headers))
     ]
     print("  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)))
     print("  ".join("-" * w for w in widths))

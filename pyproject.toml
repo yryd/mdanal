@@ -30,3 +30,9 @@ where = ["src"]
 
 [tool.setuptools.package-data]
 mdanal = ["config/*.yaml"]
+
+
+[tool.pytest.ini_options]
+# 裸 pytest 只跑框架与内置插件烟测；科学断言用 pytest tests/analyses 显式跑
+testpaths = ["tests/framework", "tests/smoke"]
+markers = ["analysis: 需要真实分析的科学断言（默认不跑）"]

@@ -5,7 +5,6 @@
 
 from __future__ import annotations
 
-import importlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -37,7 +36,11 @@ class CompareItem:
     box: tuple[float, float, float] = (0.0, 0.0, 0.0)
 
 
-def run_compare(config_path: str | Path, out_dir: str | Path | None = None) -> Path:
+def run_compare(
+    config_path: str | Path,
+    out_dir: str | Path | None = None,
+    registry: Mapping[str, Any] | None = None,
+) -> Path:
     config_path = Path(config_path).expanduser().resolve()
     config = _load_config(config_path)
     items = [_load_item(entry, config_path) for entry in config["items"]]
@@ -46,7 +49,7 @@ def run_compare(config_path: str | Path, out_dir: str | Path | None = None) -> P
 
     # 同一次对比必须来自同一分析；参数（如 dim）可由 figure.table 覆盖
     module_name, params = _resolve_analysis(items[0], directory)
-    comparison = _module_compare(module_name, params)
+    comparison = _module_compare(module_name, params, registry)
     for item in items[1:]:
         other_module, other_params = _resolve_analysis(item, directory)
         if other_module != module_name or other_params != params:
@@ -276,12 +279,19 @@ def _resolve_analysis(item: CompareItem, directory: str) -> tuple[str, dict[str,
     return str(row["name"]), params
 
 
-def _module_compare(module_name: str, params: Mapping[str, Any]) -> dict[str, Any]:
-    try:
-        module = importlib.import_module(f"mdanal.analyses.{module_name}")
-    except ImportError as exc:
-        raise MdanalError(f"找不到分析模块 {module_name}：{exc}") from exc
-    comparison = getattr(module, "COMPARE", None)
+def _module_compare(
+    module_name: str,
+    params: Mapping[str, Any],
+    registry: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    if registry is None:
+        from ..config.registry import discover
+
+        registry = discover().definitions
+    definition = registry.get(module_name)
+    if definition is None:
+        raise MdanalError(f"找不到分析 {module_name}（不在当前注册表中）")
+    comparison = definition.compare
     if not comparison:
         raise ValidationError(f"{module_name} 不支持对比（没有 COMPARE 声明）")
 
