@@ -52,7 +52,7 @@ def clip_window(
 
 
 class Labels:
-    """标签解析：分析级（analyses.yaml）→ 全局（labels.yaml）；缺键报错。"""
+    """标签解析：分析模块的 LABELS → 全局（labels.yaml）；缺键报错。"""
 
     def __init__(
         self,
@@ -69,6 +69,6 @@ class Labels:
             text = self._common[key]
         else:
             raise MdanalError(
-                f"缺少标签 {key!r}；请在 analyses.yaml 中该分析的 labels 或 labels.yaml 中补齐"
+                f"缺少标签 {key!r}；请在该分析的 LABELS 或 labels.yaml 中补齐"
             )
         return text.format(**fmt) if fmt else text

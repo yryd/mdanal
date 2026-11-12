@@ -8,6 +8,40 @@ from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 from ..plot import annotations, chart
 
+
+SLOTS = ("donor", "hydrogen", "acceptor")
+
+PARAMS = {
+    "d_a_cutoff": {
+        "type": float,
+        "default": 3.5,
+        "unit": "Å",
+        "min": 0.1,
+        "help": "供体-受体距离上限",
+    },
+    "d_h_a_angle_cutoff": {
+        "type": float,
+        "default": 150,
+        "unit": "度",
+        "min": 0.0,
+        "max": 180.0,
+        "help": "D-H-A 角度下限",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "氢键数",
+        "x": "时间 (ps)",
+        "y": "氢键数",
+    },
+    "en": {
+        "title": "Hydrogen bonds",
+        "x": "time (ps)",
+        "y": "hydrogen bonds",
+    },
+}
+
 OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
 
 

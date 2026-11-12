@@ -13,6 +13,44 @@ from ..run.writers import project_grid
 AXES = ("x", "y", "z")
 
 
+SLOTS = ("group",)
+
+PARAMS = {
+    "delta": {
+        "type": float,
+        "default": 1.0,
+        "unit": "Å",
+        "min": 0.01,
+        "help": "投影网格的边长；越小越细，代价按立方增长",
+    },
+    "sum_axis": {
+        "type": str,
+        "default": "y",
+        "choices": AXES,
+        "help": "沿哪个轴求和，投影到另外两个轴",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "密度投影",
+        "cbar": "数密度 (Å$^{-3}$)",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+    },
+    "en": {
+        "title": "Density projection",
+        "cbar": "number density (Å$^{-3}$)",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+    },
+}
+
+COORDINATES = "in_box"
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     params = ctx.params
     sum_axis = str(params["sum_axis"]).lower()

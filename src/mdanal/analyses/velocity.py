@@ -11,6 +11,67 @@ from ..errors import ValidationError
 AXES = ("x", "y", "z")
 
 
+SLOTS = ("group", "ref")
+
+PARAMS = {
+    "dim": {
+        "type": (str, int),
+        "default": "z",
+        "choices": AXES + (0, 1, 2),
+        "help": "剖面的法向轴：名称 x/y/z 或序号 0/1/2",
+    },
+    "vdim": {
+        "type": (str, int),
+        "default": "x",
+        "choices": AXES + (0, 1, 2),
+        "help": "速度分量：名称 x/y/z 或序号 0/1/2",
+    },
+    "bin_width": {
+        "type": float,
+        "default": 1.0,
+        "unit": "Å",
+        "min": 0.01,
+        "help": "剖面 bin 宽",
+    },
+    "grouping": {
+        "type": str,
+        "default": "molecules",
+        "choices": ("atoms", "residues", "segments", "molecules"),
+        "help": "按什么分组统计速度",
+    },
+    "sym": {
+        "type": bool,
+        "default": False,
+        "help": "是否对剖面做对称化",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "流速剖面",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+        "v_x": "$v_x$ (Å ps$^{-1}$)",
+        "v_y": "$v_y$ (Å ps$^{-1}$)",
+        "v_z": "$v_z$ (Å ps$^{-1}$)",
+    },
+    "en": {
+        "title": "Velocity profile",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+        "v_x": "$v_x$ (Å ps$^{-1}$)",
+        "v_y": "$v_y$ (Å ps$^{-1}$)",
+        "v_z": "$v_z$ (Å ps$^{-1}$)",
+    },
+}
+
+REQUIRES = ("velocities",)
+PACKAGE = {"name": "maicos", "min_version": "0.12"}
+MUTATES_POSITIONS = True
+
+
 COMPARE = {
     "table": "velocity",
     "x": "{axis} (Å)",

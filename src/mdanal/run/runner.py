@@ -342,7 +342,7 @@ def _prepare_outdir(outdir: Path, force: bool) -> None:
 
 
 def _import_module(item: PlanItem):
-    module_path = f"mdanal.{item.definition.module}"
+    module_path = item.definition.module
     try:
         return importlib.import_module(module_path)
     except ImportError as exc:

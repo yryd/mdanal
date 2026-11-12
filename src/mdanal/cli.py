@@ -13,10 +13,11 @@ from . import __version__
 from .errors import MdanalError, ValidationError
 from .config.registry import (
     AnalysisDef,
+    Discovery,
     build_plan,
     check_packages,
     check_requirements,
-    load_registry,
+    discover,
 )
 from .run.runner import Prepared, RunOptions, execute, prepare
 from .config.system import (
@@ -26,7 +27,6 @@ from .config.system import (
 )
 
 PROGRAM_DIR = Path(__file__).resolve().parent
-REGISTRY_PATH = PROGRAM_DIR / "analyses.yaml"
 DEFAULTS_PATH = PROGRAM_DIR / "config" / "defaults.yaml"
 LABELS_PATH = PROGRAM_DIR / "config" / "labels.yaml"
 
@@ -48,10 +48,12 @@ INPUT_LABELS = {
 
 
 def cmd_list(args: argparse.Namespace) -> int:
-    registry = load_registry(REGISTRY_PATH)
+    discovery = discover()
+    if args.name:
+        return _print_analysis(discovery, args.name)
     if args.system:
-        return _list_system(args.system, registry)
-    _print_registry(registry)
+        return _list_system(args.system, discovery)
+    _print_registry(discovery)
     return EXIT_OK
 
 
@@ -114,8 +116,8 @@ def cmd_help(args: argparse.Namespace) -> int:
 def _prepare(path: str, *, memory: bool = True) -> tuple[Prepared, list[str], list[str]]:
     """读配置 → 建计划 → 查依赖 → 建视图 → 解析分组，返回 (输入, 问题, 提示)。"""
     cfg = read_system(path)
-    registry = load_registry(REGISTRY_PATH)
-    plan = build_plan(cfg, registry)
+    discovery = discover()
+    plan = build_plan(cfg, discovery.definitions, discovery.failures)
 
     problems: list[str] = list(check_packages(plan))
     prepared = prepare(cfg, plan, memory=memory)
@@ -192,7 +194,7 @@ def _raise_if_problems(problems: Sequence[str]) -> None:
     raise ValidationError("\n".join(problems), where="校验未通过")
 
 
-def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
+def _list_system(path: str, discovery: Discovery) -> int:
     cfg = read_system(path)
     print(f"体系：{cfg.name}")
     print(f"目录：{cfg.directory}")
@@ -219,7 +221,7 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
     else:
         print("  （无）")
 
-    plan = build_plan(cfg, registry)
+    plan = build_plan(cfg, discovery.definitions, discovery.failures)
     print(f"\n将要运行的分析（{len(plan)}）：")
     print(f"  {'序号':<4}{'子目录':<18}{'分析':<12}{'视图':<12}选择")
     for item in plan:
@@ -230,11 +232,14 @@ def _list_system(path: str, registry: Mapping[str, AnalysisDef]) -> int:
     return EXIT_OK
 
 
-def _print_registry(registry: Mapping[str, AnalysisDef]) -> None:
+def _print_registry(discovery: Discovery) -> None:
     rows = []
-    for name in sorted(registry):
-        definition = registry[name]
-        params = ", ".join(f"{k}={v}" for k, v in definition.params.items()) or "-"
+    for name in sorted(discovery.definitions):
+        definition = discovery.definitions[name]
+        params = ", ".join(
+            f"{key}={spec['default']}"
+            for key, spec in definition.params.items()
+        ) or "-"
         requires = ", ".join(definition.requires) or "-"
         rows.append(
             (
@@ -255,6 +260,59 @@ def _print_registry(registry: Mapping[str, AnalysisDef]) -> None:
     print("  ".join("-" * w for w in widths))
     for row in rows:
         print("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)))
+
+    if discovery.failures:
+        print(f"\n无法加载的模块（{len(discovery.failures)}）：")
+        for failure in discovery.failures:
+            print(f"  {failure.path:<18}{failure.category}：{failure.detail}")
+
+
+def _type_text(expected: Any) -> str:
+    if isinstance(expected, tuple):
+        return " / ".join(item.__name__ for item in expected)
+    return expected.__name__
+
+
+def _print_analysis(discovery: Discovery, name: str) -> int:
+    definition = discovery.definitions.get(name)
+    if definition is None:
+        failure = next(
+            (item for item in discovery.failures if item.name == name), None
+        )
+        if failure is not None:
+            raise ValidationError(
+                f"{name} 加载失败：{failure.category}（{failure.detail}）",
+                where=failure.path,
+            )
+        raise ValidationError(
+            f"没有名为 {name!r} 的分析；可用 {sorted(discovery.definitions)}"
+        )
+
+    print(f"分析：{definition.name}")
+    print(f"模块：{definition.module}")
+    print(f"坐标：{definition.coordinates}")
+    print(f"依赖：{', '.join(definition.requires) or '-'}")
+    if definition.package:
+        print(
+            f"第三方包：{definition.package['name']}"
+            f" >= {definition.package.get('min_version') or '任意'}"
+        )
+    print(f"槽位：{', '.join(definition.slots)}")
+    print("\n参数：")
+    for key, spec in definition.params.items():
+        parts = [_type_text(spec["type"]), f"默认 {spec['default']!r}"]
+        if spec.get("unit"):
+            parts.append(spec["unit"])
+        if spec.get("choices"):
+            parts.append(f"可选 {list(spec['choices'])}")
+        if spec.get("min") is not None:
+            parts.append(f"≥ {spec['min']}")
+        if spec.get("max") is not None:
+            parts.append(f"≤ {spec['max']}")
+        if spec.get("help"):
+            parts.append(str(spec["help"]))
+        print(f"  {key:<18}{'    '.join(parts)}")
+    return EXIT_OK
 
 
 # --------------------------------------------------------------------------- #
@@ -320,6 +378,7 @@ def build_parser() -> argparse.ArgumentParser:
     check.set_defaults(func=cmd_check)
 
     listing = subparsers.add_parser("list", help="列出分析或体系信息")
+    listing.add_argument("name", nargs="?", help="查看某个分析的输入契约")
     listing.add_argument("--system", metavar="PATH", help="查看某个体系的分组与计划")
     listing.set_defaults(func=cmd_list)
 

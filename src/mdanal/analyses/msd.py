@@ -9,6 +9,38 @@ from MDAnalysis.analysis.msd import EinsteinMSD
 from ..plot import annotations, chart
 
 
+SLOTS = ("group",)
+
+PARAMS = {
+    "msd_type": {
+        "type": str,
+        "default": "xyz",
+        "choices": ("xyz", "xy", "xz", "yz", "x", "y", "z"),
+        "help": "MSD 的维度组合",
+    },
+    "fft": {
+        "type": bool,
+        "default": True,
+        "help": "用 FFT 加速",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "均方位移",
+        "x": r"$\Delta t$ (ps)",
+        "y": "MSD (Å$^{2}$)",
+    },
+    "en": {
+        "title": "Mean squared displacement",
+        "x": r"$\Delta t$ (ps)",
+        "y": "MSD (Å$^{2}$)",
+    },
+}
+
+COORDINATES = "continuous"
+
+
 COMPARE = {
     "table": "msd",
     "x": "Δt (ps)",

@@ -10,6 +10,37 @@ from ..plot import annotations, chart
 from ..errors import ValidationError
 
 
+SLOTS = ("a", "b")
+
+PARAMS = {
+    "range": {
+        "type": list,
+        "default": [0.5, 6.0],
+        "unit": "Å",
+        "help": "r 的范围 [最小值, 最大值]",
+    },
+    "nbins": {
+        "type": int,
+        "default": 60,
+        "min": 2,
+        "help": "直方图 bin 数",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "径向分布函数",
+        "x": "$r$ (Å)",
+        "y": "$g(r)$",
+    },
+    "en": {
+        "title": "Radial distribution function",
+        "x": "$r$ (Å)",
+        "y": "$g(r)$",
+    },
+}
+
+
 COMPARE = {
     "table": "rdf",
     "x": "r (Å)",

@@ -72,7 +72,7 @@ def _raw_universe(cfg) -> mda.Universe:
 @pytest.fixture(scope="module")
 def real():
     cfg = read_system(SYSTEM)
-    registry = load_registry(cli.REGISTRY_PATH)
+    registry = load_registry()
     return cfg, registry
 
 
@@ -118,7 +118,7 @@ def test_example_config_matches_registry():
 
     assert set(data) <= ALLOWED_KEYS
 
-    registry = load_registry(cli.REGISTRY_PATH)
+    registry = load_registry()
     for entry in data["analyses"]:
         assert entry["name"] in registry
         allowed = RESERVED_KEYS | set(registry[entry["name"]].params)

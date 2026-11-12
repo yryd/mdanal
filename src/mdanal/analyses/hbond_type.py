@@ -9,6 +9,46 @@ from ..plot import annotations, chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
+
+SLOTS = ("donor", "hydrogen", "acceptor")
+
+PARAMS = {
+    "d_a_cutoff": {
+        "type": float,
+        "default": 3.5,
+        "unit": "Å",
+        "min": 0.1,
+        "help": "供体-受体距离上限",
+    },
+    "d_h_a_angle_cutoff": {
+        "type": float,
+        "default": 150,
+        "unit": "度",
+        "min": 0.0,
+        "max": 180.0,
+        "help": "D-H-A 角度下限",
+    },
+    "figure_axis": {
+        "type": str,
+        "default": "rate",
+        "choices": ("rate", "total"),
+        "help": "柱状图用每帧平均（rate）还是总次数（total）",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "氢键类型分布",
+        "count": "次数",
+        "rate": "每帧平均次数",
+    },
+    "en": {
+        "title": "Hydrogen bond types",
+        "count": "count",
+        "rate": "per-frame average",
+    },
+}
+
 COLUMNS = ("供体", "受体", "次数", "每帧平均", "占比")
 FIGURE_ROWS = 12
 

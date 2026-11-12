@@ -9,6 +9,63 @@ from ..plot import annotations, chart
 from ..errors import ValidationError
 from .hbond import build_analysis
 
+
+SLOTS = ("donor", "hydrogen", "acceptor")
+
+PARAMS = {
+    "d_a_cutoff": {
+        "type": float,
+        "default": 3.5,
+        "unit": "Å",
+        "min": 0.1,
+        "help": "供体-受体距离上限",
+    },
+    "d_h_a_angle_cutoff": {
+        "type": float,
+        "default": 150,
+        "unit": "度",
+        "min": 0.0,
+        "max": 180.0,
+        "help": "D-H-A 角度下限",
+    },
+    "tau_max_ps": {
+        "type": float,
+        "default": 20,
+        "unit": "ps",
+        "min": 0.001,
+        "help": "最大滞后时间，按帧间隔换算成帧",
+    },
+    "intermittency": {
+        "type": int,
+        "default": 1,
+        "min": 0,
+        "help": "间歇判据容忍的断帧数",
+    },
+    "window_step": {
+        "type": int,
+        "default": 1,
+        "min": 1,
+        "help": "时间原点取样步长；调大可加速",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "氢键寿命",
+        "x": "滞后 (ps)",
+        "y": r"$C(\tau)$",
+        "cont": "连续",
+        "inter": "间歇（容忍 {n} 帧）",
+    },
+    "en": {
+        "title": "Hydrogen bond lifetime",
+        "x": "lag (ps)",
+        "y": r"$C(\tau)$",
+        "cont": "continuous",
+        "inter": "intermittent ({n} frame tolerance)",
+    },
+}
+
 LEVEL = 1.0 / np.e
 # 帧间隔超过这个值就提示：水的氢键寿命约 1 ps，再粗的采样分辨不出来
 MAX_FRAME_PS = 1.0

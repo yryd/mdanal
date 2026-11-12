@@ -19,6 +19,42 @@ AVOGADRO = constants["N_Avogadro"]
 VOLUME_CONVERSION = 1e-24  # Å^3 → cm^3
 
 
+SLOTS = ("group",)
+
+PARAMS = {
+    "binsize": {
+        "type": float,
+        "default": 0.5,
+        "unit": "Å",
+        "min": 0.01,
+        "help": "直方图 bin 宽",
+    },
+    "dim": {
+        "type": str,
+        "default": "z",
+        "choices": AXES,
+        "help": "沿哪个轴统计",
+    },
+}
+
+LABELS = {
+    "zh": {
+        "title": "线密度",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+        "mass": "质量密度 (g cm$^{-3}$)",
+    },
+    "en": {
+        "title": "Linear density",
+        "axis_x": "$x$ (Å)",
+        "axis_y": "$y$ (Å)",
+        "axis_z": "$z$ (Å)",
+        "mass": "mass density (g cm$^{-3}$)",
+    },
+}
+
+
 COMPARE = {
     "table": "lineardensity_{dim}",
     "x": "{axis} (Å)",
