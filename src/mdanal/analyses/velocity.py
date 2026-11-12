@@ -29,6 +29,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim])
     ctx.extras["velocity_ref"] = ref
 
+    # 单位：MAICoS 的 bin_pos 为 Å，profile 为 Å/ps，dprofile 是标准误（Å/ps）
     analysis = VelocityPlanar(
         ctx.groups["group"].atoms,
         dim=dim,

@@ -49,6 +49,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     slice_volume = volume / bins
     lengths = [float(value) for value in dimensions]
 
+    # 单位：质量 amu、电荷 e（MDAnalysis 原子属性）
     masses = np.asarray(group.masses, dtype=float)
     charges = np.asarray(group.charges, dtype=float)
     mass_sum = {axis: np.zeros(nbins) for axis in AXES}
@@ -73,6 +74,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             charge_sum[axis] += charge_hist
             edges[axis] = bin_edges
 
+    # 输出口径沿用 MDAnalysis LinearDensity 文档：
+    #   质量密度 g·cm⁻³；电荷密度 e·mol·cm⁻³（**不是** e·Å⁻³）
     norm_factor = AVOGADRO * VOLUME_CONVERSION
     tables: dict[str, pd.DataFrame] = {}
     for axis in AXES:
@@ -91,7 +94,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             {
                 f"{axis} (Å)": centers,
                 "质量密度 (g/cm^3)": mass_density[:n_bins],
-                "电荷密度 (e/Å^3)": charge_density[:n_bins],
+                "电荷密度 (e mol/cm^3)": charge_density[:n_bins],
             }
         )
     return tables

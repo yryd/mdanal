@@ -35,6 +35,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         zdim=lz,
     )
     analysis.run(start=ctx.start, stop=ctx.stop)
+    # 单位：MDAnalysis 的 grid 已是数密度 Å⁻³（见 DensityAnalysis 文档），edges 单位 Å
     grid = analysis.results.density
     ctx.extras["density_extent"] = {
         axis: float(np.asarray(grid.edges[i])[-1] - np.asarray(grid.edges[i])[0])

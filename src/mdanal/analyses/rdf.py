@@ -33,6 +33,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
                 "距离超过半盒长时无法配对，请缩小 range"
             )
 
+    # 单位：range 与 edges 为 Å；g(r) 无量纲
     analysis = InterRDF(group_a.atoms, group_b.atoms, nbins=nbins, range=(rmin, rmax))
     analysis.run(start=ctx.start, stop=ctx.stop)
 

@@ -22,6 +22,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     analysis = build_analysis(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
+    # 单位：count_by_type() 返回 (供体类型, 受体类型, 次数)，次数为整数计数
     counts = np.asarray(analysis.count_by_time(), dtype=int)
     n_frames = max(counts.size, 1)
     total = int(counts.sum())

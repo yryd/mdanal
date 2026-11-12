@@ -26,6 +26,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     )
     analysis.run(start=ctx.start, stop=ctx.stop)
 
+    # 单位：timeseries 为 Å²；delta_t_values 跟随轨迹时间，这里是 ps
     lag = np.asarray(analysis.results.delta_t_values, dtype=float)
     msd = np.asarray(analysis.results.timeseries, dtype=float)
     # delta_t_values 已按轨迹时间单位（ps）给出

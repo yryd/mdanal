@@ -46,6 +46,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     analysis = build_analysis(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
+    # 单位：lifetime() 返回 (tau, C(tau))，tau 以「帧」为单位，乘 frame_dt 才是 ps
     continuous = np.asarray(
         analysis.lifetime(tau_max=tau_max, window_step=window_step, intermittency=0)
     )

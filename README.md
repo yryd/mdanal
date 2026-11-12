@@ -231,6 +231,22 @@ groups:
 
 `mdanal list` 显示各分析的选择数与默认参数。
 
+### 输出单位
+
+各列单位以调用到的库的文档为准；代码里每处取数都标了单位。
+
+| 输出 | 单位 | 来源 |
+|---|---|---|
+| 坐标列（`x (Å)`、`r (Å)`、`滞后 (ps)` 等） | Å / ps | MDAnalysis、MAICoS |
+| 质量密度 | g·cm⁻³ | 由 amu/Å³ 换算（1 amu = 1/N_A g） |
+| 电荷密度 | **e·mol·cm⁻³** | MDAnalysis `LinearDensity` 文档口径，**不是 e·Å⁻³** |
+| 密度投影的「数密度」 | Å⁻³ | MDAnalysis `DensityAnalysis` 网格 |
+| `g(r)` | 无量纲 | `InterRDF` |
+| `MSD (Å^2)` / `Δt (ps)` | Å² / ps | `EinsteinMSD` |
+| 氢键数 / 次数 / 出现帧数 | 个 | `HydrogenBondAnalysis` |
+| 氢键寿命、滞后 | ps | 库给出以帧为单位的 τ，乘帧间隔得到 ps |
+| `v (Å/ps)` / 误差 | Å·ps⁻¹ | MAICoS `VelocityPlanar`，误差列是标准误 |
+
 `density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面零点为参考组质心，表中的坐标已加回该质心，与其他分析同框架。
 
 ## 输出

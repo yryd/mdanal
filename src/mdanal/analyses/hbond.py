@@ -35,6 +35,8 @@ COMPARE = {
 def run(ctx) -> dict[str, pd.DataFrame]:
     donor = ctx.groups["donor"]
 
+    # 单位：count_by_time() 是每帧氢键数（个）；results.hbonds 的列为
+    # [frame, donor, hydrogen, acceptor, distance(Å), angle(度)]
     analysis = build_analysis(ctx)
     analysis.run(start=ctx.start, stop=ctx.stop)
 
