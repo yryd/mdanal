@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from ..plot import annotations, chart
+from ..plot import annotations, chart, plotutil
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -106,6 +106,8 @@ def figures(ctx, tables):
     chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
+    plotutil.limit(ax, "x", ctx.window("x"))
+    plotutil.limit(ax, "y", ctx.window("y"))
     ax.set_title(ctx.label("title"))
     annotations.draw(ax, ctx)
     if ctx.annotate:

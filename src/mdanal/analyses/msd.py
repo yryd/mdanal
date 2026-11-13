@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.msd import EinsteinMSD
 
-from ..plot import annotations, chart
+from ..plot import annotations, chart, plotutil
 
 
 SLOTS = ("group",)
@@ -73,6 +73,8 @@ def figures(ctx, tables):
     chart.line(ax, table[cols[0]], table[cols[1]], marker="o", ms=2, lw=1.0)
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
+    plotutil.limit(ax, "x", ctx.window("x"))
+    plotutil.limit(ax, "y", ctx.window("y"))
     ax.set_title(ctx.label("title"))
     annotations.draw(ax, ctx)
     if ctx.annotate:

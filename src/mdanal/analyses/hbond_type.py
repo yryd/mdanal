@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..plot import annotations, chart
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
@@ -174,6 +174,7 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
         headroom=1.35,
     )
     ax.set_xlabel(ctx.label(suffix))
+    plotutil.limit(ax, "x", ctx.window("x"))
     ax.set_title(ctx.label("title"))
     annotations.draw(ax, ctx)
     if ctx.annotate:

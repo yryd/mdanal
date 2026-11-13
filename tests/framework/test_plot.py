@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import numpy as np
 import pytest
 
 from mdanal.errors import MdanalError, ValidationError
@@ -84,3 +85,31 @@ def test_missing_label_is_rejected():
 
 def test_font_is_available():
     assert chart.missing_fonts() == []
+
+
+def test_bars_handles_zero_negative_and_nan():
+    fig, ax = chart.figure((3.0, 2.0))
+    chart.bars(ax, ["a", "b"], [0.0, 0.0])
+    low, high = ax.get_xlim()
+    assert low <= 0.0 < high
+
+    fig, ax = chart.figure((3.0, 2.0))
+    chart.bars(ax, ["a", "b"], [-2.0, -1.0])
+    low, high = ax.get_xlim()
+    assert low < -2.0 and high >= 0.0
+
+    fig, ax = chart.figure((3.0, 2.0))
+    chart.bars(ax, ["a", "b"], [float("nan")] * 2)
+    low, high = ax.get_xlim()
+    assert np.isfinite(low) and np.isfinite(high) and high > low
+
+    fig, ax = chart.figure((3.0, 2.0))
+    chart.bars(ax, ["a", "b"], [-2.0, 3.0])
+    low, high = ax.get_xlim()
+    assert low < -2.0 and high > 3.0
+
+
+def test_bars_rejects_length_mismatch():
+    fig, ax = chart.figure((3.0, 2.0))
+    with pytest.raises(MdanalError, match="长度不一致"):
+        chart.bars(ax, ["a"], [1.0, 2.0])

@@ -151,13 +151,34 @@ def bars(
 ):
     """横向条形图：位置 0..n-1，值在 x 轴，标签在 y 轴。"""
     values = np.asarray(values, dtype=float)
+    if len(labels) != values.size:
+        raise MdanalError(
+            f"bars 的 labels 与 values 长度不一致：{len(labels)} != {values.size}"
+        )
+    if notes is not None and len(notes) != values.size:
+        raise MdanalError(
+            f"bars 的 notes 与 values 长度不一致：{len(notes)} != {values.size}"
+        )
+
     positions = np.arange(len(labels))
     drawn = ax.barh(positions, values, height=height, color=color or COLORS["primary"])
     ax.set_yticks(positions, list(labels))
     ax.invert_yaxis()
     if notes is not None:
         ax.bar_label(drawn, labels=list(notes), padding=2, fontsize=note_fontsize)
-    ax.set_xlim(0, float(values.max()) * headroom if values.size else 1.0)
+
+    # 允许零、负值与 NaN：范围按有限值计算；全零/全 NaN 退化为 (0, 1)
+    finite = values[np.isfinite(values)]
+    low = min(0.0, float(finite.min())) if finite.size else 0.0
+    high = max(0.0, float(finite.max())) if finite.size else 1.0
+    if high == low:
+        high = low + 1.0
+    else:
+        if high > 0:
+            high *= headroom
+        if low < 0:
+            low *= headroom
+    ax.set_xlim(low, high)
     return drawn
 
 

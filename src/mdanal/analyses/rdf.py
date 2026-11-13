@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.rdf import InterRDF
 
-from ..plot import annotations, chart
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 
 
@@ -82,6 +82,8 @@ def figures(ctx, tables):
     chart.refline(ax, 1.0, ls="--", lw=0.6, color="0.6")
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
+    plotutil.limit(ax, "x", ctx.window("x"))
+    plotutil.limit(ax, "y", ctx.window("y"))
     ax.set_title(ctx.label("title"))
     annotations.draw(ax, ctx)
     if ctx.annotate:

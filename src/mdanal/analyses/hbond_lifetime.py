@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..plot import annotations, chart
+from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
@@ -207,6 +207,8 @@ def figures(ctx, tables):
     ax.set_ylim(0, 1.02)
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
+    plotutil.limit(ax, "x", ctx.window("x"))
+    plotutil.limit(ax, "y", ctx.window("y"))
     ax.set_title(ctx.label("title"))
     chart.legend(ax)
     annotations.draw(ax, ctx)
