@@ -113,3 +113,54 @@ def test_unknown_axis_is_rejected(real, tmp_path):
 # --------------------------------------------------------------------------- #
 # 命名
 # --------------------------------------------------------------------------- #
+
+
+def test_uniform_velocity_profile_is_flat():
+    """所有原子同速时剖面为常数，误差为 0，坐标落在盒内。"""
+    from types import SimpleNamespace
+
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import velocity as velocity_module
+
+    n_frames, n_atoms, length = 4, 8, 20.0
+    rng = np.random.default_rng(1)
+    coords = np.zeros((n_frames, n_atoms, 3))
+    coords[:, :, 0] = rng.uniform(1.0, length - 1.0, size=(n_atoms,))[None, :]
+    coords[:, :, 1] = rng.uniform(1.0, length - 1.0, size=(n_atoms,))[None, :]
+    coords[:, :, 2] = np.linspace(1.0, length - 1.0, n_atoms)[None, :]
+    velocities = np.zeros((n_frames, n_atoms, 3))
+    velocities[:, :, 0] = 2.0
+    dimensions = np.tile([length, length, length, 90, 90, 90], (n_frames, 1))
+
+    universe = mda.Universe.empty(n_atoms, trajectory=True)
+    universe.load_new(
+        coords, velocities=velocities, dimensions=dimensions, format=MemoryReader
+    )
+    universe.add_TopologyAttr("mass", np.ones(n_atoms))
+
+    ctx = SimpleNamespace(
+        universe=universe,
+        groups={
+            "group": SimpleNamespace(atoms=universe.atoms),
+            "ref": SimpleNamespace(atoms=universe.atoms[:2]),
+        },
+        start=0,
+        stop=n_frames,
+        selection_frame=0,
+        extras={},
+        params={
+            "dim": "z",
+            "vdim": "x",
+            "bin_width": 2.0,
+            "grouping": "atoms",
+            "sym": False,
+        },
+    )
+    table = velocity_module.run(ctx)["velocity"]
+    finite = table["vx_A_per_ps"].notna()
+    assert finite.any()
+    assert np.allclose(table.loc[finite, "vx_A_per_ps"], 2.0)
+    assert np.allclose(table.loc[finite, "error_A_per_ps"], 0.0)
+    assert table["z_angstrom"].min() >= 0.0
+    assert table["z_angstrom"].max() <= length

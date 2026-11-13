@@ -270,7 +270,8 @@ groups:
 | `lifetime_ps` / `lag_ps` | ps | 库给出以帧为单位的 τ，乘帧间隔得到 ps |
 | `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ | MAICoS `VelocityPlanar`，误差列是标准误 |
 
-`density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面零点为参考组质心，表中的坐标已加回该质心，与其他分析同框架。
+`density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面坐标已换算为盒坐标（MAICoS 的 `bin_pos` 加平均盒心）；参考组质心只用于库内部的
+相对剖面，记入 `provenance.json`。盒子变化时坐标按窗口平均盒长换算并给出警告。
 
 ### 表头（机器名）
 

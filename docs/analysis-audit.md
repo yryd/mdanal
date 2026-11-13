@@ -64,10 +64,10 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `r_angstrom` | `InterRDF` 的 bin 中心 | Å | `results.edges` | 待核对 |
-| `g_r` | `InterRDF.results.rdf` | 无量纲 | MDAnalysis 文档 | 待核对（理想气体 g≈1） |
+| `r_angstrom` | `InterRDF` 的 bin 中心 | Å | `results.edges` | **已核对** |
+| `g_r` | `InterRDF.results.rdf` | 无量纲 | MDAnalysis 文档 | **已核对**：理想气体 g(r)≈1（实测 1.05） |
 
-半盒检查已有：`range` 上限超过半盒长时报错。计划：补理想气体解析测试。
+半盒检查已有；新增理想气体解析测试。
 
 ### hbond
 
@@ -103,16 +103,18 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `dt_ps` | `results.delta_t_values` | ps | MDAnalysis | 待解析核对 |
-| `msd_A2` | `results.timeseries` | Å² | MDAnalysis | 待解析核对（匀速 MSD=v²t²） |
+| `dt_ps` | `results.delta_t_values` | ps | MDAnalysis | **已核对**：匀速 MSD=(v·Δt)² |
+| `msd_A2` | `results.timeseries` | Å² | MDAnalysis | **已核对** |
 
 ### velocity
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `{axis}_angstrom` | `bin_pos` + 首帧参考组质心 | Å | MAICoS | **口径待确认**：参考组漂移时是固定偏移 |
-| `v{vdim}_A_per_ps` | `results.profile` | Å·ps⁻¹ | MAICoS | 待核对 |
-| `error_A_per_ps` | `results.dprofile`（标准误） | Å·ps⁻¹ | MAICoS | 标签需写明标准误 |
+| `{axis}_angstrom` | `bin_pos` + 平均盒长/2 | Å | MAICoS | **已修**：原实现加的是首帧参考组质心，只有参考组恰在盒心时才正确 |
+| `v{vdim}_A_per_ps` | `results.profile` | Å·ps⁻¹ | MAICoS | **已核对**：匀速测试为常数 |
+| `error_A_per_ps` | `results.dprofile`（标准误） | Å·ps⁻¹ | MAICoS | **已核对**：匀速时误差为 0 |
+
+盒子变化时坐标按窗口平均盒长换算并警告。
 
 ## 修正前后记录
 
@@ -127,3 +129,6 @@
 | hbond | 选择 | 原始选择串（按库坐标重选） | 解析组的 bynum 索引 | 视图平移一致性 |
 | hbond | 归一化 | `per_molecule`（除供体原子数） | `per_donor_atom` + `per_donor_residue` | 含义明确 |
 | hbond_lifetime | 列名 | `lifetime_ps` | `tau_1e_ps` | 1/e 交叉不是拟合寿命 |
+| velocity | 坐标原点 | 首帧参考组质心 | 平均盒长/2（盒坐标） | `bin_pos` 是相对盒心，不是相对参考组 |
+| rdf | 归一化 | 未验证 | 理想气体 g≈1 | 解析核对 |
+| msd | 时间轴 | 未验证 | 匀速 MSD=(v·Δt)² | 解析核对 |

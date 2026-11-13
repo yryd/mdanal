@@ -95,15 +95,35 @@ COMPARE = {
 }
 
 
+def _box_center(ctx, dim: int) -> float:
+    """返回窗口内平均盒长的一半；盒子变化时给出警告。"""
+    universe = ctx.universe
+    lengths = []
+    for frame in range(ctx.start, ctx.stop):
+        universe.trajectory[frame]
+        lengths.append(float(universe.dimensions[dim]))
+    universe.trajectory[ctx.start]
+    reference = lengths[0]
+    if any(abs(value - reference) > 1e-6 for value in lengths[1:]):
+        ctx.warn(
+            "检测到盒子在变化；速度剖面的坐标按窗口内平均盒长换算，"
+            "跨帧比较时需注意。"
+        )
+    return 0.5 * float(np.mean(lengths))
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     from maicos.modules.velocityplanar import VelocityPlanar
 
     dim, vdim, axis = _axes(ctx)
 
-    # 剖面坐标以参考组质心为零点；把该质心加回去即盒坐标
+
+    # MAICoS 的 bin_pos 是相对盒心的坐标；加回 L/2 才是盒坐标（0…L）。
+    # 参考组质心只决定 MAICoS 内部的相对剖面，仍记入 meta 供溯源。
     ctx.universe.trajectory[ctx.selection_frame]
     ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim])
     ctx.extras["velocity_ref"] = ref
+    box_center = _box_center(ctx, dim)
 
     # 单位：MAICoS 的 bin_pos 为 Å，profile 为 Å/ps，dprofile 是标准误（Å/ps）
     analysis = VelocityPlanar(
@@ -122,7 +142,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     table = pd.DataFrame(
         {
-            f"{axis}_angstrom": np.asarray(analysis.results.bin_pos, dtype=float) + ref,
+            f"{axis}_angstrom": np.asarray(analysis.results.bin_pos, dtype=float)
+            + box_center,
             f"v{AXES[vdim]}_A_per_ps": np.asarray(analysis.results.profile, dtype=float),
             "error_A_per_ps": np.asarray(analysis.results.dprofile, dtype=float),
         }
