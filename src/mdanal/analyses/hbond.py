@@ -45,6 +45,12 @@ LABELS = {
 OCCUPANCY_COLUMNS = ("donor", "hydrogen", "acceptor", "frames_present", "occupancy")
 
 
+def _selection(group) -> str:
+    """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
+    indices = np.asarray(group.atoms.indices, dtype=int) + 1
+    return "bynum " + " ".join(str(index) for index in indices)
+
+
 def _build(ctx) -> HydrogenBondAnalysis:
     """按三个槽位与两个判据构造分析。
 
@@ -53,11 +59,12 @@ def _build(ctx) -> HydrogenBondAnalysis:
     """
     return HydrogenBondAnalysis(
         ctx.universe,
-        donors_sel=ctx.groups["donor"].selection,
-        hydrogens_sel=ctx.groups["hydrogen"].selection,
-        acceptors_sel=ctx.groups["acceptor"].selection,
+        donors_sel=_selection(ctx.groups["donor"]),
+        hydrogens_sel=_selection(ctx.groups["hydrogen"]),
+        acceptors_sel=_selection(ctx.groups["acceptor"]),
         d_a_cutoff=float(ctx.params["d_a_cutoff"]),
         d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
+        update_selections=False,
     )
 
 
@@ -93,7 +100,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     )
 
     occupancy_table = _occupancy(analysis, len(counts))
-    summary_table = _summary(counts, donor.n_atoms)
+    summary_table = _summary(counts, donor)
     return {
         "hbond_count": count_table,
         "hbond_summary": summary_table,
@@ -140,10 +147,21 @@ def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
     )
 
 
-def _summary(counts: np.ndarray, n_molecules: int) -> pd.DataFrame:
+def _summary(counts: np.ndarray, donor) -> pd.DataFrame:
+    """归一化分别按供体原子数与供体残基数给出，避免"每分子"含义含糊。"""
+    n_atoms = donor.atoms.n_atoms
+    n_residues = donor.atoms.residues.n_residues
     if counts.size == 0:
         return pd.DataFrame(
-            [{"n_frames": 0, "mean_hbonds": 0.0, "std_hbonds": 0.0, "per_molecule": 0.0}]
+            [
+                {
+                    "n_frames": 0,
+                    "mean_hbonds": 0.0,
+                    "std_hbonds": 0.0,
+                    "per_donor_atom": 0.0,
+                    "per_donor_residue": 0.0,
+                }
+            ]
         )
     mean = float(counts.mean())
     return pd.DataFrame(
@@ -152,7 +170,8 @@ def _summary(counts: np.ndarray, n_molecules: int) -> pd.DataFrame:
                 "n_frames": int(counts.size),
                 "mean_hbonds": mean,
                 "std_hbonds": float(counts.std(ddof=0)),
-                "per_molecule": mean / max(n_molecules, 1),
+                "per_donor_atom": mean / max(n_atoms, 1),
+                "per_donor_residue": mean / max(n_residues, 1),
             }
         ]
     )

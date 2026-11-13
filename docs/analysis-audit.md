@@ -76,18 +76,19 @@
 | `frame` / `time_ps` / `hbond_count` | 每帧 `count_by_time()`；时间 = 帧号×dt | — / ps / 个 | MDAnalysis | 正确（待选择串修复） |
 | `frames_present` / `occupancy` | 按 `(donor,hydrogen,acceptor)` 分组计数 / n_frames | 帧 / — | 自实现 | 正确 |
 | `n_frames` / `mean_hbonds` / `std_hbonds` | 计数序列统计 | — / 个 | 自实现 | 正确 |
-| `per_molecule` | `mean / donor.n_atoms` | — | 自实现 | **错误**：除的是供体原子数 |
-| 选择 | 传原始选择串给库 | — | 库构造参数 | **错误**：绕过视图平移 |
+| `per_donor_atom` | `mean / 供体原子数` | — | 自实现 | **已修** |
+| `per_donor_residue` | `mean / 供体残基数` | — | 自实现 | **新增** |
+| 选择 | 解析后原子组的 `bynum` 索引，`update_selections=False` | — | 自实现 | **已修**：不再按库自己的坐标重选 |
 
-计划：改原子组/索引；`per_donor_atom` + `per_donor_residue`；补视图平移测试。
+修正前 `per_molecule` 除的是供体原子数（70.1/144=0.487）；修正后分别给原子/残基两列。
 
 ### hbond_type
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `count` | `count_by_type()` 按类型汇总 | 个 | MDAnalysis | 待与 hbond 总数交叉核对 |
-| `per_frame` | `count / n_frames` | 个/帧 | 自实现 | 待核对分母 |
-| `share` | `count / Σcount` | — | 自实现 | 待核对（求和为 1） |
+| `count` | `count_by_type()` 按类型汇总 | 个 | MDAnalysis | **已核对**：总和等于 hbond 计数 |
+| `per_frame` | `count / n_frames` | 个/帧 | 自实现 | **已核对** |
+| `share` | `count / Σcount` | — | 自实现 | **已核对**：求和为 1 |
 
 ### hbond_lifetime
 
@@ -95,8 +96,8 @@
 |---|---|---|---|---|
 | `lag_ps` | `lifetime()` 的 τ（帧）× dt | ps | MDAnalysis | 正确 |
 | `continuous` / `intermittent` | 存活曲线 C(τ) | — | MDAnalysis | 正确 |
-| `lifetime_ps` | 首次 C(τ)≤1/e 的线性插值 | ps | 自实现 | **命名误导**：应叫 `tau_1e_ps` |
-| 氢键身份 | lifetime 按 H–受体对 | — | MDAnalysis 文档 | 与 occupancy 的三元组不同，需写明 |
+| `tau_1e_ps` | 首次 C(τ)≤1/e 的线性插值 | ps | 自实现 | **已改名**（原 `lifetime_ps`） |
+| 氢键身份 | lifetime 按 H–受体对 | — | MDAnalysis 文档 | 与 occupancy 的三元组不同，README 已写明 |
 
 ### msd
 
@@ -123,3 +124,6 @@
 | lineardensity | 电荷单位 | e·mol·cm⁻³（×0.6022） | e/Å³ | 电荷/体积 |
 | lineardensity | bin 体积 | 全局最大盒长 | 逐轴 bin 数 | 非整除/非立方一致 |
 | lineardensity | 变盒子 | 静默用首帧体积 | 警告 + 只用首帧 | 固定盒前提 |
+| hbond | 选择 | 原始选择串（按库坐标重选） | 解析组的 bynum 索引 | 视图平移一致性 |
+| hbond | 归一化 | `per_molecule`（除供体原子数） | `per_donor_atom` + `per_donor_residue` | 含义明确 |
+| hbond_lifetime | 列名 | `lifetime_ps` | `tau_1e_ps` | 1/e 交叉不是拟合寿命 |

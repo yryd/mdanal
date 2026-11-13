@@ -88,6 +88,12 @@ COMPARE = {
 }
 
 
+def _selection(group) -> str:
+    """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
+    indices = np.asarray(group.atoms.indices, dtype=int) + 1
+    return "bynum " + " ".join(str(index) for index in indices)
+
+
 def _build(ctx) -> HydrogenBondAnalysis:
     """按三个槽位与两个判据构造分析。
 
@@ -96,11 +102,12 @@ def _build(ctx) -> HydrogenBondAnalysis:
     """
     return HydrogenBondAnalysis(
         ctx.universe,
-        donors_sel=ctx.groups["donor"].selection,
-        hydrogens_sel=ctx.groups["hydrogen"].selection,
-        acceptors_sel=ctx.groups["acceptor"].selection,
+        donors_sel=_selection(ctx.groups["donor"]),
+        hydrogens_sel=_selection(ctx.groups["hydrogen"]),
+        acceptors_sel=_selection(ctx.groups["acceptor"]),
         d_a_cutoff=float(ctx.params["d_a_cutoff"]),
         d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
+        update_selections=False,
     )
 
 
@@ -151,9 +158,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     tau_inter = _crossing(lag, intermittent[1])
     summary = pd.DataFrame(
         [
-            {"criterion": "continuous", "lifetime_ps": tau_cont, "tolerance_frames": 0,
+            {"criterion": "continuous", "tau_1e_ps": tau_cont, "tolerance_frames": 0,
              "note": "" if np.isfinite(tau_cont) else "not reached 1/e"},
-            {"criterion": "intermittent", "lifetime_ps": tau_inter, "tolerance_frames": intermittency,
+            {"criterion": "intermittent", "tau_1e_ps": tau_inter, "tolerance_frames": intermittency,
              "note": "" if np.isfinite(tau_inter) else "not reached 1/e"},
         ]
     )

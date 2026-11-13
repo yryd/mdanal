@@ -246,6 +246,14 @@ groups:
 
 `mdanal list` 显示各分析的选择数与默认参数；`mdanal list <name>` 打印完整契约（类型、单位、默认值、取值范围与说明）。
 
+氢键口径：
+
+- `per_donor_atom` = 平均氢键数 / 供体原子数；`per_donor_residue` = 平均氢键数 / 供体残基数；
+  不再输出含义含糊的"每分子平均"；
+- `tau_1e_ps` 是存活曲线 C(τ) 首次降到 1/e 的交叉时间（线性插值），不是指数拟合寿命；
+- `hbond_lifetime` 按 **H–受体对** 识别同一个氢键，`hbond_occupancy` 按 **供体–氢–受体三元组**；
+  两者身份定义不同，比较时需注意。
+
 ### 输出单位
 
 各列单位以调用到的库的文档为准；代码里每处取数都标了单位。
@@ -279,10 +287,10 @@ groups:
 | `rdf` | `r_angstrom` / `g_r` | 距离 / 径向分布函数 | Å / — |
 | `hbond` | `frame` / `time_ps` / `hbond_count` | 帧号 / 时间 / 氢键数 | — / ps / 个 |
 | | `donor` / `hydrogen` / `acceptor` / `frames_present` / `occupancy` | 占有率表 | — / 个 / — |
-| | `n_frames` / `mean_hbonds` / `std_hbonds` / `per_molecule` | 汇总 | — |
+| | `n_frames` / `mean_hbonds` / `std_hbonds` / `per_donor_atom` / `per_donor_residue` | 汇总（按供体原子/残基归一化） | — |
 | `hbond_type` | `donor` / `acceptor` / `count` / `per_frame` / `share` | 类型统计 | — |
 | `hbond_lifetime` | `lag_ps` / `continuous` / `intermittent` | 滞后与存活概率 | ps / — |
-| | `criterion` / `lifetime_ps` / `tolerance_frames` / `note` | 寿命汇总 | — / ps / 帧 |
+| | `criterion` / `tau_1e_ps` / `tolerance_frames` / `note` | 寿命汇总（1/e 交叉时间） | — / ps / 帧 |
 | `msd` | `dt_ps` / `msd_A2` | 滞后 / 均方位移 | ps / Å² |
 | `velocity` | `{x,y,z}_angstrom` | 剖面坐标 | Å |
 | | `v{x,y,z}_A_per_ps` / `error_A_per_ps` | 速度 / 标准误 | Å ps⁻¹ |

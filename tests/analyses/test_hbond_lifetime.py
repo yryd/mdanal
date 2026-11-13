@@ -48,6 +48,12 @@ def test_hbond_lifetime_output(real, tmp_path):
     summary = pd.read_csv(
         out / "hbond_lifetime/tables/hbond_lifetime_summary.csv", encoding="utf-8-sig"
     )
+    assert list(summary.columns) == [
+        "criterion",
+        "tau_1e_ps",
+        "tolerance_frames",
+        "note",
+    ]
     assert list(summary["criterion"]) == ["continuous", "intermittent"]
     assert (out / "hbond_lifetime/figures/hbond_lifetime.png").is_file()
 
