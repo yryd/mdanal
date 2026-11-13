@@ -26,9 +26,9 @@
 | density | `{a}_angstrom`、`{b}_angstrom`、`number_density_A3` | 键集合一致 | 无（二维图不参与对比） | 公式修正后复核 |
 | lineardensity | `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_A3` | 一致 | 有 | 已改电荷单位 |
 | rdf | `r_angstrom`、`g_r` | 一致 | 有 | 待核对归一化 |
-| hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_molecule`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | A4 改归一化列名 |
+| hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | 已改归一化列名 |
 | hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 待交叉核对 |
-| hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`lifetime_ps`、`tolerance_frames`、`note` | 一致 | 有 | A4 改 `tau_1e_ps` |
+| hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`tau_1e_ps`、`tolerance_frames`、`note` | 一致 | 有 | 已改 `tau_1e_ps` |
 | msd | `dt_ps`、`msd_A2` | 一致 | 有 | 待解析核对 |
 | velocity | `{axis}_angstrom`、`v{vdim}_A_per_ps`、`error_A_per_ps` | 一致 | 有 | 误差列确认是标准误 |
 
@@ -132,3 +132,40 @@
 | velocity | 坐标原点 | 首帧参考组质心 | 平均盒长/2（盒坐标） | `bin_pos` 是相对盒心，不是相对参考组 |
 | rdf | 归一化 | 未验证 | 理想气体 g≈1 | 解析核对 |
 | msd | 时间轴 | 未验证 | 匀速 MSD=(v·Δt)² | 解析核对 |
+
+
+## 审计完成状态
+
+| 分析 | 状态 | 测试文件 | 用例数 |
+|---|---|---|---|
+| density | 已修（Δ³、边缘、变盒警告） | `tests/analyses/test_density.py` | 3 |
+| lineardensity | 已修（e/Å³、逐轴 bin、变盒警告） | `tests/analyses/test_lineardensity.py` | 3 |
+| rdf | 已核对（理想气体 g≈1） | `tests/analyses/test_rdf.py` | 2 |
+| hbond | 已修（选择串、归一化） | `tests/analyses/test_hbond.py` | 4 |
+| hbond_type | 已核对（总数/份额） | `tests/analyses/test_hbond_type.py` | 2 |
+| hbond_lifetime | 已改名 + 文档（1/e 交叉） | `tests/analyses/test_hbond_lifetime.py` | 2 |
+| msd | 已核对（匀速解析） | `tests/analyses/test_msd.py` | 2 |
+| velocity | 已修（盒坐标原点） | `tests/analyses/test_velocity.py` | 5 |
+
+相对修正前基线的输出变化（9 项）：
+
+```
+density-xy/tables/density_xy.csv
+density-xy/figures/density_xy.png
+lineardensity/tables/lineardensity_{x,y,z}.csv
+lineardensity/figures/lineardensity_z.png
+hbond/tables/hbond_summary.csv
+hbond_lifetime/tables/hbond_lifetime_summary.csv
+velocity/tables/velocity.csv
+```
+
+其余表与图逐字节不变。验收：`pytest` 76 条、`pytest tests/analyses` 23 条全部通过；
+`check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
+
+剩余限制（本轮不处理）：
+
+- 变盒子时 `density`/`lineardensity` 只用首帧（警告），不做逐帧体积加权；
+- 三斜盒直接拒绝；
+- `tau_1e_ps` 是 1/e 交叉时间，不做指数拟合与误差估计；
+- `hbond_lifetime`（H–受体对）与 `hbond_occupancy`（三元组）的身份定义不同；
+- `velocity` 的盒子变化时坐标按平均盒长换算，跨帧比较需注意。
