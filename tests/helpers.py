@@ -71,6 +71,18 @@ def split_trajectory(directory: Path) -> tuple[Path, Path, int]:
     return first, second, len(starts)
 
 
+def constant_box_trajectory(directory: Path) -> Path:
+    """把夹具轨迹每一帧的 BOX BOUNDS 改成第一帧的，用于固定盒测试。"""
+    lines = (SYSTEM / "run.lammpstrj").read_text(encoding="utf-8").splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.startswith("ITEM: BOX BOUNDS")]
+    first = lines[starts[0] + 1 : starts[0] + 4]
+    for index in starts:
+        lines[index + 1 : index + 4] = first
+    path = directory / "constant.lammpstrj"
+    path.write_text("".join(lines), encoding="utf-8")
+    return path
+
+
 def segmented_system(directory: Path, trajectory: str) -> Path:
     """照抄夹具体系，只换轨迹与绝对路径。"""
     content = (SYSTEM / "system.yaml").read_text(encoding="utf-8")

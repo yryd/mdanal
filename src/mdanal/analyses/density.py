@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from MDAnalysis.analysis.density import DensityAnalysis
 
 from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
@@ -55,7 +54,7 @@ def _project_grid(
 ) -> tuple[np.ndarray, np.ndarray, np.ndarray, tuple[int, int]]:
     """沿 sum_axis 求和，投影到另外两轴，返回 (轴1中心, 轴2中心, 数密度, 保留的轴号)。
 
-    数密度 = Σ_axis n / (Δa · Δb · L_axis)，单位 Å⁻³，即沿求和方向的平均。
+    数密度 = Σ_k ρ / N_k，单位 Å⁻³，即沿求和方向的平均。
     """
     counts = np.asarray(counts, dtype=float)
     if counts.ndim != 3:
@@ -67,15 +66,28 @@ def _project_grid(
 
     index = AXES.index(axis)
     centers = [0.5 * (np.asarray(e[1:]) + np.asarray(e[:-1])) for e in edges]
-    widths = [float(np.asarray(e)[1] - np.asarray(e)[0]) for e in edges]
-    lengths = [float(np.asarray(e)[-1] - np.asarray(e)[0]) for e in edges]
 
     keep = tuple(i for i in range(3) if i != index)
     summed = counts.sum(axis=index)
-    volume = widths[keep[0]] * widths[keep[1]] * lengths[index]
-    density = summed / volume
+    # 沿求和方向求平均：除以该方向的格数，不是体积
+    density = summed / counts.shape[index]
 
     return centers[keep[0]], centers[keep[1]], density, keep
+
+
+def _fixed_box_stop(ctx) -> tuple[int, int | None]:
+    """返回 (有效 stop, 首次变盒的帧)。盒子变了就只用首帧。"""
+    universe = ctx.universe
+    universe.trajectory[ctx.start]
+    reference = np.asarray(universe.dimensions[:3], dtype=float)
+    for frame in range(ctx.start + 1, ctx.stop):
+        universe.trajectory[frame]
+        current = np.asarray(universe.dimensions[:3], dtype=float)
+        if not np.allclose(current, reference, rtol=1e-6, atol=1e-6):
+            universe.trajectory[ctx.start]
+            return ctx.start + 1, frame
+    universe.trajectory[ctx.start]
+    return ctx.stop, None
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -87,28 +99,48 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     if delta <= 0:
         raise ValidationError(f"delta 必须为正数，收到 {delta}")
 
+    universe = ctx.universe
+    if universe.dimensions is None:
+        raise ValidationError("轨迹缺少盒信息，无法做密度投影")
+    angles = np.asarray(universe.dimensions[3:], dtype=float)
+    if not np.allclose(angles, 90.0, atol=1e-3):
+        raise ValidationError(
+            f"只支持正交盒子；检测到盒角 {angles.tolist()}（三斜盒未支持）"
+        )
+
+    stop, changed = _fixed_box_stop(ctx)
+    if changed is not None:
+        ctx.warn(
+            f"检测到盒子在变化（第 {changed} 帧与首帧不同）；密度只使用第 "
+            f"{ctx.start} 帧，其余帧忽略。需要多帧平均请选固定盒窗口。"
+        )
+    n_frames = stop - ctx.start
+    if n_frames <= 0:
+        raise ValidationError("帧窗口为空，无法计算密度")
+
+    universe.trajectory[ctx.start]
+    lengths = np.asarray(universe.dimensions[:3], dtype=float)
+    cells = np.ceil(lengths / delta).astype(int)
+    edges = [np.arange(n + 1, dtype=float) * delta for n in cells]
+    counts = np.zeros(tuple(cells), dtype=float)
+
     atoms = ctx.groups["group"].atoms
-    lx, ly, lz = (float(v) for v in ctx.universe.dimensions[:3])
-    # 显式给定网格范围：默认以原子包围盒居中，会漏掉盒边缘的原子
-    analysis = DensityAnalysis(
-        atoms,
-        delta=delta,
-        padding=0.0,
-        gridcenter=[lx / 2, ly / 2, lz / 2],
-        xdim=lx,
-        ydim=ly,
-        zdim=lz,
-    )
-    analysis.run(start=ctx.start, stop=ctx.stop)
-    # 单位：MDAnalysis 的 grid 已是数密度 Å⁻³（见 DensityAnalysis 文档），edges 单位 Å
-    grid = analysis.results.density
+    for frame in range(ctx.start, stop):
+        universe.trajectory[frame]
+        positions = np.asarray(atoms.positions, dtype=float)
+        # 原始轨迹可能是未包裹坐标；按盒长折回后再计入网格
+        wrapped = positions - np.floor(positions / lengths) * lengths
+        hist, _ = np.histogramdd(wrapped, bins=edges)
+        counts += hist
+
+    # 单位 Å⁻³：每个格子的计数 / 帧数 / 格体积
+    grid = counts / (n_frames * delta**3)
     ctx.extras["density_extent"] = {
-        axis: float(np.asarray(grid.edges[i])[-1] - np.asarray(grid.edges[i])[0])
-        for i, axis in enumerate(AXES)
+        axis: float(edges[i][-1]) for i, axis in enumerate(AXES)
     }
 
     # 表里是盒坐标（0…L）；视图平移只在出图时施加
-    center_a, center_b, density, keep = _project_grid(grid.grid, grid.edges, sum_axis)
+    center_a, center_b, density, keep = _project_grid(grid, edges, sum_axis)
     a, b = AXES[keep[0]], AXES[keep[1]]
 
     # 平面场要摊平成 (坐标, 坐标, 值) 三列；density[i, j] 对应 (a_i, b_j)

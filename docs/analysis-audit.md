@@ -8,9 +8,9 @@
 | 问题 | 采用 | 说明 |
 |---|---|---|
 | 密度投影语义 | 沿轴平均密度，Å⁻³ | 除数是该轴格数 `N_k`，不是体积 |
-| 电荷密度单位 | `e/Å³` | 由库的 `e·mol·cm⁻³` 乘 `N_A×1e-24 = 0.6022` |
+| 电荷密度单位 | `e/Å³` | 电荷 / bin 体积（不再用库的 `e·mol·cm⁻³`） |
 | 氢键归一化 | `per_donor_atom` + `per_donor_residue` | 删除含糊的 `per_molecule` |
-| 变盒子（NPT） | 检测并拒绝 | `density`、`lineardensity` 只支持固定盒子 |
+| 变盒子（NPT） | 检测并警告，只用首帧 | `density`、`lineardensity` 多帧平均只在固定盒窗口成立 |
 | 氢键寿命 | 改名 `tau_1e_ps` | 只改名称与文档，不改算法 |
 | 速度参考系 | 审计后定 | 优先逐帧参考质心；否则文档写明固定偏移 |
 
@@ -24,7 +24,7 @@
 | 分析 | 表头 | 图内中英 | COMPARE 列标签 | 结论 |
 |---|---|---|---|---|
 | density | `{a}_angstrom`、`{b}_angstrom`、`number_density_A3` | 键集合一致 | 无（二维图不参与对比） | 公式修正后复核 |
-| lineardensity | `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_mol_cm3` | 一致 | 有 | A3 改电荷单位 |
+| lineardensity | `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_A3` | 一致 | 有 | 已改电荷单位 |
 | rdf | `r_angstrom`、`g_r` | 一致 | 有 | 待核对归一化 |
 | hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_molecule`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | A4 改归一化列名 |
 | hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 待交叉核对 |
@@ -42,12 +42,11 @@
 | 输出 | 公式（当前） | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
 | `{a}_angstrom`, `{b}_angstrom` | 网格格心（盒坐标） | Å | MDAnalysis `Density.edges` | 正确 |
-| `number_density_A3` | `Σ_k ρ_grid / (Δa·Δb·L_k)` | Å⁻³ | 库网格已是 Å⁻³ | **错误**：应为 `Σ_k ρ_grid / N_k`；delta≠1 时低 Δ³ |
-| 网格范围 | `gridcenter=L/2`, `padding=0` | — | — | **边缘丢原子**：delta=1 实测 499/504 |
-| 变盒子 | 网格固定首帧 | — | — | **错误**：后续帧原子出格 |
+| `number_density_A3` | `Σ_k ρ / N_k` | Å⁻³ | 三维直方图 + 投影平均 | **已修**：delta=1 与 2 均严格守恒（504） |
+| 网格范围 | `ceil(L/delta)` 格，坐标按盒折回 | Å | 自实现 | **已修**：未包裹坐标不再丢原子 |
+| 变盒子 | 检测后只用首帧 | — | `_fixed_box_stop` | **已改**：多帧 + 变盒 → 警告并只用首帧 |
 
-已知证据：delta=1 积分 499/504；delta=2 积分 62.9/504（低 8 倍）。
-计划：改除数为 `N_k`、加 `padding=delta`、逐帧检查盒尺寸并拒绝变盒子。
+修正前：delta=1 积分 499/504；delta=2 积分 62.9/504。修正后两者均为 504（浮点误差 <1e-5）。
 
 ### lineardensity
 
@@ -55,11 +54,11 @@
 |---|---|---|---|---|
 | `{axis}_angstrom` | 直方图 bin 中心 | Å | 自实现逐帧直方图 | 正确 |
 | `mass_density_g_cm3` | `Σ_frames m_hist / n / (N_A·1e-24·V_bin)` | g·cm⁻³ | 质量 amu、V_bin Å³ | 固定盒/整除时正确 |
-| `charge_density_e_mol_cm3` | 同上，权重为电荷 e | e·mol·cm⁻³ | MDAnalysis 文档口径 | **口径待换**：物理值为 ×0.6022 的 e/Å³ |
-| `V_bin` | `volume / bins[axis]`，直方图上界用 `max(L)` | Å³ | 沿用库的全局上界 | **非整除/非立方时不一致** |
-| 变盒子 | 首帧固定 `volume/bins` | — | — | **错误** |
+| `charge_density_e_A3` | `Σ_frames q_hist / n / V_bin` | e·Å⁻³ | 电荷 e + bin 体积 Å³ | **已修**：不再乘 Avogadro |
+| `V_bin` | `L_i·L_j·L_k / floor(L_i/binsize)` | Å³ | 逐轴直方图 | **已修**：逐轴自己的 bin 数 |
+| 变盒子 | 检测后只用首帧 | — | `_fixed_box_stop` | **已改**：警告并只用首帧 |
 
-计划：电荷换 `e/Å³`；逐轴 `upper=L_axis`、`nbins=floor(L_axis/binsize)`；变盒子拒绝。
+修正后单帧结果与独立 `numpy.histogram` 逐点一致（含 g/cm³ 与 e/Å³ 换算）。
 
 ### rdf
 
@@ -116,4 +115,11 @@
 
 ## 修正前后记录
 
-（每完成一个分析，在此追加：列/数值、修正前、修正后、原因、对应提交。）
+| 分析 | 项目 | 修正前 | 修正后 | 原因 |
+|---|---|---|---|---|
+| density | delta=1 守恒 | 499/504 | 504.000003 | 未包裹坐标折回 + 投影除格数 |
+| density | delta=2 守恒 | 62.9/504 | 504.000000 | 投影除数由体积改为格数 |
+| density | 变盒子 | 静默按首帧网格 | 警告 + 只用首帧 | 固定盒前提 |
+| lineardensity | 电荷单位 | e·mol·cm⁻³（×0.6022） | e/Å³ | 电荷/体积 |
+| lineardensity | bin 体积 | 全局最大盒长 | 逐轴 bin 数 | 非整除/非立方一致 |
+| lineardensity | 变盒子 | 静默用首帧体积 | 警告 + 只用首帧 | 固定盒前提 |

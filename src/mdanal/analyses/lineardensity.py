@@ -59,12 +59,12 @@ COLUMN_LABELS = {
     "zh": {
         "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
         "mass_density_g_cm3": "质量密度 (g cm$^{-3}$)",
-        "charge_density_e_mol_cm3": "电荷密度 (e mol cm$^{-3}$)",
+        "charge_density_e_A3": "电荷密度 (e Å$^{-3}$)",
     },
     "en": {
         "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
         "mass_density_g_cm3": "mass density (g cm$^{-3}$)",
-        "charge_density_e_mol_cm3": "charge density (e mol cm$^{-3}$)",
+        "charge_density_e_A3": "charge density (e Å$^{-3}$)",
     },
 }
 
@@ -76,74 +76,93 @@ COMPARE = {
 }
 
 
+def _fixed_box_stop(ctx) -> tuple[int, int | None]:
+    """返回 (有效 stop, 首次变盒的帧)。盒子变了就只用首帧。"""
+    universe = ctx.universe
+    universe.trajectory[ctx.start]
+    reference = np.asarray(universe.dimensions[:3], dtype=float)
+    for frame in range(ctx.start + 1, ctx.stop):
+        universe.trajectory[frame]
+        current = np.asarray(universe.dimensions[:3], dtype=float)
+        if not np.allclose(current, reference, rtol=1e-6, atol=1e-6):
+            universe.trajectory[ctx.start]
+            return ctx.start + 1, frame
+    universe.trajectory[ctx.start]
+    return ctx.stop, None
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     binsize = float(ctx.params["binsize"])
     if binsize <= 0:
         raise ValidationError(f"binsize 必须为正数，收到 {binsize}")
 
-    group = ctx.groups["group"].atoms
-    n_frames = ctx.stop - ctx.start
+    universe = ctx.universe
+    if universe.dimensions is None:
+        raise ValidationError("轨迹缺少盒信息，无法计算线密度")
+    angles = np.asarray(universe.dimensions[3:], dtype=float)
+    if not np.allclose(angles, 90.0, atol=1e-3):
+        raise ValidationError(
+            f"只支持正交盒子；检测到盒角 {angles.tolist()}（三斜盒未支持）"
+        )
+
+    stop, changed = _fixed_box_stop(ctx)
+    if changed is not None:
+        ctx.warn(
+            f"检测到盒子在变化（第 {changed} 帧与首帧不同）；线密度只使用第 "
+            f"{ctx.start} 帧，其余帧忽略。需要多帧平均请选固定盒窗口。"
+        )
+    n_frames = stop - ctx.start
     if n_frames <= 0:
         raise ValidationError("帧窗口为空，无法计算线密度")
 
-    # 与库一致：网格数按起始帧的盒尺寸取整，切片体积在整个窗口内固定
-    dimensions = np.asarray(ctx.universe.dimensions[:3], dtype=float)
-    volume = float(np.prod(dimensions))
-    bins = (dimensions // binsize).astype(int)
+    universe.trajectory[ctx.start]
+    lengths = np.asarray(universe.dimensions[:3], dtype=float)
+    bins = np.floor(lengths / binsize).astype(int)
     if int(bins.min()) < 1:
         raise ValidationError(
-            f"binsize {binsize:g} Å 大于最短盒长 {float(dimensions.min()):g} Å"
+            f"binsize {binsize:g} Å 大于最短盒长 {float(lengths.min()):g} Å"
         )
-    nbins = int(bins.max())
-    slice_volume = volume / bins
-    lengths = [float(value) for value in dimensions]
+    edges = {
+        axis: np.linspace(0.0, lengths[i], bins[i] + 1)
+        for i, axis in enumerate(AXES)
+    }
 
     # 单位：质量 amu、电荷 e（MDAnalysis 原子属性）
+    group = ctx.groups["group"].atoms
     masses = np.asarray(group.masses, dtype=float)
     charges = np.asarray(group.charges, dtype=float)
-    mass_sum = {axis: np.zeros(nbins) for axis in AXES}
-    charge_sum = {axis: np.zeros(nbins) for axis in AXES}
-    edges: dict[str, np.ndarray] = {}
+    mass_sum = {axis: np.zeros(bins[i]) for i, axis in enumerate(AXES)}
+    charge_sum = {axis: np.zeros(bins[i]) for i, axis in enumerate(AXES)}
 
-    for frame in range(ctx.start, ctx.stop):
-        ctx.universe.trajectory[frame]
-        group.wrap(compound="atoms")
-        positions = group.positions
-        # 库对三个轴统一用最大盒长作上界，这里保持一致
-        upper = float(np.max(ctx.universe.dimensions[:3]))
-        for axis in AXES:
-            column = positions[:, AXES.index(axis)]
+    for frame in range(ctx.start, stop):
+        universe.trajectory[frame]
+        positions = np.asarray(group.positions, dtype=float)
+        # 原始轨迹可能是未包裹坐标；按盒长折回后再计入直方图
+        wrapped = positions - np.floor(positions / lengths) * lengths
+        for i, axis in enumerate(AXES):
             mass_hist, _ = np.histogram(
-                column, weights=masses, bins=nbins, range=(0.0, upper)
+                wrapped[:, i], weights=masses, bins=edges[axis]
             )
-            charge_hist, bin_edges = np.histogram(
-                column, weights=charges, bins=nbins, range=(0.0, upper)
+            charge_hist, _ = np.histogram(
+                wrapped[:, i], weights=charges, bins=edges[axis]
             )
             mass_sum[axis] += mass_hist
             charge_sum[axis] += charge_hist
-            edges[axis] = bin_edges
 
-    # 输出口径沿用 MDAnalysis LinearDensity 文档：
-    #   质量密度 g·cm⁻³；电荷密度 e·mol·cm⁻³（**不是** e·Å⁻³）
-    norm_factor = AVOGADRO * VOLUME_CONVERSION
+    volume = float(np.prod(lengths))
+    norm_factor = AVOGADRO * VOLUME_CONVERSION  # amu/Å³ → g/cm³
     tables: dict[str, pd.DataFrame] = {}
-    for axis in AXES:
-        norm = norm_factor * slice_volume[AXES.index(axis)]
-        mass_density = mass_sum[axis] / n_frames / norm
-        charge_density = charge_sum[axis] / n_frames / norm
-
-        # 末尾不足一个 bin 的薄层整格丢弃，否则该格的密度会因体积按满格计而偏低
-        bin_edges = edges[axis]
-        n_bins = int(
-            np.searchsorted(bin_edges, lengths[AXES.index(axis)], side="right") - 1
-        )
+    for i, axis in enumerate(AXES):
+        bin_volume = volume / bins[i]
+        mass_density = mass_sum[axis] / n_frames / (norm_factor * bin_volume)
+        charge_density = charge_sum[axis] / n_frames / bin_volume
+        centers = 0.5 * (edges[axis][1:] + edges[axis][:-1])
         # 表里是盒坐标（0…L）；视图平移只在出图时施加
-        centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])[:n_bins]
         tables[f"lineardensity_{axis}"] = pd.DataFrame(
             {
                 f"{axis}_angstrom": centers,
-                "mass_density_g_cm3": mass_density[:n_bins],
-                "charge_density_e_mol_cm3": charge_density[:n_bins],
+                "mass_density_g_cm3": mass_density,
+                "charge_density_e_A3": charge_density,
             }
         )
     return tables

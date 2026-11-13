@@ -175,6 +175,9 @@ analyses:
 - 改 `origin` 后，`prop` 选择串里的坐标区间要同步改；**数据表不变**，改图不必重跑分析。
 - 需要平移后的数值时加 `--aligned`，程序会另写一份 `*.aligned.csv`；正表仍是盒坐标。
 - 图件窗口写在每条分析的 `plot.window` 里（如 `plot: {window: {z: [17.0, 30.0]}}`），只裁坐标轴、不改数据表；体系级不再有窗口。
+- `density` 与 `lineardensity` 只在**固定盒子**窗口上做多帧平均；检测到盒子变化时
+  只使用窗口首帧并在 `provenance.json` 的 warnings 里提示。要显式只算一帧，用
+  `section: [i, i+1]`；要平均，请把窗口裁到盒子不变的一段。
 - 轨迹为包裹坐标时，`msd` 会用 `NoJump` 重建连续性并给出提示。
 - 程序内部按盒坐标（`0 … L`）计算，视图偏移只影响选择串的求值与出图。
 
@@ -251,8 +254,8 @@ groups:
 |---|---|---|
 | 坐标列（`x (Å)`、`r (Å)`、`滞后 (ps)` 等） | Å / ps | MDAnalysis、MAICoS |
 | 质量密度 | g·cm⁻³ | 由 amu/Å³ 换算（1 amu = 1/N_A g） |
-| 电荷密度 | **e·mol·cm⁻³** | MDAnalysis `LinearDensity` 文档口径，**不是 e·Å⁻³** |
-| `number_density_A3` | Å⁻³ | MDAnalysis `DensityAnalysis` 网格 |
+| `charge_density_e_A3` | e·Å⁻³ | 自实现直方图（电荷 / bin 体积） |
+| `number_density_A3` | Å⁻³ | 自实现三维直方图（坐标按盒折回） |
 | `g_r` | 无量纲 | `InterRDF` |
 | `msd_A2` / `dt_ps` | Å² / ps | `EinsteinMSD` |
 | `hbond_count` / `count` / `frames_present` | 个 | `HydrogenBondAnalysis` |
@@ -272,7 +275,7 @@ groups:
 | | `number_density_A3` | 沿求和轴平均的数密度 | Å⁻³ |
 | `lineardensity` | `{x,y,z}_angstrom` | 轴坐标 | Å |
 | | `mass_density_g_cm3` | 质量密度 | g cm⁻³ |
-| | `charge_density_e_mol_cm3` | 电荷密度（库口径） | e mol cm⁻³ |
+| | `charge_density_e_A3` | 电荷密度 | e Å⁻³ |
 | `rdf` | `r_angstrom` / `g_r` | 距离 / 径向分布函数 | Å / — |
 | `hbond` | `frame` / `time_ps` / `hbond_count` | 帧号 / 时间 / 氢键数 | — / ps / 个 |
 | | `donor` / `hydrogen` / `acceptor` / `frames_present` / `occupancy` | 占有率表 | — / 个 / — |
