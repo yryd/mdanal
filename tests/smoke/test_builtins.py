@@ -125,3 +125,13 @@ def test_compare_columns_have_bilingual_labels():
             labels = definition.column_labels.get(lang, {})
             missing = [column for column in columns if column not in labels]
             assert not missing, (name, lang, missing)
+
+
+def test_labels_are_bilingual_and_complete():
+    """每个内置分析的中英标签键集合必须一致；可对比列标签也一样。"""
+    for name, definition in discover().definitions.items():
+        assert set(definition.labels["zh"]) == set(definition.labels["en"]), name
+        if definition.column_labels:
+            assert set(definition.column_labels["zh"]) == set(
+                definition.column_labels["en"]
+            ), name
