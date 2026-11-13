@@ -34,8 +34,8 @@ COORDINATES = "any"
 REQUIRES = ()
 PACKAGE = None
 COLUMN_LABELS = {
-    "zh": {"x_angstrom": "x (Å)", "y": "值"},
-    "en": {"x_angstrom": "x (Å)", "y": "value"},
+    "zh": {"x_angstrom": "x (Å)", "y": "值", "y2": "第二列"},
+    "en": {"x_angstrom": "x (Å)", "y": "value", "y2": "second"},
 }
 COMPARE = {"table": "fake", "x": "x_angstrom", "y": ["y"], "box_axis": True}
 MUTATES_POSITIONS = False
@@ -47,6 +47,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         {
             "x_angstrom": frames * float(ctx.params["scale"]),
             "y": frames,
+            "y2": frames * 2.0,
             "start": np.full(len(frames), ctx.start, dtype=int),
             "stop": np.full(len(frames), ctx.stop, dtype=int),
         }

@@ -60,7 +60,7 @@ def parse(value: Any, where: str) -> tuple[dict[str, Any], ...]:
         elif kind == "span":
             item["at"] = _pair(entry.get("at"), position)
         else:  # text
-            item["at"] = _pair(entry.get("at"), position)
+            item["at"] = _point(entry.get("at"), position)
         items.append(item)
     return tuple(items)
 
@@ -112,6 +112,17 @@ def _number(value: Any, key: str, where: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         raise ValidationError(f"{key} 必须是数值，收到 {value!r}", where=where)
     return float(value)
+
+
+def _point(value: Any, where: str) -> tuple[float, float]:
+    """text 的位置：严格按 [x, y]，不排序，也允许两个数相等。"""
+    if (
+        not isinstance(value, (list, tuple))
+        or len(value) != 2
+        or any(isinstance(v, bool) or not isinstance(v, (int, float)) for v in value)
+    ):
+        raise ValidationError(f"at 必须是两个数 [x, y]，收到 {value!r}", where=where)
+    return (float(value[0]), float(value[1]))
 
 
 def _pair(value: Any, where: str) -> tuple[float, float]:

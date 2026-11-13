@@ -36,7 +36,8 @@ def test_annotations_parse():
         "probe",
     )
     assert len(items) == 4
-    assert items[2]["at"] == (17.0, 29.0)
+    assert items[2]["at"] == (17.0, 29.0)   # span 排序为 (低, 高)
+    assert items[3]["at"] == (5.0, 0.8)     # text 保持原顺序
 
 
 def test_annotations_require_axis():
@@ -113,3 +114,18 @@ def test_bars_rejects_length_mismatch():
     fig, ax = chart.figure((3.0, 2.0))
     with pytest.raises(MdanalError, match="长度不一致"):
         chart.bars(ax, ["a"], [1.0, 2.0])
+
+
+def test_annotations_text_keeps_position():
+    items = annotations.parse(
+        [
+            {"kind": "text", "at": [5, 0.8], "text": "bulk"},
+            {"kind": "text", "at": [1, 1], "text": "corner"},
+        ],
+        "probe",
+    )
+    assert items[0]["at"] == (5.0, 0.8)
+    assert items[1]["at"] == (1.0, 1.0)
+
+    with pytest.raises(ValidationError, match="不能相等"):
+        annotations.parse([{"kind": "span", "axis": "z", "at": [1, 1]}], "probe")

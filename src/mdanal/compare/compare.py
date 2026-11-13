@@ -12,6 +12,7 @@ from typing import Any, Mapping
 
 import pandas as pd
 import yaml
+from matplotlib import rcParams
 
 from ..plot import chart
 from ..errors import MdanalError, ValidationError
@@ -68,6 +69,16 @@ def run_compare(
     x_axis = x_column[0] if x_column[:1] in AXES else None
     align = _parse_align(figure.get("align"), config_path)
 
+    time_axis = _is_time_axis(box_axis, x_column)
+    if not time_axis:
+        offenders = [item.label for item in items if item.t_offset]
+        if offenders:
+            raise ValidationError(
+                "t_offset 只能用于时间轴（列名以 _ps 结尾且非盒坐标轴）；"
+                f"{offenders} 设了非零偏移，而当前横轴是 {x_column!r}",
+                where=str(config_path),
+            )
+
     blocks: list[pd.DataFrame] = []
     for item in items:
         frame = _read_table(item, directory, table_name)
@@ -76,7 +87,8 @@ def run_compare(
         if box_axis and x_axis:
             shift = _axis_shift(item, x_axis, align)
             item.shift[x_axis] = shift
-        x = frame[x_column].to_numpy(dtype=float) + shift + item.t_offset
+        offset = item.t_offset if time_axis else 0.0
+        x = frame[x_column].to_numpy(dtype=float) + shift + offset
         block = pd.DataFrame({"item": item.label, "x": x})
         for column in y_columns:
             block[column] = frame[column].to_numpy(dtype=float)
@@ -97,15 +109,28 @@ def run_compare(
     )
 
     fig, ax = chart.figure("single")
-    for block in blocks:
-        label = str(block["item"].iloc[0])
-        for index, column in enumerate(y_columns):
+    multi_column = len(y_columns) > 1
+    show_legend = len(items) > 1 or multi_column
+    colors = rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
+    styles = ("-", "--", ":", "-.")
+    for block_index, block in enumerate(blocks):
+        item_label = str(block["item"].iloc[0])
+        color = colors[block_index % len(colors)]
+        for column_index, column in enumerate(y_columns):
+            if not show_legend:
+                label = None
+            elif multi_column:
+                label = f"{item_label} · {labels.get(column, column)}"
+            else:
+                label = item_label
             chart.line(
                 ax,
                 block["x"],
                 block[column],
                 lw=1.2,
-                label=label if index == 0 and len(items) > 1 else None,
+                color=color,
+                ls=styles[column_index % len(styles)],
+                label=label,
             )
 
     xlabel = str(figure.get("xlabel") or labels.get(x_column, x_column))
@@ -123,7 +148,7 @@ def run_compare(
     else:
         low, high = _default_range(items, align, box_axis, x_axis, merged)
     ax.set_xlim(low, high)
-    if len(items) > 1:
+    if show_legend:
         chart.legend(ax)
     chart.save(fig, out / f"{directory}.png", dpi=300)
 
@@ -137,6 +162,7 @@ def run_compare(
             "x": x_column,
             "y": y_columns,
             "lang": lang,
+            "time_axis": time_axis,
             "xlabel": xlabel,
             "ylabel": ylabel,
             "align": dict(align),
@@ -337,6 +363,11 @@ def _require_columns(
             f"{directory} 的表缺少列 {missing}；实际列为 {list(frame.columns)}",
             where=str(item.root),
         )
+
+
+def _is_time_axis(box_axis: bool, x_column: str) -> bool:
+    """只有非盒坐标轴且列名以 _ps 结尾时，才允许 t_offset。"""
+    return (not box_axis) and str(x_column).endswith("_ps")
 
 
 def _axis_shift(item: CompareItem, axis: str, align: Mapping[str, Any]) -> float:

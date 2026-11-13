@@ -34,7 +34,7 @@ def test_fake_analysis_end_to_end(tmp_path):
     assert (out / "fake" / "figures" / "fake.png").is_file()
 
     table = pd.read_csv(out / "fake/tables/fake.csv", encoding="utf-8-sig")
-    assert list(table.columns) == ["x_angstrom", "y", "start", "stop"]
+    assert list(table.columns) == ["x_angstrom", "y", "y2", "start", "stop"]
     assert len(table) == 5
     assert set(table["start"]) == {0}
     assert set(table["stop"]) == {5}
