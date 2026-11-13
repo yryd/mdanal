@@ -72,10 +72,25 @@ PACKAGE = {"name": "maicos", "min_version": "0.12"}
 MUTATES_POSITIONS = True
 
 
+COLUMN_LABELS = {
+    "zh": {
+        "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
+        "vx_A_per_ps": "$v_x$ (Å ps$^{-1}$)",
+        "vy_A_per_ps": "$v_y$ (Å ps$^{-1}$)",
+        "vz_A_per_ps": "$v_z$ (Å ps$^{-1}$)",
+    },
+    "en": {
+        "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
+        "vx_A_per_ps": "$v_x$ (Å ps$^{-1}$)",
+        "vy_A_per_ps": "$v_y$ (Å ps$^{-1}$)",
+        "vz_A_per_ps": "$v_z$ (Å ps$^{-1}$)",
+    },
+}
+
 COMPARE = {
     "table": "velocity",
-    "x": "{axis} (Å)",
-    "y": ["v{vdim} (Å/ps)"],
+    "x": "{axis}_angstrom",
+    "y": ["v{vdim}_A_per_ps"],
     "box_axis": True,
 }
 
@@ -107,9 +122,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     table = pd.DataFrame(
         {
-            f"{axis} (Å)": np.asarray(analysis.results.bin_pos, dtype=float) + ref,
-            f"v{AXES[vdim]} (Å/ps)": np.asarray(analysis.results.profile, dtype=float),
-            "误差 (Å/ps)": np.asarray(analysis.results.dprofile, dtype=float),
+            f"{axis}_angstrom": np.asarray(analysis.results.bin_pos, dtype=float) + ref,
+            f"v{AXES[vdim]}_A_per_ps": np.asarray(analysis.results.profile, dtype=float),
+            "error_A_per_ps": np.asarray(analysis.results.dprofile, dtype=float),
         }
     )
     return {"velocity": table}
@@ -126,8 +141,8 @@ def meta(ctx, tables) -> dict:
 def figures(ctx, tables):
     name, table = next(iter(tables.items()))
     dim, vdim, axis = _axes(ctx)
-    coordinate = table[f"{axis} (Å)"].to_numpy()
-    velocity = table[f"v{AXES[vdim]} (Å/ps)"].to_numpy()
+    coordinate = table[f"{axis}_angstrom"].to_numpy()
+    velocity = table[f"v{AXES[vdim]}_A_per_ps"].to_numpy()
 
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
     velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)

@@ -71,10 +71,19 @@ LEVEL = 1.0 / np.e
 MAX_FRAME_PS = 1.0
 
 
+COLUMN_LABELS = {
+    "zh": {"lag_ps": "滞后 (ps)", "continuous": "连续", "intermittent": "间歇"},
+    "en": {
+        "lag_ps": "lag (ps)",
+        "continuous": "continuous",
+        "intermittent": "intermittent",
+    },
+}
+
 COMPARE = {
     "table": "hbond_lifetime",
-    "x": "滞后 (ps)",
-    "y": ["连续", "间歇"],
+    "x": "lag_ps",
+    "y": ["continuous", "intermittent"],
     "box_axis": False,
 }
 
@@ -132,9 +141,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     lag = continuous[0] * frame_dt
     table = pd.DataFrame(
         {
-            "滞后 (ps)": lag,
-            "连续": continuous[1],
-            "间歇": intermittent[1],
+            "lag_ps": lag,
+            "continuous": continuous[1],
+            "intermittent": intermittent[1],
         }
     )
 
@@ -142,10 +151,10 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     tau_inter = _crossing(lag, intermittent[1])
     summary = pd.DataFrame(
         [
-            {"判据": "连续", "氢键寿命 (ps)": tau_cont, "断帧容忍 (帧)": 0,
-             "备注": "" if np.isfinite(tau_cont) else "未降到 1/e"},
-            {"判据": "间歇", "氢键寿命 (ps)": tau_inter, "断帧容忍 (帧)": intermittency,
-             "备注": "" if np.isfinite(tau_inter) else "未降到 1/e"},
+            {"criterion": "continuous", "lifetime_ps": tau_cont, "tolerance_frames": 0,
+             "note": "" if np.isfinite(tau_cont) else "not reached 1/e"},
+            {"criterion": "intermittent", "lifetime_ps": tau_inter, "tolerance_frames": intermittency,
+             "note": "" if np.isfinite(tau_inter) else "not reached 1/e"},
         ]
     )
 
@@ -167,16 +176,16 @@ def meta(ctx, tables) -> dict:
 def figures(ctx, tables):
     table = tables["hbond_lifetime"]
     info = ctx.extras.get("hbond_lifetime", {})
-    lag = table["滞后 (ps)"].to_numpy()
+    lag = table["lag_ps"].to_numpy()
     intermittency = int(info.get("intermittency", 0))
 
     fig, ax = chart.figure(ctx.size("single"))
     chart.line(
-        ax, lag, table["连续"], lw=1.3, color=chart.COLORS["primary"],
+        ax, lag, table["continuous"], lw=1.3, color=chart.COLORS["primary"],
         label=ctx.label("cont"),
     )
     chart.line(
-        ax, lag, table["间歇"], lw=1.3, ls="--", color=chart.COLORS["secondary"],
+        ax, lag, table["intermittent"], lw=1.3, ls="--", color=chart.COLORS["secondary"],
         label=ctx.label("inter", n=intermittency),
     )
     chart.refline(ax, LEVEL, ls=":", lw=0.8, color=chart.COLORS["guide"])

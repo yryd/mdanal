@@ -115,9 +115,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")
     table = pd.DataFrame(
         {
-            f"{a} (Å)": grid_a.ravel(),
-            f"{b} (Å)": grid_b.ravel(),
-            "数密度 (Å^-3)": density.ravel(),
+            f"{a}_angstrom": grid_a.ravel(),
+            f"{b}_angstrom": grid_b.ravel(),
+            "number_density_A3": density.ravel(),
         }
     )
     return {f"density_{a}{b}": table}

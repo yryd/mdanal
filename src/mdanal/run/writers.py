@@ -12,8 +12,8 @@ from typing import Any, Mapping, Sequence
 import pandas as pd
 
 AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
-# 表里形如 "x (Å)" 的列是盒坐标列；aligned 副本对它施加视图平移
-COORD_COLUMN = re.compile(r"^([xyz]) \(Å\)$")
+# 表里形如 "x_angstrom" 的列是盒坐标列；aligned 副本对它施加视图平移
+COORD_COLUMN = re.compile(r"^([xyz])_angstrom$")
 
 
 def write_aligned(

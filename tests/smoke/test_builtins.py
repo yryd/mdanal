@@ -109,3 +109,19 @@ def test_check_analysis_builtin():
     assert check_analysis(discovery) == []
     # 实跑选两条分析，避免冒烟测试太慢；静态检查已覆盖全部八个
     assert check_analysis(discovery, system=SYSTEM, names=("density", "rdf")) == []
+
+
+def test_compare_columns_have_bilingual_labels():
+    """参与对比的每一列都必须有中英标签，否则 compare --lang 会退回机器名。"""
+    for name, definition in discover().definitions.items():
+        comparison = definition.compare
+        if not comparison:
+            continue
+        values = {key: spec["default"] for key, spec in definition.params.items()}
+        values.setdefault("axis", values.get("dim", ""))
+        columns = [comparison["x"].format(**values)]
+        columns += [column.format(**values) for column in comparison["y"]]
+        for lang in ("zh", "en"):
+            labels = definition.column_labels.get(lang, {})
+            missing = [column for column in columns if column not in labels]
+            assert not missing, (name, lang, missing)

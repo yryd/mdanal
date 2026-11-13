@@ -40,6 +40,7 @@ def run_compare(
     config_path: str | Path,
     out_dir: str | Path | None = None,
     registry: Mapping[str, Any] | None = None,
+    lang: str = "zh",
 ) -> Path:
     config_path = Path(config_path).expanduser().resolve()
     config = _load_config(config_path)
@@ -62,6 +63,7 @@ def run_compare(
     table_name = str(figure.get("table") or comparison["table"])
     x_column = comparison["x"]
     y_columns = [str(column) for column in (figure.get("y") or comparison["y"])]
+    labels = comparison.get("labels", {}).get(lang, {})
     box_axis = comparison["box_axis"]
     x_axis = x_column[0] if x_column[:1] in AXES else None
     align = _parse_align(figure.get("align"), config_path)
@@ -106,8 +108,13 @@ def run_compare(
                 label=label if index == 0 and len(items) > 1 else None,
             )
 
-    ax.set_xlabel(str(figure.get("xlabel") or x_column))
-    ax.set_ylabel(str(figure.get("ylabel") or ", ".join(y_columns)))
+    xlabel = str(figure.get("xlabel") or labels.get(x_column, x_column))
+    ylabel = str(
+        figure.get("ylabel")
+        or ", ".join(labels.get(column, column) for column in y_columns)
+    )
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
     if figure.get("title"):
         ax.set_title(str(figure["title"]))
     xlim = figure.get("xlim")
@@ -129,6 +136,9 @@ def run_compare(
             "table": table_name,
             "x": x_column,
             "y": y_columns,
+            "lang": lang,
+            "xlabel": xlabel,
+            "ylabel": ylabel,
             "align": dict(align),
             "xlim": [low, high],
             "items": [
@@ -303,6 +313,7 @@ def _module_compare(
         "y": [str(column).format(**values) for column in comparison["y"]],
         "table": str(comparison.get("table", module_name)).format(**values),
         "box_axis": bool(comparison.get("box_axis")),
+        "labels": dict(definition.column_labels),
     }
 
 

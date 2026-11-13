@@ -67,7 +67,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     density_csv = out / "density-xz" / "tables" / "density_xz.csv"
     assert density_csv.is_file()
     table = pd.read_csv(density_csv, encoding="utf-8-sig")
-    assert list(table.columns) == ["x (Å)", "z (Å)", "数密度 (Å^-3)"]
+    assert list(table.columns) == ["x_angstrom", "z_angstrom", "number_density_A3"]
 
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["input"] == {
@@ -83,7 +83,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     extent = meta["grid_extent"]
     delta = float(meta["delta"])
     # Σρ · Δa · Δb · L_axis = 原子数（L_axis 为网格沿求和方向的覆盖长度）
-    total = float(table["数密度 (Å^-3)"].sum()) * delta * delta * extent[meta["sum_axis"]]
+    total = float(table["number_density_A3"].sum()) * delta * delta * extent[meta["sum_axis"]]
     # 网格按 delta 取整，盒边缘可能有极少数原子落在网格外，故留 2% 余量
     assert total == pytest.approx(selection_count(cfg, "all"), rel=0.02)
 
@@ -112,8 +112,8 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     reference = universe.select_atoms("type 1 3").center_of_mass()[2]  # 盒坐标
 
     velocity = pd.read_csv(out / "velocity/tables/velocity.csv", encoding="utf-8-sig")
-    assert list(velocity.columns) == ["z (Å)", "vx (Å/ps)", "误差 (Å/ps)"]
-    z = velocity["z (Å)"]
+    assert list(velocity.columns) == ["z_angstrom", "vx_A_per_ps", "error_A_per_ps"]
+    z = velocity["z_angstrom"]
 
     # 剖面网格覆盖盒长，坐标是盒坐标
     assert z.max() - z.min() < length
@@ -128,7 +128,7 @@ def test_velocity_axis_uses_view_coordinates(real, tmp_path):
     lineardensity = pd.read_csv(
         out / "lineardensity/tables/lineardensity_z.csv", encoding="utf-8-sig"
     )
-    centers = lineardensity["z (Å)"].to_numpy()
+    centers = lineardensity["z_angstrom"].to_numpy()
     spacing = float(centers[1] - centers[0])
     assert centers[0] - spacing / 2 == pytest.approx(0.0, abs=1e-5)
 
@@ -151,7 +151,7 @@ def test_velocity_axis_accepts_axis_names(real, tmp_path):
     by_name = pd.read_csv(
         out / "velocity-by-name/tables/velocity.csv", encoding="utf-8-sig"
     )
-    assert list(by_name.columns) == ["x (Å)", "vx (Å/ps)", "误差 (Å/ps)"]
+    assert list(by_name.columns) == ["x_angstrom", "vx_A_per_ps", "error_A_per_ps"]
     pd.testing.assert_frame_equal(by_index, by_name)
 
 
@@ -197,16 +197,16 @@ def test_hbond_lifetime_output(real, tmp_path):
     table = pd.read_csv(
         out / "hbond_lifetime/tables/hbond_lifetime.csv", encoding="utf-8-sig"
     )
-    assert list(table.columns) == ["滞后 (ps)", "连续", "间歇"]
-    assert table["滞后 (ps)"].iloc[0] == 0
-    assert table["连续"].iloc[0] == 1 and table["间歇"].iloc[0] == 1
+    assert list(table.columns) == ["lag_ps", "continuous", "intermittent"]
+    assert table["lag_ps"].iloc[0] == 0
+    assert table["continuous"].iloc[0] == 1 and table["intermittent"].iloc[0] == 1
     # 每帧 5 ps，tau_max_ps=20 -> 4 帧，最后一行是 20 ps
-    assert table["滞后 (ps)"].iloc[-1] == pytest.approx(20.0)
+    assert table["lag_ps"].iloc[-1] == pytest.approx(20.0)
 
     summary = pd.read_csv(
         out / "hbond_lifetime/tables/hbond_lifetime_summary.csv", encoding="utf-8-sig"
     )
-    assert list(summary["判据"]) == ["连续", "间歇"]
+    assert list(summary["criterion"]) == ["continuous", "intermittent"]
     assert (out / "hbond_lifetime/figures/hbond_lifetime.png").is_file()
 
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
@@ -238,13 +238,13 @@ def test_hbond_type_output(real, tmp_path):
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
 
     table = pd.read_csv(out / "hbond_type/tables/hbond_type.csv", encoding="utf-8-sig")
-    assert list(table.columns) == ["供体", "受体", "次数", "每帧平均", "占比"]
+    assert list(table.columns) == ["donor", "acceptor", "count", "per_frame", "share"]
     assert not table.empty
-    assert table["次数"].is_monotonic_decreasing
-    assert set(table["供体"].str.split("-").str[0]) == {"TMA"}
-    assert table["供体"].str.match(r"^[A-Z]{3}-[A-Z][a-z]?$").all()
-    assert np.allclose(table["每帧平均"], table["次数"] / (STOP - START))
-    assert table["占比"].sum() == pytest.approx(1.0)
+    assert table["count"].is_monotonic_decreasing
+    assert set(table["donor"].str.split("-").str[0]) == {"TMA"}
+    assert table["donor"].str.match(r"^[A-Z]{3}-[A-Z][a-z]?$").all()
+    assert np.allclose(table["per_frame"], table["count"] / (STOP - START))
+    assert table["share"].sum() == pytest.approx(1.0)
     assert (out / "hbond_type/figures/hbond_type.png").is_file()
 
     # 横轴可切换为总次数

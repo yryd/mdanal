@@ -52,6 +52,7 @@ class AnalysisDef:
     slots: tuple[str, ...]
     params: Mapping[str, Mapping[str, Any]]
     labels: Mapping[str, Mapping[str, str]]
+    column_labels: Mapping[str, Mapping[str, str]] = field(default_factory=dict)
     requires: tuple[str, ...] = ()
     package: Mapping[str, str] | None = None
     coordinates: str = "any"
@@ -253,6 +254,9 @@ def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:
         slots=slots,
         params=params,
         labels=labels,
+        column_labels=_normalise_column_labels(
+            getattr(module, "COLUMN_LABELS", None), where
+        ),
         requires=requires,
         package=package,
         coordinates=str(coordinates),
@@ -408,6 +412,32 @@ def _normalise_labels(value: Any, where: str) -> dict[str, dict[str, str]]:
         if not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
             raise ValidationError(
                 f"LABELS.{lang} 的键与值都必须是字符串", where=f"{where}:LABELS"
+            )
+        labels[lang] = dict(table)
+    return labels
+
+
+def _normalise_column_labels(
+    value: Any, where: str
+) -> dict[str, dict[str, str]]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping) or not value:
+        raise ValidationError(
+            "COLUMN_LABELS 必须是 {zh: {...}, en: {...}}", where=f"{where}:COLUMN_LABELS"
+        )
+    labels: dict[str, dict[str, str]] = {}
+    for lang in ("zh", "en"):
+        table = value.get(lang)
+        if not isinstance(table, Mapping) or not table:
+            raise ValidationError(
+                f"COLUMN_LABELS.{lang} 必须是非空映射",
+                where=f"{where}:COLUMN_LABELS",
+            )
+        if not all(isinstance(k, str) and isinstance(v, str) for k, v in table.items()):
+            raise ValidationError(
+                f"COLUMN_LABELS.{lang} 的键与值都必须是字符串",
+                where=f"{where}:COLUMN_LABELS",
             )
         labels[lang] = dict(table)
     return labels

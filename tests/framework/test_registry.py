@@ -31,7 +31,7 @@ def test_definition_from_fake_module():
     assert definition.labels["zh"]["title"] == "假分析"
     assert definition.compare == {
         "table": "fake",
-        "x": "x (Å)",
+        "x": "x_angstrom",
         "y": ["y"],
         "box_axis": True,
     }

@@ -85,7 +85,7 @@ out: compare
 ```
 
 ```bash
-mdanal compare --config compare.yaml [--out DIR]
+mdanal compare --config compare.yaml [--out DIR] [--lang zh|en]
 ```
 
 - 只叠一维曲线（`lineardensity`、`velocity`、`rdf`、`msd`、`hbond`、`hbond_lifetime`）；
@@ -93,7 +93,8 @@ mdanal compare --config compare.yaml [--out DIR]
 - 横轴是盒坐标的分析参与对齐：`left`（盒下角 → 0）、`center`（盒心 → 0，默认）、
   或直接写数值当锚点；每个体系可用 `anchor` 单独覆盖；
 - 缺省横轴范围取各体系该轴平移后的并集；`t_offset` 用来平移时间轴的零点；
-- 输出：一张 PNG、合并后的对齐表 `tables/<表名>.csv`、`provenance.json`（每个体系的平移量）。
+- 轴标签取该分析 `COLUMN_LABELS` 里的中英文案，可用 `figure.xlabel/ylabel` 覆盖；`--lang` 切换语言；
+- 输出：一张 PNG、合并后的对齐表 `tables/<表名>.csv`、`provenance.json`（每个体系的平移量与所用语言）。
 
 ## 配置
 
@@ -249,14 +250,37 @@ groups:
 | 坐标列（`x (Å)`、`r (Å)`、`滞后 (ps)` 等） | Å / ps | MDAnalysis、MAICoS |
 | 质量密度 | g·cm⁻³ | 由 amu/Å³ 换算（1 amu = 1/N_A g） |
 | 电荷密度 | **e·mol·cm⁻³** | MDAnalysis `LinearDensity` 文档口径，**不是 e·Å⁻³** |
-| 密度投影的「数密度」 | Å⁻³ | MDAnalysis `DensityAnalysis` 网格 |
-| `g(r)` | 无量纲 | `InterRDF` |
-| `MSD (Å^2)` / `Δt (ps)` | Å² / ps | `EinsteinMSD` |
-| 氢键数 / 次数 / 出现帧数 | 个 | `HydrogenBondAnalysis` |
-| 氢键寿命、滞后 | ps | 库给出以帧为单位的 τ，乘帧间隔得到 ps |
-| `v (Å/ps)` / 误差 | Å·ps⁻¹ | MAICoS `VelocityPlanar`，误差列是标准误 |
+| `number_density_A3` | Å⁻³ | MDAnalysis `DensityAnalysis` 网格 |
+| `g_r` | 无量纲 | `InterRDF` |
+| `msd_A2` / `dt_ps` | Å² / ps | `EinsteinMSD` |
+| `hbond_count` / `count` / `frames_present` | 个 | `HydrogenBondAnalysis` |
+| `lifetime_ps` / `lag_ps` | ps | 库给出以帧为单位的 τ，乘帧间隔得到 ps |
+| `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ | MAICoS `VelocityPlanar`，误差列是标准误 |
 
 `density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面零点为参考组质心，表中的坐标已加回该质心，与其他分析同框架。
+
+### 表头（机器名）
+
+表头是稳定的机器名（ASCII、不随 `--lang` 变），`--lang` 只影响图内文字。`*_angstrom` 是盒坐标列，
+`--aligned` 副本会对它们施加视图平移。
+
+| 分析 | 列 | 含义 | 单位 |
+|---|---|---|---|
+| `density` | `x_angstrom` / `y_angstrom` | 投影平面坐标 | Å |
+| | `number_density_A3` | 沿求和轴平均的数密度 | Å⁻³ |
+| `lineardensity` | `{x,y,z}_angstrom` | 轴坐标 | Å |
+| | `mass_density_g_cm3` | 质量密度 | g cm⁻³ |
+| | `charge_density_e_mol_cm3` | 电荷密度（库口径） | e mol cm⁻³ |
+| `rdf` | `r_angstrom` / `g_r` | 距离 / 径向分布函数 | Å / — |
+| `hbond` | `frame` / `time_ps` / `hbond_count` | 帧号 / 时间 / 氢键数 | — / ps / 个 |
+| | `donor` / `hydrogen` / `acceptor` / `frames_present` / `occupancy` | 占有率表 | — / 个 / — |
+| | `n_frames` / `mean_hbonds` / `std_hbonds` / `per_molecule` | 汇总 | — |
+| `hbond_type` | `donor` / `acceptor` / `count` / `per_frame` / `share` | 类型统计 | — |
+| `hbond_lifetime` | `lag_ps` / `continuous` / `intermittent` | 滞后与存活概率 | ps / — |
+| | `criterion` / `lifetime_ps` / `tolerance_frames` / `note` | 寿命汇总 | — / ps / 帧 |
+| `msd` | `dt_ps` / `msd_A2` | 滞后 / 均方位移 | ps / Å² |
+| `velocity` | `{x,y,z}_angstrom` | 剖面坐标 | Å |
+| | `v{x,y,z}_A_per_ps` / `error_A_per_ps` | 速度 / 标准误 | Å ps⁻¹ |
 
 ## 输出
 

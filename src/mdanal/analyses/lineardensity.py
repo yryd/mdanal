@@ -55,10 +55,23 @@ LABELS = {
 }
 
 
+COLUMN_LABELS = {
+    "zh": {
+        "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
+        "mass_density_g_cm3": "质量密度 (g cm$^{-3}$)",
+        "charge_density_e_mol_cm3": "电荷密度 (e mol cm$^{-3}$)",
+    },
+    "en": {
+        "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
+        "mass_density_g_cm3": "mass density (g cm$^{-3}$)",
+        "charge_density_e_mol_cm3": "charge density (e mol cm$^{-3}$)",
+    },
+}
+
 COMPARE = {
     "table": "lineardensity_{dim}",
-    "x": "{axis} (Å)",
-    "y": ["质量密度 (g/cm^3)"],
+    "x": "{axis}_angstrom",
+    "y": ["mass_density_g_cm3"],
     "box_axis": True,
 }
 
@@ -128,9 +141,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         centers = 0.5 * (bin_edges[1:] + bin_edges[:-1])[:n_bins]
         tables[f"lineardensity_{axis}"] = pd.DataFrame(
             {
-                f"{axis} (Å)": centers,
-                "质量密度 (g/cm^3)": mass_density[:n_bins],
-                "电荷密度 (e mol/cm^3)": charge_density[:n_bins],
+                f"{axis}_angstrom": centers,
+                "mass_density_g_cm3": mass_density[:n_bins],
+                "charge_density_e_mol_cm3": charge_density[:n_bins],
             }
         )
     return tables

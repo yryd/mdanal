@@ -40,7 +40,7 @@ def test_compare_overlays_two_runs(tmp_path):
     roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
     config = _config(tmp_path, roots)
     out = tmp_path / "out"
-    run_compare(config, out, registry=fake_registry())
+    run_compare(config, out, registry=fake_registry(), lang="en")
 
     table = pd.read_csv(out / "tables" / "fake.csv", encoding="utf-8-sig")
     assert "x" in table.columns and "y" in table.columns
@@ -50,6 +50,9 @@ def test_compare_overlays_two_runs(tmp_path):
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
     assert len(provenance["items"]) == 2
     assert len(provenance["xlim"]) == 2
+    assert provenance["lang"] == "en"
+    assert provenance["xlabel"] == "x (Å)"
+    assert provenance["ylabel"] == "value"
 
 
 def test_compare_rejects_analysis_without_declaration(tmp_path):

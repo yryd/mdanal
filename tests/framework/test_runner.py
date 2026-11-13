@@ -34,7 +34,7 @@ def test_fake_analysis_end_to_end(tmp_path):
     assert (out / "fake" / "figures" / "fake.png").is_file()
 
     table = pd.read_csv(out / "fake/tables/fake.csv", encoding="utf-8-sig")
-    assert list(table.columns) == ["x (Å)", "y", "start", "stop"]
+    assert list(table.columns) == ["x_angstrom", "y", "start", "stop"]
     assert len(table) == 5
     assert set(table["start"]) == {0}
     assert set(table["stop"]) == {5}
@@ -136,7 +136,7 @@ def test_aligned_tables_equal_plain_plus_shift(tmp_path):
     shifted = pd.read_csv(
         tmp_path / "aligned/fake/tables/fake.aligned.csv", encoding="utf-8-sig"
     )
-    delta = shifted["x (Å)"] - plain["x (Å)"]
+    delta = shifted["x_angstrom"] - plain["x_angstrom"]
     assert np.allclose(delta, cfg.view.shift[0])
     pd.testing.assert_series_equal(shifted["y"], plain["y"])
 

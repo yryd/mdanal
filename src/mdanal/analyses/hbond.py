@@ -42,7 +42,7 @@ LABELS = {
     },
 }
 
-OCCUPANCY_COLUMNS = ("供体", "氢", "受体", "出现帧数", "占有率")
+OCCUPANCY_COLUMNS = ("donor", "hydrogen", "acceptor", "frames_present", "occupancy")
 
 
 def _build(ctx) -> HydrogenBondAnalysis:
@@ -61,10 +61,15 @@ def _build(ctx) -> HydrogenBondAnalysis:
     )
 
 
+COLUMN_LABELS = {
+    "zh": {"time_ps": "时间 (ps)", "hbond_count": "氢键数"},
+    "en": {"time_ps": "time (ps)", "hbond_count": "hydrogen bonds"},
+}
+
 COMPARE = {
     "table": "hbond_count",
-    "x": "时间 (ps)",
-    "y": ["氢键数"],
+    "x": "time_ps",
+    "y": ["hbond_count"],
     "box_axis": False,
 }
 
@@ -81,9 +86,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     frames = np.arange(ctx.start, ctx.start + len(counts))
     count_table = pd.DataFrame(
         {
-            "帧": frames,
-            "时间 (ps)": frames * ctx.frame_dt_ps,
-            "氢键数": counts,
+            "frame": frames,
+            "time_ps": frames * ctx.frame_dt_ps,
+            "hbond_count": counts,
         }
     )
 
@@ -100,9 +105,9 @@ def figures(ctx, tables):
     table = tables["hbond_count"]
     fig, ax = chart.figure(ctx.size("single"))
     chart.line(
-        ax, table["时间 (ps)"], table["氢键数"], lw=0.9, color=chart.COLORS["primary"]
+        ax, table["time_ps"], table["hbond_count"], lw=0.9, color=chart.COLORS["primary"]
     )
-    mean = float(table["氢键数"].mean())
+    mean = float(table["hbond_count"].mean())
     chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
@@ -121,16 +126,16 @@ def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
         return pd.DataFrame(columns=list(OCCUPANCY_COLUMNS))
 
     triples = pd.DataFrame(
-        hbonds[:, 1:4].astype(int), columns=["供体", "氢", "受体"]
+        hbonds[:, 1:4].astype(int), columns=["donor", "hydrogen", "acceptor"]
     )
     table = (
-        triples.groupby(["供体", "氢", "受体"])
+        triples.groupby(["donor", "hydrogen", "acceptor"])
         .size()
-        .rename("出现帧数")
+        .rename("frames_present")
         .reset_index()
     )
-    table["占有率"] = table["出现帧数"] / n_frames
-    return table.sort_values(["占有率", "供体"], ascending=[False, True]).reset_index(
+    table["occupancy"] = table["frames_present"] / n_frames
+    return table.sort_values(["occupancy", "donor"], ascending=[False, True]).reset_index(
         drop=True
     )
 
@@ -138,16 +143,16 @@ def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
 def _summary(counts: np.ndarray, n_molecules: int) -> pd.DataFrame:
     if counts.size == 0:
         return pd.DataFrame(
-            [{"帧数": 0, "平均氢键数": 0.0, "标准差": 0.0, "每分子平均": 0.0}]
+            [{"n_frames": 0, "mean_hbonds": 0.0, "std_hbonds": 0.0, "per_molecule": 0.0}]
         )
     mean = float(counts.mean())
     return pd.DataFrame(
         [
             {
-                "帧数": int(counts.size),
-                "平均氢键数": mean,
-                "标准差": float(counts.std(ddof=0)),
-                "每分子平均": mean / max(n_molecules, 1),
+                "n_frames": int(counts.size),
+                "mean_hbonds": mean,
+                "std_hbonds": float(counts.std(ddof=0)),
+                "per_molecule": mean / max(n_molecules, 1),
             }
         ]
     )

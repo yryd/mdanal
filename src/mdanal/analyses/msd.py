@@ -41,10 +41,15 @@ LABELS = {
 COORDINATES = "continuous"
 
 
+COLUMN_LABELS = {
+    "zh": {"dt_ps": r"$\Delta t$ (ps)", "msd_A2": "MSD (Å$^{2}$)"},
+    "en": {"dt_ps": r"$\Delta t$ (ps)", "msd_A2": "MSD (Å$^{2}$)"},
+}
+
 COMPARE = {
     "table": "msd",
-    "x": "Δt (ps)",
-    "y": ["MSD (Å^2)"],
+    "x": "dt_ps",
+    "y": ["msd_A2"],
     "box_axis": False,
 }
 
@@ -62,7 +67,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     lag = np.asarray(analysis.results.delta_t_values, dtype=float)
     msd = np.asarray(analysis.results.timeseries, dtype=float)
     # delta_t_values 已按轨迹时间单位（ps）给出
-    table = pd.DataFrame({"Δt (ps)": lag, "MSD (Å^2)": msd})
+    table = pd.DataFrame({"dt_ps": lag, "msd_A2": msd})
     return {"msd": table}
 
 

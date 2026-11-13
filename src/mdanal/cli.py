@@ -116,7 +116,8 @@ def cmd_check_analysis(args: argparse.Namespace) -> int:
 def cmd_compare(args: argparse.Namespace) -> int:
     from .compare.compare import run_compare
 
-    out = run_compare(args.config, args.out)
+    lang = args.lang or _load_defaults()["language"]
+    out = run_compare(args.config, args.out, lang=lang)
     print(f"输出：{out}")
     return EXIT_OK
 
@@ -409,6 +410,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     compare.add_argument("--config", required=True, metavar="FILE", help="对比配置")
     compare.add_argument("--out", metavar="DIR", help="输出目录（默认取配置的 out）")
+    compare.add_argument("--lang", choices=("zh", "en"), help="图内文字语言（默认取 defaults.yaml）")
     compare.set_defaults(func=cmd_compare)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")

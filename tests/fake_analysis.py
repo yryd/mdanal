@@ -33,7 +33,11 @@ LABELS = {
 COORDINATES = "any"
 REQUIRES = ()
 PACKAGE = None
-COMPARE = {"table": "fake", "x": "x (Å)", "y": ["y"], "box_axis": True}
+COLUMN_LABELS = {
+    "zh": {"x_angstrom": "x (Å)", "y": "值"},
+    "en": {"x_angstrom": "x (Å)", "y": "value"},
+}
+COMPARE = {"table": "fake", "x": "x_angstrom", "y": ["y"], "box_axis": True}
 MUTATES_POSITIONS = False
 
 
@@ -41,7 +45,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     frames = np.arange(ctx.start, ctx.stop, dtype=float)
     table = pd.DataFrame(
         {
-            "x (Å)": frames * float(ctx.params["scale"]),
+            "x_angstrom": frames * float(ctx.params["scale"]),
             "y": frames,
             "start": np.full(len(frames), ctx.start, dtype=int),
             "stop": np.full(len(frames), ctx.stop, dtype=int),
@@ -57,7 +61,7 @@ def meta(ctx, tables) -> dict:
 def figures(ctx, tables):
     table = tables["fake"]
     fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, table["x (Å)"], table["y"], lw=1.0)
+    chart.line(ax, table["x_angstrom"], table["y"], lw=1.0)
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))

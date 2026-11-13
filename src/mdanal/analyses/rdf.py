@@ -41,10 +41,15 @@ LABELS = {
 }
 
 
+COLUMN_LABELS = {
+    "zh": {"r_angstrom": "$r$ (Å)", "g_r": "$g(r)$"},
+    "en": {"r_angstrom": "$r$ (Å)", "g_r": "$g(r)$"},
+}
+
 COMPARE = {
     "table": "rdf",
-    "x": "r (Å)",
-    "y": ["g(r)"],
+    "x": "r_angstrom",
+    "y": ["g_r"],
     "box_axis": False,
 }
 
@@ -71,7 +76,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     edges = np.asarray(analysis.results.edges, dtype=float)
     centers = 0.5 * (edges[1:] + edges[:-1])
     rdf = np.asarray(analysis.results.rdf, dtype=float)
-    return {"rdf": pd.DataFrame({"r (Å)": centers, "g(r)": rdf})}
+    return {"rdf": pd.DataFrame({"r_angstrom": centers, "g_r": rdf})}
 
 
 def figures(ctx, tables):

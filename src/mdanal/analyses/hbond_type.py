@@ -49,7 +49,7 @@ LABELS = {
     },
 }
 
-COLUMNS = ("供体", "受体", "次数", "每帧平均", "占比")
+COLUMNS = ("donor", "acceptor", "count", "per_frame", "share")
 FIGURE_ROWS = 12
 
 
@@ -107,7 +107,7 @@ def figures(ctx, tables):
         raise ValidationError(
             f"figure_axis 只能是 rate 或 total，收到 {axis!r}"
         )
-    column, label = ("每帧平均", "rate") if axis == "rate" else ("次数", "count")
+    column, label = ("per_frame", "rate") if axis == "rate" else ("count", "count")
 
     shown = table.head(FIGURE_ROWS)
     return [("hbond_type", _bars(ctx, shown, column, label))]
@@ -130,10 +130,10 @@ def _summarise(rows, ctx, n_frames: int, total: int) -> pd.DataFrame:
 
     table = pd.DataFrame(
         [(d, a, n) for (d, a), n in counts.items()],
-        columns=["供体", "受体", "次数"],
-    ).sort_values("次数", ascending=False, ignore_index=True)
-    table["每帧平均"] = table["次数"] / n_frames
-    table["占比"] = table["次数"] / max(total, 1)
+        columns=["donor", "acceptor", "count"],
+    ).sort_values("count", ascending=False, ignore_index=True)
+    table["per_frame"] = table["count"] / n_frames
+    table["share"] = table["count"] / max(total, 1)
     return table.loc[:, list(COLUMNS)]
 
 
@@ -157,12 +157,12 @@ def _label(pair: str, elements: dict[str, str]) -> str:
 
 
 def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
-    labels = (table["供体"] + " → " + table["受体"]).tolist()
+    labels = (table["donor"] + " → " + table["acceptor"]).tolist()
     values = table[column].to_numpy(dtype=float)
 
     fig, ax = chart.figure(ctx.size("wide"))
     # 数值与占比标在条末：占比极小的类型在条形图上几乎看不见，靠数字读
-    shares = table["占比"].to_numpy(dtype=float)
+    shares = table["share"].to_numpy(dtype=float)
     chart.bars(
         ax,
         labels,
