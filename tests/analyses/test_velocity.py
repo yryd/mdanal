@@ -261,3 +261,43 @@ def test_moving_reference_does_not_shift_profile():
     finite = table["vx_A_per_ps"].notna()
     assert np.allclose(table.loc[finite, "z_angstrom"], group_z)
     assert np.allclose(table.loc[finite, "vx_A_per_ps"], group_z)
+
+
+def test_pooled_samples_mean_and_naive_sem():
+    """一帧 1 个样本 v=0、另一帧 3 个样本 v=10：均值 7.5，样本 SEM 2.5。"""
+    from types import SimpleNamespace
+
+    from mdanal.analyses import velocity as velocity_module
+
+    n_frames, n_atoms, length = 2, 3, 10.0
+    positions = np.zeros((n_frames, n_atoms, 3))
+    positions[:, :, 0] = 5.0
+    positions[:, :, 1] = 5.0
+    positions[0, 0, 2] = 0.5
+    positions[0, 1:, 2] = 8.5
+    positions[1, :, 2] = 0.5
+    velocities = np.zeros((n_frames, n_atoms, 3))
+    velocities[1, :, 0] = 10.0
+    universe = _velocity_universe(positions, velocities, length)
+    ctx = SimpleNamespace(
+        universe=universe,
+        groups={
+            "group": SimpleNamespace(atoms=universe.atoms),
+            "ref": SimpleNamespace(atoms=universe.atoms[:1]),
+        },
+        start=0,
+        stop=n_frames,
+        selection_frame=0,
+        extras={},
+        params={
+            "dim": "z",
+            "vdim": "x",
+            "bin_width": 1.0,
+            "grouping": "atoms",
+            "sym": False,
+        },
+    )
+    table = velocity_module.run(ctx)["velocity"]
+    row = table.iloc[0]
+    assert row["vx_A_per_ps"] == pytest.approx(7.5)
+    assert row["error_A_per_ps"] == pytest.approx(2.5)

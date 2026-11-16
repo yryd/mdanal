@@ -57,8 +57,13 @@ def test_annotations_axis_mismatch_is_skipped():
 
     class Ctx:
         annotations = ({"kind": "vline", "axis": "x", "at": 0.5, "text": None},)
+        lang = "zh"
+        warnings = []
 
-    annotations.draw(ax, Ctx(), axes={"x": "z"})
+        def warn(self, message):
+            self.warnings.append(message)
+
+    annotations.draw(ax, Ctx(), x_axis="z")
     assert len(ax.lines) == 1  # 只有数据线，没有竖线
 
 
@@ -129,3 +134,67 @@ def test_annotations_text_keeps_position():
 
     with pytest.raises(ValidationError, match="不能相等"):
         annotations.parse([{"kind": "span", "axis": "z", "at": [1, 1]}], "probe")
+
+
+def test_annotations_support_plot_axes_and_bilingual_text():
+    items = annotations.parse(
+        [
+            {"kind": "vline", "axis": "horizontal", "at": 10, "text": {"zh": "参考", "en": "ref"}},
+            {"kind": "vline", "axis": "x", "at": 15},
+            {"kind": "span", "axis": "vertical", "at": [0, 2]},
+            {"kind": "hline", "axis": "vertical", "at": 1},
+        ],
+        "probe",
+    )
+    assert items[0]["axis"] == "horizontal"
+    assert items[0]["text"] == {"zh": "参考", "en": "ref"}
+    assert items[1]["axis"] == "x"
+    assert items[2]["axis"] == "vertical"
+
+    fig, ax = chart.figure("single")
+    chart.line(ax, [0, 20], [0, 1])
+
+    class Ctx:
+        annotations = items
+        lang = "en"
+        warnings = []
+
+        def warn(self, message):
+            self.warnings.append(message)
+
+    annotations.draw(ax, Ctx(), x_axis="z")
+    assert any(line.get_linestyle() == ":" for line in ax.lines)
+    assert len(ax.patches) >= 1  # vertical span
+    assert any(text.get_text() == "ref" for text in ax.texts)
+
+
+def test_annotations_reject_vline_vertical_and_text_axis():
+    with pytest.raises(ValidationError, match="vline"):
+        annotations.parse(
+            [{"kind": "vline", "axis": "vertical", "at": 1}], "probe"
+        )
+    with pytest.raises(ValidationError, match="text 不接受"):
+        annotations.parse(
+            [{"kind": "text", "axis": "horizontal", "at": [1, 2]}], "probe"
+        )
+
+
+def test_annotations_mismatch_warns_once():
+    fig, ax = chart.figure("single")
+    chart.line(ax, [0, 1], [0, 1])
+
+    class Ctx:
+        annotations = (
+            {"kind": "vline", "axis": "x", "at": 0.5, "text": None},
+            {"kind": "vline", "axis": "x", "at": 0.6, "text": None},
+        )
+        lang = "zh"
+        warnings = []
+
+        def warn(self, message):
+            self.warnings.append(message)
+
+    ctx = Ctx()
+    annotations.draw(ax, ctx, x_axis="z")
+    assert len(ax.lines) == 1
+    assert len(ctx.warnings) == 1

@@ -115,6 +115,8 @@
 | `error_A_per_ps` | 逐帧样本的标准误（未做相关时间校正） | Å·ps⁻¹ | 自实现 | **已核对**：匀速时为 0 |
 
 盒子变化时按首帧参考盒坐标平均并警告；参考组只记入 meta，不参与分箱或速度相减。
+`velocity.meta` 另记录 `averaging=pooled_unit_samples`、`error_method=naive_sample_sem_without_time_correlation_correction`、
+`reference_role=metadata_only`，与代码口径一致。
 
 ## 修正前后记录
 

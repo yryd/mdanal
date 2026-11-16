@@ -35,6 +35,7 @@ mdanal list density                            # 查看某个分析的输入契�
 mdanal list --system DIR                       # 列出体系的分组与将要执行的分析
 mdanal check --system DIR                      # 校验配置与依赖，不计算
 mdanal run --system DIR --out OUT              # 执行分析
+mdanal replot --from OUT --out FIGURES        # 从已有结果重绘，不读轨迹
 mdanal check-analysis                          # 检查已安装分析的声明是否完整
 mdanal check-analysis --system DIR             # 再按该体系实跑中英各一遍并检查出图
 ```
@@ -50,6 +51,24 @@ mdanal check-analysis --system DIR             # 再按该体系实跑中英各�
 | `--no-memory` | 不把轨迹读入内存，按需读盘 | 关闭（默认按收益自动决定） |
 
 源码运行时把 `mdanal` 换成 `python main.py`。
+
+## 从已有结果重绘
+
+`run` 会在每条分析目录下保存 `plot.json`（绘图快照，含表哈希、参数、标签、窗口、标注与呈现默认值）。
+`replot` 只读快照和 CSV，不加载轨迹、不重新计算：
+
+```bash
+mdanal replot --from OUT --out FIGURES
+mdanal replot --from OUT --out FIGURES_EN --analysis msd --analysis rdf --lang en --format svg
+mdanal replot --from OUT --out FIGURES_CUSTOM --config plot.yaml
+```
+
+- `--from` 是 `run` 的结果根目录；`--out` 必须是独立目录，不能与源目录重叠；
+- 非空输出默认拒绝，只有带 `replot.json` 的旧重绘目录才可用 `--force` 更新；
+- 表哈希不一致、快照缺失/版本不支持、插件无法导入时明确失败；插件源码变化只警告；
+- `plot.yaml` 支持 `defaults` 和按分析目录的 `plot`/`annotate` 覆盖，优先级为
+  快照默认 < 配置 defaults < 单分析配置 < CLI；
+- 初始 `run` 出图也读刚写出的 CSV，和 `replot` 共用同一渲染路径。
 
 ## 自己画图
 
@@ -147,12 +166,13 @@ analyses:
 两个额外键：
 
 - `section: [起, 止]`：在体系帧窗口内再切一段（相对偏移），只影响该分析；分组仍在体系窗口首帧解析一次。
-- `plot:`：图件选项，目前支持 `window: {轴: [下界, 上界]}`，只裁坐标轴、不改数据表。
+- `plot:`：图件选项，支持 `window`、`size`（英寸）、`xlim`/`ylim`、`title`/`xlabel`/`ylabel`（字符串或 `{zh, en}`）与 `rc`；只改呈现，不改数据表。
 
 ### 图内标注（可选）
 
-每条分析可以带 `annotate`，标注**属于这一条分析**，`axis` 必填——`density-xz` 的横轴是 x、
-`lineardensity` 的横轴是 z，同一个位置在两处含义不同：
+每条分析可以带 `annotate`，标注**属于这一条分析**。`axis` 写 `horizontal`/`vertical` 时
+使用这张图的横轴/纵轴数据坐标（时间、r 等）；写 `x`/`y`/`z` 时保留旧的物理盒轴语义，
+只有该物理轴正好是本图横轴时才画，否则 `warn` 并跳过：
 
 ```yaml
   - name: lineardensity
@@ -162,10 +182,12 @@ analyses:
       - {kind: vline, axis: z, at: 22.0, text: 界面}
       - {kind: span,  axis: z, at: [17.0, 29.0], text: 缝内}
       - {kind: hline, at: 0.5, text: 参考}
+      - {kind: vline, axis: horizontal, at: 10, text: {zh: 参考时间, en: Reference}}
+      - {kind: span,  axis: vertical, at: [0, 2], text: 置信带}
       - {kind: text,  at: [5.0, 0.8], text: bulk}
 ```
 
-`vline` / `span` 只在该图横轴等于所写 `axis` 时生效，其余情况跳过；`hline` / `text` 按图的数值坐标放置。
+`text` 支持字符串或 `{zh, en}`；`vline+vertical` 等矛盾组合会报错；纵向区间文字用纵轴 transform。
 
 ### 坐标与视图
 
@@ -328,11 +350,12 @@ OUT/
 from ..plot import annotations, chart
 
 SLOTS = ("a", "b")                      # 必填：选择槽位，顺序与 sel 对应
-PARAMS = {                              # 必填：带类型与说明的参数
-    "cutoff": {"type": float, "default": 12.0, "unit": "Å", "min": 0.0,
-               "help": "超过该距离不计"},
-    "nbins": {"type": int, "default": 50, "min": 2},
-}
+PARAMS = {}                              # 必填：可为空映射；无参数分析不要虚构参数
+# 有参数时：
+# PARAMS = {
+#     "cutoff": {"type": float, "default": 12.0, "unit": "Å", "min": 0.0},
+#     "nbins": {"type": int, "default": 50, "min": 2},
+# }
 LABELS = {                              # 必填：图内文字，中英各一份
     "zh": {"title": "距离分布", "x": "$r$ (Å)", "y": "计数"},
     "en": {"title": "Distance distribution", "x": "$r$ (Å)", "y": "count"},
@@ -350,16 +373,22 @@ def run(ctx):
 
 
 def figures(ctx, tables):
-    """可选：返回 [(图名, matplotlib Figure)]；核心负责保存。"""
+    """可选：返回 [(图名, matplotlib Figure)]；核心负责保存。
+
+    ctx 是 PlotContext：只有表、快照信息与呈现设置，没有 universe/原子组。
+    """
 
 
 def meta(ctx, tables):
     """可选：返回 dict，写进 provenance。"""
 ```
 
-`ctx` 提供 `groups`、`start`、`stop`、`params`、`view`、`selection_frame`、`window(axis)`、
-`warn()`、`label()`、`size()`、`universe`。图件窗口用 `ctx.window(axis)`；切片后的帧窗口由
-`ctx.start/stop` 给出。
+`run(ctx)` / `meta(ctx, tables)` 的 `ctx` 是 RunContext，提供 `groups`、`universe`、`view`、
+`start/stop`、`selection_frame`、`params`、`window(axis)`、`warn()` 等；`figures(plot_ctx, tables)`
+的 `ctx` 是 PlotContext，只提供 `params`、`meta`、`extras`、`start/stop`、`frame_dt_ps`、`shift`、
+`lang`、`annotations`、`label()`、`size()`、`window(axis)`、`annotation()`、`warn()`，**没有** Universe。
+图件窗口用 `ctx.window(axis)`；切片后的帧窗口由 `ctx.start/stop` 给出。可复制的空参数模板见
+`example/analysis_template.py`。
 
 **分析之间不互相 import，也不共享辅助函数**；需要复用就各自写一份。`mdanal list <name>`
 可检查契约，`mdanal check-analysis <name>` 会做静态校验，加 `--system DIR` 时还会实跑一遍。
@@ -372,7 +401,7 @@ src/mdanal/
 ├── errors.py         共用异常
 ├── config/           配置与发现（system、registry、naming、check、defaults/labels.yaml）
 ├── run/              执行（context、runner、writers）
-├── plot/             绘图（chart、plotutil、annotations）
+├── plot/             绘图（context、snapshot、render、replot、settings、chart、annotations）
 ├── compare/          多体系对比
 └── analyses/         分析插件：一个文件一个分析
 ```

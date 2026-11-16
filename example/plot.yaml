@@ -1,0 +1,17 @@
+schema_version: 1
+defaults:
+  lang: en
+  dpi: 300
+  format: png
+  show_run_info: false
+analyses:
+  msd:
+    plot:
+      xlim: [0, 80]
+      ylim: [0, 20]
+      title: {zh: 均方位移, en: Mean squared displacement}
+    annotate:
+      - {kind: vline, axis: horizontal, at: 10, text: {zh: 参考时间, en: Reference time}}
+  rdf:
+    annotate:
+      - {kind: span, axis: horizontal, at: [3, 5], text: {zh: 观察区间, en: Inspection window}}

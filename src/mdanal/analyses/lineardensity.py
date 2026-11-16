@@ -174,14 +174,14 @@ def figures(ctx, tables):
     table = tables[name]
     cols = list(table.columns)
 
-    shift = ctx.system.view.shift[AXES.index(axis)]
+    shift = ctx.shift[AXES.index(axis)]
     fig, ax = chart.figure(ctx.size("single"))
     chart.line(ax, np.asarray(table[cols[0]]) + shift, table[cols[1]], lw=1.2)
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label("mass"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "x", ctx.window(axis))
-    annotations.draw(ax, ctx, axes={"x": axis})
+    annotations.draw(ax, ctx, x_axis=axis)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

@@ -9,7 +9,10 @@ import re
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
+import numpy as np
 import pandas as pd
+
+from ..errors import ValidationError
 
 AXIS_INDEX = {"x": 0, "y": 1, "z": 2}
 # 表里形如 "x_angstrom" 的列是盒坐标列；aligned 副本对它施加视图平移
@@ -74,3 +77,77 @@ def sha256(path: str | Path, chunk: int = 1 << 20) -> str:
         for block in iter(lambda: handle.read(chunk), b""):
             digest.update(block)
     return digest.hexdigest()
+
+
+def column_kinds(frame: pd.DataFrame) -> list[dict[str, str]]:
+    """记录列名与可恢复的基础类型；不支持的对象列直接报错。"""
+    from pandas.api import types as ptypes
+
+    result: list[dict[str, str]] = []
+    for name in frame.columns:
+        series = frame[name]
+        if ptypes.is_bool_dtype(series.dtype):
+            kind = "bool"
+        elif ptypes.is_integer_dtype(series.dtype):
+            kind = "int"
+        elif ptypes.is_float_dtype(series.dtype):
+            kind = "float"
+        elif ptypes.is_string_dtype(series.dtype) or ptypes.is_object_dtype(series.dtype):
+            values = [value for value in series.tolist() if value is not None]
+            if not all(isinstance(value, str) for value in values):
+                raise ValidationError(
+                    f"表列 {name!r} 含非字符串对象，无法写入可重绘快照"
+                )
+            kind = "str"
+        else:
+            raise ValidationError(
+                f"表列 {name!r} 的类型 {series.dtype} 不受快照支持"
+            )
+        result.append({"name": str(name), "kind": kind})
+    return result
+
+
+def read_table(path: str | Path, columns: Sequence[Mapping[str, str]]) -> pd.DataFrame:
+    """按快照记录的列类型读回 CSV；保留字符串 "NA"，不自动转缺失。"""
+    raw = pd.read_csv(
+        path, dtype=str, keep_default_na=False, encoding="utf-8-sig"
+    )
+    expected = [str(column["name"]) for column in columns]
+    missing = [name for name in expected if name not in raw.columns]
+    if missing:
+        raise ValidationError(f"表 {path} 缺少快照记录的列 {missing}")
+    result = pd.DataFrame(index=raw.index)
+    for column in columns:
+        name = str(column["name"])
+        kind = str(column["kind"])
+        values = raw[name]
+        if kind == "float":
+            result[name] = pd.to_numeric(
+                values.replace("", np.nan), errors="raise"
+            ).astype(float)
+        elif kind == "int":
+            numeric = pd.to_numeric(values.replace("", np.nan), errors="raise")
+            result[name] = (
+                numeric.astype("int64")
+                if not numeric.isna().any()
+                else numeric.astype("Int64")
+            )
+        elif kind == "bool":
+            mapping = {
+                "True": True,
+                "False": False,
+                "1": True,
+                "0": False,
+                "": None,
+            }
+            invalid = [value for value in values if value not in mapping]
+            if invalid:
+                raise ValidationError(
+                    f"表列 {name!r} 的布尔值无法解析：{invalid[:3]}"
+                )
+            result[name] = values.map(mapping).astype("boolean")
+        elif kind == "str":
+            result[name] = values.astype(object)
+        else:
+            raise ValidationError(f"表列 {name!r} 的类型 {kind!r} 不受支持")
+    return result

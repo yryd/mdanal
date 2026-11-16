@@ -175,7 +175,7 @@ def figures(ctx, tables):
     keep = [axis for axis in AXES if axis != sum_axis]
     a, b = keep[0], keep[1]
 
-    shift = ctx.system.view.shift
+    shift = ctx.shift
     shift_a, shift_b = shift[AXES.index(a)], shift[AXES.index(b)]
 
     fig, ax = chart.figure(ctx.size("map"))
@@ -191,9 +191,10 @@ def figures(ctx, tables):
     x_range = plotutil.clip_window(ctx.window(a), plotutil.data_range(ax, "x"))
     y_range = plotutil.clip_window(ctx.window(b), plotutil.data_range(ax, "y"))
     # 画布高度按数据纵横比取，等比例坐标轴才不会在画布里留下大片空白
-    width = ctx.size("map")[0]
-    height = width * (y_range[1] - y_range[0]) / (x_range[1] - x_range[0]) + 0.9
-    fig.set_size_inches(width, max(height, 1.6))
+    if not getattr(ctx, "size_is_explicit", False):
+        width = ctx.size("map")[0]
+        height = width * (y_range[1] - y_range[0]) / (x_range[1] - x_range[0]) + 0.9
+        fig.set_size_inches(width, max(height, 1.6))
     ax.set_xlim(x_range)
     ax.set_ylim(y_range)
     ax.set_aspect("equal")
@@ -201,7 +202,7 @@ def figures(ctx, tables):
     ax.set_ylabel(ctx.label(f"axis_{b}"))
     ax.set_title(ctx.label("title"))
     chart.colorbar(fig, ax, mesh, ctx.label("cbar"))
-    annotations.draw(ax, ctx, axes={"x": a, "y": b})
+    annotations.draw(ax, ctx, x_axis=a)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

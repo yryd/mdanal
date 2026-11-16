@@ -18,6 +18,7 @@ from typing import Any, Mapping, Sequence
 
 from ..errors import ValidationError
 from ..plot.annotations import parse as parse_annotations
+from ..plot.settings import parse_plot
 from .system import SystemConfig
 
 ANALYSES_PACKAGE = "mdanal.analyses"
@@ -82,6 +83,7 @@ class PlanItem:
     annotations: tuple[dict[str, Any], ...] = ()
     section: tuple[int, int] | None = None
     window: Mapping[str, tuple[float, float]] = field(default_factory=dict)
+    plot: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def needs_velocity(self) -> bool:
@@ -278,8 +280,8 @@ def _normalise_slots(value: Any, where: str) -> tuple[str, ...]:
 
 
 def _normalise_params(value: Any, where: str) -> dict[str, dict[str, Any]]:
-    if not isinstance(value, Mapping) or not value:
-        raise ValidationError("PARAMS 必须是非空映射", where=f"{where}:PARAMS")
+    if not isinstance(value, Mapping):
+        raise ValidationError("PARAMS 必须是映射（可为 {}）", where=f"{where}:PARAMS")
     return {
         str(key): _param_spec(str(key), item, where)
         for key, item in value.items()
@@ -558,7 +560,8 @@ def build_plan(
 
         try:
             section = _parse_section(entry.get("section"), where)
-            window = _parse_plot(entry.get("plot"), where)
+            plot_settings = parse_plot(entry.get("plot"), f"{where}.plot")
+            window = dict(plot_settings.get("window") or {})
         except ValidationError as exc:
             problems.append(str(exc))
             continue
@@ -595,6 +598,7 @@ def build_plan(
                 annotations=annotations,
                 section=section,
                 window=window,
+                plot=plot_settings,
             )
         )
 
@@ -627,57 +631,6 @@ def _parse_section(value: Any, where: str) -> tuple[int, int] | None:
             f"section 需满足 0 ≤ 起 < 止，收到 {[start, stop]}", where=f"{where}.section"
         )
     return (start, stop)
-
-
-def _parse_plot(value: Any, where: str) -> dict[str, tuple[float, float]]:
-    if value is None:
-        return {}
-    if not isinstance(value, Mapping):
-        raise ValidationError(
-            "plot 必须是映射（目前只支持 window）", where=f"{where}.plot"
-        )
-    unknown = set(value) - {"window"}
-    if unknown:
-        raise ValidationError(
-            f"plot 含未知字段 {sorted(unknown)}；允许 window", where=f"{where}.plot"
-        )
-
-    window = value.get("window")
-    if window is None:
-        return {}
-    if not isinstance(window, Mapping):
-        raise ValidationError(
-            "plot.window 必须是映射（轴 → [下界, 上界]）", where=f"{where}.plot.window"
-        )
-    unknown = set(window) - set("xyz")
-    if unknown:
-        raise ValidationError(
-            f"plot.window 含未知轴 {sorted(unknown)}；允许 ['x', 'y', 'z']",
-            where=f"{where}.plot.window",
-        )
-
-    parsed: dict[str, tuple[float, float]] = {}
-    for axis, bounds in window.items():
-        if (
-            not isinstance(bounds, (list, tuple))
-            or len(bounds) != 2
-            or not all(
-                isinstance(item, (int, float)) and not isinstance(item, bool)
-                for item in bounds
-            )
-        ):
-            raise ValidationError(
-                f"plot.window.{axis} 必须是两个数 [下界, 上界]，收到 {bounds!r}",
-                where=f"{where}.plot.window.{axis}",
-            )
-        low, high = (float(item) for item in bounds)
-        if high <= low:
-            raise ValidationError(
-                f"plot.window.{axis} 要求下界小于上界，收到 {[low, high]}",
-                where=f"{where}.plot.window.{axis}",
-            )
-        parsed[axis] = (low, high)
-    return parsed
 
 
 def _duplicate_directories(items: Sequence[PlanItem]) -> dict[str, list[int]]:

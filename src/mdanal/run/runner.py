@@ -28,6 +28,13 @@ from ..config.system import (
     seek_frame,
 )
 from ..plot import plotutil
+from ..plot.render import render as render_figures
+from ..plot.snapshot import (
+    build_snapshot,
+    make_plot_context,
+    read_tables,
+    write_snapshot,
+)
 from .context import RunContext
 from .writers import (
     sha256,
@@ -177,21 +184,29 @@ def prepare(
     )
 
 
+def _labels_for_snapshot(item: PlanItem, common_labels: Mapping[str, Mapping[str, str]]):
+    return {
+        lang: {
+            **dict(common_labels.get(lang, {})),
+            **dict(item.definition.labels.get(lang, {})),
+        }
+        for lang in ("zh", "en")
+    }
+
+
 def execute(
     prepared: Prepared,
     outdir: str | Path,
     options: RunOptions,
     common_labels: Mapping[str, Mapping[str, str]],
 ) -> Path:
-    """执行全部计划条目，返回输出目录。"""
+    """执行全部计划条目：先算表写快照，再统一渲染；渲染失败保留结果。"""
     outdir = Path(outdir).expanduser().resolve()
     _prepare_outdir(outdir, options.force)
 
     cfg = prepared.cfg
     plotutil.apply_style()
-
-    manifest_rows: list[dict[str, Any]] = []
-    details: list[dict[str, Any]] = []
+    records: list[dict[str, Any]] = []
 
     for item in prepared.plan:
         groups = prepared.item_groups(item)
@@ -223,9 +238,70 @@ def execute(
         table_paths = write_tables(target, tables)
         if options.aligned:
             write_aligned(target, tables, cfg.view.shift)
-        figure_paths = _draw_figures(module, ctx, item, tables, target, options.dpi)
-
         meta = _collect_meta(module, ctx, tables, item)
+        payload = build_snapshot(
+            module=module,
+            item=item,
+            tables=tables,
+            table_paths=table_paths,
+            ctx=ctx,
+            meta=meta,
+            labels=_labels_for_snapshot(item, common_labels),
+            lang=options.lang,
+            dpi=options.dpi,
+            annotate=options.annotate,
+            figure_sizes=options.figure_sizes,
+            fmt="png",
+            target=target,
+        )
+        snapshot_path = write_snapshot(target, payload)
+        records.append(
+            {
+                "item": item,
+                "module": module,
+                "ctx": ctx,
+                "groups": groups,
+                "target": target,
+                "table_paths": table_paths,
+                "payload": payload,
+                "snapshot_path": snapshot_path,
+                "meta": meta,
+            }
+        )
+
+    manifest_rows: list[dict[str, Any]] = []
+    details: list[dict[str, Any]] = []
+    render_errors: list[dict[str, str]] = []
+
+    for record in records:
+        item = record["item"]
+        ctx = record["ctx"]
+        groups = record["groups"]
+        target = record["target"]
+        payload = record["payload"]
+        snapshot_path = record["snapshot_path"]
+        plot_warnings: list[str] = []
+        error: str | None = None
+        figure_paths: list[Path] = []
+        try:
+            tables = read_tables(payload, target)
+            plot_ctx = make_plot_context(
+                payload, lang=options.lang, dpi=options.dpi, annotate=options.annotate
+            )
+            figure_paths = render_figures(
+                record["module"],
+                plot_ctx,
+                tables,
+                target,
+                fmt="png",
+                settings=payload["context"]["defaults"].get("plot") or {},
+            )
+            plot_warnings = list(plot_ctx.warnings)
+        except Exception as exc:  # 保留表/快照，记录失败，稍后统一报错
+            error = str(exc)
+            render_errors.append({"directory": item.directory, "error": error})
+
+        warnings = list(ctx.warnings) + plot_warnings
         atoms = [groups[slot].n_atoms for slot in item.definition.slots]
         manifest_rows.append(
             {
@@ -252,17 +328,26 @@ def execute(
                 "view": item.view,
                 "window": {axis: list(bounds) for axis, bounds in item.window.items()},
                 "section": list(item.section) if item.section else None,
-                "warnings": list(ctx.warnings),
-                "tables": [p.name for p in table_paths.values()],
+                "warnings": warnings,
+                "tables": [p.name for p in record["table_paths"].values()],
                 "figures": [p.name for p in figure_paths],
-                "meta": meta,
+                "plot": {
+                    "path": snapshot_path.relative_to(outdir).as_posix(),
+                    "sha256": sha256(snapshot_path),
+                },
+                "status": "render_failed" if error else "ok",
+                "error": error,
+                "meta": record["meta"],
             }
         )
-
-        print(f"[{item.order:02d}] {item.directory:<18} "
-              f"表 {len(table_paths)} 张，图 {len(figure_paths)} 张")
-        for message in ctx.warnings:
+        print(
+            f"[{item.order:02d}] {item.directory:<18} "
+            f"表 {len(record['table_paths'])} 张，图 {len(figure_paths)} 张"
+        )
+        for message in warnings:
             print(f"     警告：{message}")
+        if error:
+            print(f"     绘图失败：{error}")
 
     write_manifest(outdir, manifest_rows)
     write_provenance(
@@ -316,18 +401,23 @@ def execute(
                 "dpi": options.dpi,
                 "annotate": options.annotate,
                 "aligned": options.aligned,
+                "status": "failed" if render_errors else "ok",
+                "errors": render_errors,
             },
             "analyses": details,
             "libraries": _library_versions(),
         },
     )
     print(f"\n输出：{outdir}")
+    if render_errors:
+        detail = "；".join(
+            f"{entry['directory']}: {entry['error']}" for entry in render_errors
+        )
+        raise MdanalError(
+            f"计算已完成，但绘图失败（表与快照已保留，可修复后 replot）：{detail}",
+            where=str(outdir),
+        )
     return outdir
-
-
-# --------------------------------------------------------------------------- #
-# 内部
-# --------------------------------------------------------------------------- #
 
 
 def _naming_payload(summary: NamingSummary | None) -> dict[str, Any] | None:
@@ -401,36 +491,6 @@ def _run_module(module, ctx: RunContext, item: PlanItem) -> dict[str, Any]:
             where=str(item.directory),
         )
     return tables
-
-
-def _draw_figures(
-    module,
-    ctx: RunContext,
-    item: PlanItem,
-    tables: Mapping[str, Any],
-    target: Path,
-    dpi: int,
-) -> list[Path]:
-    if not hasattr(module, "figures"):
-        return []
-    try:
-        produced = module.figures(ctx, dict(tables)) or []
-    except MdanalError:
-        raise
-    except Exception as exc:
-        raise MdanalError(
-            f"{item.directory} 绘图失败：{exc}", where=str(ctx.system.yaml_path)
-        ) from exc
-
-    names = [name for name, _ in produced]
-    if len(set(names)) != len(names):
-        raise MdanalError(
-            f"{item.name} 产生了重名图 {names}", where=str(item.directory)
-        )
-    return [
-        plotutil.save(fig, target / "figures" / f"{name}.png", dpi)
-        for name, fig in produced
-    ]
 
 
 def _collect_meta(module, ctx: RunContext, tables, item: PlanItem) -> dict:

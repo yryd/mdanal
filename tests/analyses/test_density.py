@@ -150,3 +150,29 @@ def test_density_constant_box_averages_frames(real, tmp_path):
     assert np.allclose(
         full_table["number_density_A3"].to_numpy(), np.mean(singles, axis=0), atol=1e-9
     )
+
+
+def test_density_plot_size_and_title_are_saved(real, tmp_path):
+    cfg, _ = real
+    path = write_system(
+        tmp_path,
+        cfg.topology,
+        cfg.trajectory,
+        "  - name: density\n"
+        "    tag: sized\n"
+        "    sel: [all_atoms]\n"
+        "    sum_axis: y\n"
+        "    plot:\n"
+        "      size: [5, 2]\n"
+        "      title: {zh: 密度, en: Density}\n",
+        frames="[0, 5]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    snapshot = json.loads(
+        (out / "density-sized/plot.json").read_text(encoding="utf-8")
+    )
+    plot = snapshot["context"]["defaults"]["plot"]
+    assert plot["size"] == [5.0, 2.0]
+    assert plot["title"] == {"zh": "密度", "en": "Density"}
+    assert (out / "density-sized/figures/density_xz.png").is_file()

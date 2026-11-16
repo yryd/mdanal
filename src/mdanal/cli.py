@@ -122,6 +122,24 @@ def cmd_compare(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_replot(args: argparse.Namespace) -> int:
+    from .plot.replot import run_replot
+
+    out = run_replot(
+        args.from_dir,
+        args.out,
+        analyses=tuple(args.analysis or ()),
+        config=args.config,
+        lang=args.lang,
+        dpi=args.dpi,
+        fmt=args.format,
+        annotate=args.annotate,
+        force=args.force,
+    )
+    print(f"输出：{out}")
+    return EXIT_OK
+
+
 def cmd_help(args: argparse.Namespace) -> int:
     args.parser.print_help()
     return EXIT_OK
@@ -413,6 +431,28 @@ def build_parser() -> argparse.ArgumentParser:
     compare.add_argument("--lang", choices=("zh", "en"), help="图内文字语言（默认取 defaults.yaml）")
     compare.add_argument("--force", action="store_true", help="允许覆盖非空输出目录")
     compare.set_defaults(func=cmd_compare)
+
+    replot = subparsers.add_parser(
+        "replot", help="从已有 run 结果重绘（不读轨迹、不重算）"
+    )
+    replot.add_argument("--from", dest="from_dir", required=True, metavar="DIR",
+                        help="run 结果根目录")
+    replot.add_argument("--out", required=True, metavar="DIR", help="独立绘图输出目录")
+    replot.add_argument("--analysis", action="append", default=[], metavar="DIR",
+                        help="只重绘指定分析目录（可重复）")
+    replot.add_argument("--config", metavar="FILE", help="呈现覆盖配置")
+    replot.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
+    replot.add_argument("--dpi", type=int, help="覆盖分辨率")
+    replot.add_argument("--format", choices=("png", "svg", "pdf"), help="图件格式")
+    annotate_group = replot.add_mutually_exclusive_group()
+    annotate_group.add_argument("--annotate", dest="annotate", action="store_true",
+                                help="显示自动帧窗口/参数说明")
+    annotate_group.add_argument("--no-annotate", dest="annotate", action="store_false",
+                                help="关闭自动说明")
+    replot.set_defaults(annotate=None)
+    replot.add_argument("--force", action="store_true",
+                        help="仅更新本程序之前生成的重绘目录")
+    replot.set_defaults(func=cmd_replot)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")
     help_cmd.set_defaults(func=cmd_help, parser=parser)

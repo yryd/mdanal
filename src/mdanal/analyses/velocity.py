@@ -254,6 +254,9 @@ def meta(ctx, tables) -> dict:
         "coordinate_frame": "box",
         "box_length_ref": ctx.extras.get("velocity_box_ref"),
         "n_bins": ctx.extras.get("velocity_bins"),
+        "averaging": "pooled_unit_samples",
+        "error_method": "naive_sample_sem_without_time_correlation_correction",
+        "reference_role": "metadata_only",
     }
 
 
@@ -266,14 +269,14 @@ def figures(ctx, tables):
     # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
     velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
-    shift = ctx.system.view.shift[dim]
+    shift = ctx.shift[dim]
     fig, ax = chart.figure(ctx.size("single"))
     chart.line(ax, coordinate + shift, velocity_plot, lw=1.2)
     ax.set_xlabel(ctx.label(f"axis_{axis}"))
     ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
     ax.set_title(ctx.label("title"))
     plotutil.limit(ax, "x", ctx.window(axis))
-    annotations.draw(ax, ctx, axes={"x": axis})
+    annotations.draw(ax, ctx, x_axis=axis)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
     return [(name, fig)]

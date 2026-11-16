@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 
@@ -165,3 +166,14 @@ def test_list_shows_failure_reason(capsys):
     cli._print_registry(discovery)
     output = capsys.readouterr().out
     assert "broken.py" in output and "缺可选依赖" in output
+
+
+def test_empty_params_are_allowed():
+    subset = {
+        "SLOTS": ("group",),
+        "PARAMS": {},
+        "LABELS": {"zh": {"title": "t"}, "en": {"title": "t"}},
+    }
+    definition = _definition_from_module("empty", _module(**subset), Path("empty.py"))
+    assert definition.params == {}
+    assert definition.slots == ("group",)

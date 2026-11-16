@@ -43,6 +43,13 @@ def test_builtin_end_to_end(tmp_path):
         assert len(provenance["analyses"]) == 8
         assert len(list(out.glob("*/figures/*.png"))) == 8
         assert len(list(out.glob("*/tables/*.csv"))) == 13
+        assert len(list(out.glob("*/plot.json"))) == 8
+
+    source = tmp_path / "zh"
+    replot = tmp_path / "replot"
+    assert cli.main(["replot", "--from", str(source), "--out", str(replot)]) == 0
+    assert len(list(replot.glob("*/figures/*.png"))) == 8
+    assert (replot / "replot.json").is_file()
 
 
 def test_builtin_check_and_list(capsys):

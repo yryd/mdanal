@@ -21,6 +21,20 @@ def save(fig, path, dpi: int):
     return chart.save(fig, path, dpi)
 
 
+def resolve_text(value, lang: str):
+    """字符串或含完整 zh/en 的映射；返回当前语言文本。"""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, Mapping):
+        if "zh" not in value or "en" not in value:
+            raise MdanalError("文字映射必须同时含 zh 和 en")
+        text = value.get(lang)
+        if not isinstance(text, str):
+            raise MdanalError(f"文字映射缺少语言 {lang!r} 的字符串")
+        return text
+    raise MdanalError(f"文字必须是字符串或 zh/en 映射，收到 {value!r}")
+
+
 def limit(ax, axis: str, bounds: tuple[float, float] | None) -> None:
     """按窗口裁剪坐标轴范围；落在数据范围之外的边界忽略。"""
     if not bounds:
