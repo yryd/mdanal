@@ -164,3 +164,100 @@ def test_uniform_velocity_profile_is_flat():
     assert np.allclose(table.loc[finite, "error_A_per_ps"], 0.0)
     assert table["z_angstrom"].min() >= 0.0
     assert table["z_angstrom"].max() <= length
+
+
+def _velocity_universe(positions, velocities, length=20.0):
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+
+    n_frames, n_atoms = positions.shape[:2]
+    universe = mda.Universe.empty(n_atoms, trajectory=True)
+    universe.load_new(
+        positions,
+        velocities=velocities,
+        dimensions=np.tile([length, length, length, 90, 90, 90], (n_frames, 1)),
+        format=MemoryReader,
+    )
+    universe.add_TopologyAttr("mass", np.ones(n_atoms))
+    return universe
+
+
+def test_nonuniform_profile_uses_box_coordinates():
+    """vx=z、参考组在 z=1 时，机器标为 z 的 bin 必须给出该处的 vx。"""
+    from types import SimpleNamespace
+
+    from mdanal.analyses import velocity as velocity_module
+
+    n_frames, n_atoms, length = 4, 10, 20.0
+    z = np.linspace(1.0, length - 1.0, n_atoms)
+    positions = np.zeros((n_frames, n_atoms, 3))
+    positions[:, :, 0] = 5.0
+    positions[:, :, 1] = 5.0
+    positions[:, :, 2] = z[None, :]
+    velocities = np.zeros((n_frames, n_atoms, 3))
+    velocities[:, :, 0] = z[None, :]
+    universe = _velocity_universe(positions, velocities, length)
+
+    ctx = SimpleNamespace(
+        universe=universe,
+        groups={
+            "group": SimpleNamespace(atoms=universe.atoms),
+            "ref": SimpleNamespace(atoms=universe.atoms[:1]),
+        },
+        start=0,
+        stop=n_frames,
+        selection_frame=0,
+        extras={},
+        params={
+            "dim": "z",
+            "vdim": "x",
+            "bin_width": 2.0,
+            "grouping": "atoms",
+            "sym": False,
+        },
+    )
+    table = velocity_module.run(ctx)["velocity"]
+    assert np.allclose(table["z_angstrom"], [1, 3, 5, 7, 9, 11, 13, 15, 17, 19])
+    assert np.allclose(table["vx_A_per_ps"], table["z_angstrom"])
+
+
+def test_moving_reference_does_not_shift_profile():
+    """参考组移动不应改变原盒坐标中的剖面（参考组只用于记录位置）。"""
+    from types import SimpleNamespace
+
+    from mdanal.analyses import velocity as velocity_module
+
+    n_frames, length = 4, 20.0
+    group_z = np.array([3.0, 5.0, 7.0, 9.0, 11.0, 13.0, 15.0, 17.0, 19.0])
+    n_atoms = len(group_z) + 1
+    positions = np.zeros((n_frames, n_atoms, 3))
+    positions[:, :, 0] = 5.0
+    positions[:, :, 1] = 5.0
+    positions[:, 1:, 2] = group_z[None, :]
+    positions[:, 0, 2] = 1.0 + np.arange(n_frames)
+    velocities = np.zeros((n_frames, n_atoms, 3))
+    velocities[:, 1:, 0] = group_z[None, :]
+    universe = _velocity_universe(positions, velocities, length)
+
+    ctx = SimpleNamespace(
+        universe=universe,
+        groups={
+            "group": SimpleNamespace(atoms=universe.atoms[1:]),
+            "ref": SimpleNamespace(atoms=universe.atoms[:1]),
+        },
+        start=0,
+        stop=n_frames,
+        selection_frame=0,
+        extras={},
+        params={
+            "dim": "z",
+            "vdim": "x",
+            "bin_width": 2.0,
+            "grouping": "atoms",
+            "sym": False,
+        },
+    )
+    table = velocity_module.run(ctx)["velocity"]
+    finite = table["vx_A_per_ps"].notna()
+    assert np.allclose(table.loc[finite, "z_angstrom"], group_z)
+    assert np.allclose(table.loc[finite, "vx_A_per_ps"], group_z)

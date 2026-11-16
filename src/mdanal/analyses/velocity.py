@@ -1,4 +1,4 @@
-"""流速剖面（MAICoS VelocityPlanar）。"""
+"""流速剖面：按原盒坐标逐帧分箱，速度取实验室系。"""
 
 from __future__ import annotations
 
@@ -68,8 +68,7 @@ LABELS = {
 }
 
 REQUIRES = ("velocities",)
-PACKAGE = {"name": "maicos", "min_version": "0.12"}
-MUTATES_POSITIONS = True
+MUTATES_POSITIONS = False
 
 
 COLUMN_LABELS = {
@@ -95,59 +94,155 @@ COMPARE = {
 }
 
 
-def _box_center(ctx, dim: int) -> float:
-    """返回窗口内平均盒长的一半；盒子变化时给出警告。"""
-    universe = ctx.universe
-    lengths = []
-    for frame in range(ctx.start, ctx.stop):
-        universe.trajectory[frame]
-        lengths.append(float(universe.dimensions[dim]))
-    universe.trajectory[ctx.start]
-    reference = lengths[0]
-    if any(abs(value - reference) > 1e-6 for value in lengths[1:]):
-        ctx.warn(
-            "检测到盒子在变化；速度剖面的坐标按窗口内平均盒长换算，"
-            "跨帧比较时需注意。"
-        )
-    return 0.5 * float(np.mean(lengths))
+def _unit_layout(atoms, grouping: str) -> tuple[np.ndarray, np.ndarray]:
+    """把原子映射到统计单元（原子/残基/分子/段），返回单元编号与首原子。"""
+    if grouping == "atoms":
+        index = np.arange(atoms.n_atoms, dtype=int)
+    else:
+        attribute = {
+            "molecules": "molnums",
+            "residues": "resids",
+            "segments": "segids",
+        }.get(grouping)
+        if attribute is None:
+            raise ValidationError(f"未知的 grouping {grouping!r}")
+        if not hasattr(atoms, attribute):
+            raise ValidationError(f"轨迹缺少 {attribute}，无法按 {grouping} 分组")
+        _, index = np.unique(getattr(atoms, attribute), return_inverse=True)
+    _, first = np.unique(index, return_index=True)
+    return index, first
+
+
+def _unit_vectors(
+    positions: np.ndarray,
+    velocities: np.ndarray,
+    masses: np.ndarray,
+    index: np.ndarray,
+    first: np.ndarray,
+    unit_mass: np.ndarray,
+    lengths: np.ndarray,
+) -> tuple[np.ndarray, np.ndarray]:
+    """单元的质心位置与质心速度；跨周期边界时以首原子为锚点做最小镜像。"""
+    anchor_per_atom = positions[first][index]
+    delta = positions - anchor_per_atom
+    delta -= np.round(delta / lengths) * lengths
+    anchor = positions[first]
+    com = np.column_stack(
+        [
+            anchor[:, axis]
+            + np.bincount(
+                index, weights=masses * delta[:, axis], minlength=len(unit_mass)
+            )
+            / unit_mass
+            for axis in range(3)
+        ]
+    )
+    velocity = np.column_stack(
+        [
+            np.bincount(
+                index, weights=masses * velocities[:, axis], minlength=len(unit_mass)
+            )
+            / unit_mass
+            for axis in range(3)
+        ]
+    )
+    return com, velocity
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
-    from maicos.modules.velocityplanar import VelocityPlanar
-
     dim, vdim, axis = _axes(ctx)
+    grouping = str(ctx.params["grouping"])
+    bin_width = float(ctx.params["bin_width"])
+    if bin_width <= 0:
+        raise ValidationError(f"bin_width 必须为正数，收到 {bin_width}")
 
+    universe = ctx.universe
+    atoms = ctx.groups["group"].atoms
+    ref = ctx.groups["ref"].atoms
+    if not universe.trajectory.ts.has_velocities:
+        raise ValidationError("轨迹不含速度列，无法计算流速剖面")
 
-    # MAICoS 的 bin_pos 是相对盒心的坐标；加回 L/2 才是盒坐标（0…L）。
-    # 参考组质心只决定 MAICoS 内部的相对剖面，仍记入 meta 供溯源。
-    ctx.universe.trajectory[ctx.selection_frame]
-    ref = float(ctx.groups["ref"].atoms.center_of_mass()[dim])
-    ctx.extras["velocity_ref"] = ref
-    box_center = _box_center(ctx, dim)
+    index, first = _unit_layout(atoms, grouping)
+    if len(first) == 0:
+        raise ValidationError("统计分组为空，无法计算流速剖面")
+    masses = np.asarray(atoms.masses, dtype=float)
+    if masses.size != atoms.n_atoms:
+        masses = np.ones(atoms.n_atoms, dtype=float)
+    unit_mass = np.bincount(index, weights=masses, minlength=len(first))
+    if np.any(unit_mass <= 0):
+        raise ValidationError("存在总质量为 0 的统计单元，无法计算质心速度")
 
-    # 单位：MAICoS 的 bin_pos 为 Å，profile 为 Å/ps，dprofile 是标准误（Å/ps）
-    analysis = VelocityPlanar(
-        ctx.groups["group"].atoms,
-        dim=dim,
-        vdim=vdim,
-        bin_width=float(ctx.params["bin_width"]),
-        grouping=str(ctx.params["grouping"]),
-        refgroup=ctx.groups["ref"].atoms,
-        sym=bool(ctx.params["sym"]),
-        unwrap=True,
-        pack=True,
-        output=None,
+    universe.trajectory[ctx.start]
+    lengths_ref = np.asarray(universe.dimensions[:3], dtype=float)
+    if bin_width >= lengths_ref[dim]:
+        raise ValidationError(
+            f"bin_width {bin_width:g} Å 不小于盒长 {lengths_ref[dim]:g} Å"
+        )
+    n_bins = max(1, int(np.floor(lengths_ref[dim] / bin_width)))
+    bin_width_ref = float(lengths_ref[dim] / n_bins)
+
+    universe.trajectory[ctx.selection_frame]
+    ctx.extras["velocity_ref"] = float(
+        np.average(
+            np.asarray(ref.positions, dtype=float),
+            weights=np.asarray(ref.masses, dtype=float),
+            axis=0,
+        )[dim]
     )
-    analysis.run(start=ctx.start, stop=ctx.stop)
 
+    sums = np.zeros(n_bins, dtype=float)
+    sums_sq = np.zeros(n_bins, dtype=float)
+    counts = np.zeros(n_bins, dtype=int)
+    box_changed = False
+
+    for frame in range(ctx.start, ctx.stop):
+        universe.trajectory[frame]
+        lengths = np.asarray(universe.dimensions[:3], dtype=float)
+        if abs(lengths[dim] - lengths_ref[dim]) > 1e-6:
+            box_changed = True
+        positions = np.asarray(atoms.positions, dtype=float)
+        velocities = np.asarray(atoms.velocities, dtype=float)
+        com, unit_velocity = _unit_vectors(
+            positions, velocities, masses, index, first, unit_mass, lengths
+        )
+
+        # 速度剖面是实验室系速度；参考组只用于记录位置，不参与速度相减
+        relative = unit_velocity[:, vdim]
+
+        wrapped = com - np.floor(com / lengths) * lengths
+        # 统一到首帧参考盒，NPT 下也能在同一个坐标轴上平均
+        coordinate = wrapped[:, dim] / lengths[dim] * lengths_ref[dim]
+        bins = np.clip((coordinate / bin_width_ref).astype(int), 0, n_bins - 1)
+        sums += np.bincount(bins, weights=relative, minlength=n_bins)
+        sums_sq += np.bincount(bins, weights=relative * relative, minlength=n_bins)
+        counts += np.bincount(bins, minlength=n_bins)
+
+    if box_changed:
+        ctx.warn(
+            "检测到盒子在变化；速度剖面在首帧参考盒坐标中平均，"
+            "跨帧比较时需注意。"
+        )
+
+    with np.errstate(invalid="ignore", divide="ignore"):
+        profile = sums / counts
+        variance = (sums_sq - counts * profile**2) / (counts - 1)
+        error = np.sqrt(np.maximum(variance, 0.0) / counts)
+    error[counts < 2] = np.nan
+
+    if bool(ctx.params["sym"]):
+        profile = 0.5 * (profile + profile[::-1])
+        error = 0.5 * (error + error[::-1])
+
+    centers = (np.arange(n_bins, dtype=float) + 0.5) * bin_width_ref
     table = pd.DataFrame(
         {
-            f"{axis}_angstrom": np.asarray(analysis.results.bin_pos, dtype=float)
-            + box_center,
-            f"v{AXES[vdim]}_A_per_ps": np.asarray(analysis.results.profile, dtype=float),
-            "error_A_per_ps": np.asarray(analysis.results.dprofile, dtype=float),
+            f"{axis}_angstrom": centers,
+            f"v{AXES[vdim]}_A_per_ps": profile,
+            "error_A_per_ps": error,
         }
     )
+    ctx.extras["velocity_bins"] = n_bins
+    ctx.extras["velocity_box_ref"] = float(lengths_ref[dim])
     return {"velocity": table}
 
 
@@ -156,6 +251,9 @@ def meta(ctx, tables) -> dict:
         "axis": _axes(ctx)[2],
         "ref_com": ctx.extras.get("velocity_ref"),
         "ref_frame": ctx.selection_frame,
+        "coordinate_frame": "box",
+        "box_length_ref": ctx.extras.get("velocity_box_ref"),
+        "n_bins": ctx.extras.get("velocity_bins"),
     }
 
 
