@@ -198,3 +198,47 @@ def test_annotations_mismatch_warns_once():
     annotations.draw(ax, ctx, x_axis="z")
     assert len(ax.lines) == 1
     assert len(ctx.warnings) == 1
+
+
+def test_palette_parser_accepts_names_and_custom_lists():
+    from mdanal.plot.settings import parse_plot, resolve_palette
+
+    bright = resolve_palette("bright", "test")
+    assert bright[0] == "#4477AA"
+    assert parse_plot({"palette": "bright"}, "test")["palette"][0] == "#4477AA"
+    custom = parse_plot({"palette": ["#112233", "steelblue"]}, "test")["palette"]
+    assert custom == ["#112233", "steelblue"]
+    with pytest.raises(ValidationError, match="色板名"):
+        parse_plot({"palette": "no-such-palette"}, "test")
+
+
+def test_render_applies_palette_to_cycle(tmp_path, monkeypatch):
+    from mdanal.plot import render as render_module
+
+    captured = {}
+
+    class Module:
+        @staticmethod
+        def figures(ctx, tables):
+            fig, ax = chart.figure("single")
+            chart.line(ax, [0, 1], [0, 1])
+            chart.line(ax, [0, 1], [1, 0])
+            return [("t", fig)]
+
+    class Ctx:
+        lang = "zh"
+        dpi = 72
+
+    def fake_save(fig, path, dpi):
+        captured["colors"] = [line.get_color() for line in fig.axes[0].lines]
+        return path
+
+    monkeypatch.setattr(render_module.chart, "save", fake_save)
+    render_module.render(
+        Module,
+        Ctx(),
+        {},
+        tmp_path,
+        settings={"palette": ["#112233", "#445566"]},
+    )
+    assert captured["colors"] == ["#112233", "#445566"]

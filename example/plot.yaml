@@ -5,6 +5,7 @@ defaults:
   format: png
   show_run_info: false
   plot:
+    palette: bright
     rc:
       font.size: 9
 analyses:

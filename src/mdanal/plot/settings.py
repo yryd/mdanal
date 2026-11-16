@@ -4,11 +4,13 @@ from __future__ import annotations
 
 from typing import Any, Mapping
 
+import matplotlib
 from matplotlib import rcParams
+from matplotlib.colors import is_color_like
 
 from ..errors import ValidationError
 
-PLOT_KEYS = {"window", "size", "xlim", "ylim", "title", "xlabel", "ylabel", "rc"}
+PLOT_KEYS = {"window", "size", "xlim", "ylim", "title", "xlabel", "ylabel", "rc", "palette"}
 TEXT_KEYS = {"title", "xlabel", "ylabel"}
 
 
@@ -49,6 +51,47 @@ def parse_text(value: Any, where: str) -> str | dict[str, str]:
     raise ValidationError(f"{where} 必须是字符串或 {{zh, en}} 映射")
 
 
+
+
+def resolve_palette(value: Any, where: str) -> tuple[str, ...]:
+    """把 ``bright`` 这类 SciencePlots 色板或颜色列表规范成颜色元组。"""
+    if isinstance(value, str):
+        name = value.strip()
+        if not name:
+            raise ValidationError(f"{where} 不能是空字符串", where=where)
+        try:
+            import scienceplots  # noqa: F401  注册 SciencePlots 样式名
+        except ImportError as exc:
+            raise ValidationError(
+                f"{where} 使用命名色板需要安装 scienceplots", where=where
+            ) from exc
+        try:
+            with matplotlib.style.context(name):
+                colors = rcParams["axes.prop_cycle"].by_key().get("color")
+        except Exception as exc:
+            raise ValidationError(
+                f"{where} 不是可用的 Matplotlib/SciencePlots 色板名：{name!r}",
+                where=where,
+            ) from exc
+        if not colors:
+            raise ValidationError(
+                f"{where} 色板 {name!r} 没有颜色循环", where=where
+            )
+        return tuple(str(color) for color in colors)
+    if isinstance(value, (list, tuple)) and value:
+        colors = []
+        for index, color in enumerate(value):
+            if not isinstance(color, str) or not is_color_like(color):
+                raise ValidationError(
+                    f"{where}[{index}] 不是有效颜色：{color!r}", where=where
+                )
+            colors.append(str(color))
+        return tuple(colors)
+    raise ValidationError(
+        f"{where} 必须是色板名或非空颜色列表，收到 {value!r}", where=where
+    )
+
+
 def parse_plot(value: Any, where: str) -> dict[str, Any]:
     if value is None:
         return {}
@@ -76,6 +119,8 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
                 bounds, f"{where}.window.{axis}"
             )
         result["window"] = parsed_window
+    if "palette" in value:
+        result["palette"] = list(resolve_palette(value["palette"], f"{where}.palette"))
     if "size" in value:
         result["size"] = _finite_pair(value["size"], f"{where}.size", positive=True)
     for key in ("xlim", "ylim"):

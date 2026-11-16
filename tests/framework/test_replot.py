@@ -252,3 +252,22 @@ def test_replot_after_moving_source(tmp_path):
     target = tmp_path / "replot"
     run_replot(moved, target)
     assert (target / "fake/figures/fake.png").is_file()
+
+
+def test_plot_palette_roundtrips_through_snapshot(tmp_path):
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - name: fake\n"
+        "    sel: [all_atoms, all_atoms]\n"
+        "    plot: {palette: bright}\n",
+        frames="[0, 5]",
+    )
+    out = tmp_path / "out"
+    run_fake(path, out)
+    snapshot = json.loads((out / "fake/plot.json").read_text(encoding="utf-8"))
+    assert snapshot["context"]["defaults"]["plot"]["palette"][0] == "#4477AA"
+    target = tmp_path / "replot"
+    run_replot(out, target)
+    assert (target / "fake/figures/fake.png").is_file()

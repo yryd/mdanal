@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import Any, Mapping, Sequence
 
 import matplotlib
+from cycler import cycler
 
 from . import chart, plotutil
 from ..errors import MdanalError, ValidationError
@@ -61,7 +62,9 @@ def render(
         return []
     plotutil.apply_style()
     settings = dict(settings or {})
-    rc = settings.get("rc") or {}
+    rc = dict(settings.get("rc") or {})
+    if settings.get("palette"):
+        rc["axes.prop_cycle"] = cycler(color=list(settings["palette"]))
     with matplotlib.rc_context(rc):
         try:
             produced = module.figures(ctx, dict(tables)) or []

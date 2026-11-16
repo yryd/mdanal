@@ -79,6 +79,7 @@ defaults:
   dpi: 300
   format: png
   plot:
+    palette: bright
     rc:
       font.size: 9
 analyses:
@@ -92,6 +93,22 @@ analyses:
 ```
 
 完整可运行示例见 `example/plot.yaml`。
+
+### 颜色
+
+`palette` 可以写 SciencePlots 的颜色风格名，也可以写自定义列表：
+
+```yaml
+plot:
+  palette: bright
+  # 或
+  palette: ["#0077BB", "#EE7733", "#009988", "#CC3311"]
+```
+
+- 命名色板来自 SciencePlots：`retro`（当前默认）、`bright`、`high-contrast`、`high-vis`、`light`、`muted`、`vibrant`、`std-colors`；
+- 自定义列表接受十六进制、CSS 颜色名或 Matplotlib 颜色；
+- 只影响没有显式指定颜色的曲线；`hbond`、`hbond_lifetime` 的部分颜色和密度图色标仍是单独设置；
+- `compare` 的 `figure.palette` 用法相同。
 
 ## 自己画图
 
@@ -121,6 +138,7 @@ items:
 figure:
   analysis: lineardensity     # 各运行里的分析目录名
   align: center               # left / center / {z: 22.0}
+  palette: bright             # 可选：SciencePlots 色板名或颜色列表
   xlim: [-20, 20]
 out: compare
 ```
@@ -189,7 +207,7 @@ analyses:
 两个额外键：
 
 - `section: [起, 止]`：在体系帧窗口内再切一段（相对偏移），只影响该分析；分组仍在体系窗口首帧解析一次。
-- `plot:`：图件选项，支持 `window`、`size`（英寸）、`xlim`/`ylim`、`title`/`xlabel`/`ylabel`（字符串或 `{zh, en}`）与 `rc`；只改呈现，不改数据表。
+- `plot:`：图件选项，支持 `window`、`size`（英寸）、`xlim`/`ylim`、`title`/`xlabel`/`ylabel`（字符串或 `{zh, en}`）、`palette` 与 `rc`；只改呈现，不改数据表。
 
 ### 图内标注（可选）
 

@@ -15,6 +15,7 @@ import yaml
 from matplotlib import rcParams
 
 from ..plot import chart
+from ..plot.settings import resolve_palette
 from ..errors import MdanalError, ValidationError
 from ..run.writers import write_provenance
 
@@ -24,6 +25,7 @@ TOP_KEYS = {"items", "figure", "out"}
 ITEM_KEYS = {"root", "label", "anchor", "t_offset"}
 FIGURE_KEYS = {
     "analysis", "table", "align", "xlim", "xlabel", "ylabel", "title", "y",
+    "palette",
 }
 
 
@@ -113,7 +115,11 @@ def run_compare(
     fig, ax = chart.figure("single")
     multi_column = len(y_columns) > 1
     show_legend = len(items) > 1 or multi_column
-    colors = rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
+    colors = (
+        list(figure["palette"])
+        if figure.get("palette")
+        else rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
+    )
     styles = ("-", "--", ":", "-.")
     for block_index, block in enumerate(blocks):
         item_label = str(block["item"].iloc[0])
@@ -164,6 +170,7 @@ def run_compare(
             "x": x_column,
             "y": y_columns,
             "lang": lang,
+            "palette": list(figure["palette"]) if figure.get("palette") else None,
             "time_axis": time_axis,
             "xlabel": xlabel,
             "ylabel": ylabel,
@@ -225,6 +232,13 @@ def _load_config(path: Path) -> dict[str, Any]:
         )
     if not isinstance(figure.get("analysis"), str):
         raise ValidationError("figure.analysis 必须是字符串", where=f"{path}:figure")
+    if "palette" in figure:
+        figure = dict(figure)
+        figure["palette"] = list(
+            resolve_palette(figure["palette"], f"{path}:figure.palette")
+        )
+        data = dict(data)
+        data["figure"] = figure
     return data
 
 

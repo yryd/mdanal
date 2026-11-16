@@ -150,3 +150,29 @@ def test_compare_refuses_nonempty_output_without_force(tmp_path):
 
     run_compare(config, out, registry=fake_registry(), force=True)
     assert (out / "fake.png").is_file()
+
+
+def test_compare_uses_configured_palette(tmp_path, monkeypatch):
+    roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
+    config = tmp_path / "compare.yaml"
+    config.write_text(
+        "items:\n"
+        f"  - {{root: {roots[0]}, label: A}}\n"
+        f"  - {{root: {roots[1]}, label: B}}\n"
+        "figure:\n"
+        "  analysis: fake\n"
+        "  align: left\n"
+        "  palette: [\"#112233\", \"#445566\"]\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_save(fig, path, dpi):
+        captured["colors"] = [line.get_color() for line in fig.axes[0].lines]
+        return path
+
+    monkeypatch.setattr(compare_module.chart, "save", fake_save)
+    out = run_compare(config, tmp_path / "out", registry=fake_registry())
+    assert captured["colors"] == ["#112233", "#445566"]
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    assert provenance["palette"] == ["#112233", "#445566"]
