@@ -116,3 +116,37 @@ def test_time_axis_detection():
     assert _is_time_axis(False, "dt_ps")
     assert not _is_time_axis(False, "r_angstrom")
     assert not _is_time_axis(True, "z_angstrom")
+
+
+def test_compare_refuses_to_write_into_input_directory(tmp_path):
+    """输出等于/位于输入结果目录时必须先失败，且不改动输入溯源。"""
+    import hashlib
+
+    roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
+    config = _config(tmp_path, roots)
+    provenance = roots[0] / "provenance.json"
+    before = hashlib.sha256(provenance.read_bytes()).hexdigest()
+
+    with pytest.raises(ValidationError, match="重叠"):
+        run_compare(config, roots[0], registry=fake_registry())
+    assert hashlib.sha256(provenance.read_bytes()).hexdigest() == before
+
+    with pytest.raises(ValidationError, match="重叠"):
+        run_compare(config, roots[0] / "compare", registry=fake_registry())
+    assert not (roots[0] / "compare").exists()
+
+
+def test_compare_refuses_nonempty_output_without_force(tmp_path):
+    roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
+    config = _config(tmp_path, roots)
+    out = tmp_path / "compare"
+    out.mkdir()
+    marker = out / "keep.txt"
+    marker.write_text("old", encoding="utf-8")
+
+    with pytest.raises(ValidationError, match="非空"):
+        run_compare(config, out, registry=fake_registry())
+    assert marker.read_text(encoding="utf-8") == "old"
+
+    run_compare(config, out, registry=fake_registry(), force=True)
+    assert (out / "fake.png").is_file()

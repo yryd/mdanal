@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import pandas as pd
 import yaml
@@ -42,6 +42,7 @@ def run_compare(
     out_dir: str | Path | None = None,
     registry: Mapping[str, Any] | None = None,
     lang: str = "zh",
+    force: bool = False,
 ) -> Path:
     config_path = Path(config_path).expanduser().resolve()
     config = _load_config(config_path)
@@ -98,8 +99,9 @@ def run_compare(
     out = (
         Path(out_dir).expanduser().resolve()
         if out_dir
-        else config_path.parent / str(config.get("out", "compare"))
+        else (config_path.parent / str(config.get("out", "compare"))).resolve()
     )
+    _guard_output(out, items, config_path, force=force)
     (out / "tables").mkdir(parents=True, exist_ok=True)
     merged.to_csv(
         out / "tables" / f"{table_name}.csv",
@@ -401,3 +403,28 @@ def _default_range(
         return low - 1.0, high + 1.0
     pad = 0.02 * (high - low)
     return low - pad, high + pad
+
+
+def _guard_output(
+    out: Path,
+    items: Sequence[CompareItem],
+    config_path: Path,
+    *,
+    force: bool,
+) -> None:
+    """compare 绝不能写进输入结果目录，也不能悄悄覆盖非空输出。"""
+    for item in items:
+        if out == item.root or out.is_relative_to(item.root) or item.root.is_relative_to(out):
+            raise ValidationError(
+                f"对比输出目录 {out} 与输入结果目录 {item.root} 重叠；"
+                "请换一个独立的输出目录",
+                where=str(config_path),
+            )
+    if out.exists():
+        if not out.is_dir():
+            raise ValidationError(f"对比输出路径不是目录：{out}", where=str(config_path))
+        if any(out.iterdir()) and not force:
+            raise ValidationError(
+                f"对比输出目录非空：{out}；请换目录，或加 --force 覆盖",
+                where=str(config_path),
+            )
