@@ -189,6 +189,20 @@ def build_gallery(tiny_out: Path) -> None:
 def build_quickstart(quick_out: Path, quick_replot: Path) -> None:
     copy_figure(quick_out / "msd/figures/msd.png", ASSETS / "quickstart-msd-zh.png")
     copy_figure(quick_replot / "msd/figures/msd.png", ASSETS / "quickstart-msd-en.png")
+    quick_svg = quick_out.parent / "quick-svg"
+    run_cli(
+        [
+            "replot", "--from", str(quick_out), "--out", str(quick_svg),
+            "--config", str(ROOT / "example/recipes/plot-en.yaml"),
+            "--format", "svg",
+        ]
+    )
+    quick_svg_file = ASSETS / "quickstart-msd-en.svg"
+    copy_figure(quick_svg / "msd/figures/msd.svg", quick_svg_file)
+    quick_svg_file.write_text(
+        "\n".join(line.rstrip() for line in quick_svg_file.read_text(encoding="utf-8").splitlines()) + "\n",
+        encoding="utf-8",
+    )
 
 
 def build_recipes(tiny_out: Path, recipes: Path) -> None:

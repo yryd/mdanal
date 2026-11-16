@@ -167,6 +167,21 @@ system.yaml:
 7. 库需要质量、键、电荷、连续坐标 → 先检查真实前提，不要靠名字猜或默默补默认值；
 8. 处理坐标原位修改、版本差异、空结果和异常。
 
+### 现成对照：`rdf.py` / `msd.py`
+
+完整带注释的实现见 [`rdf.py`](../src/mdanal/analyses/rdf.py) 和 [`msd.py`](../src/mdanal/analyses/msd.py)。以 RDF 为例：
+
+| 独立脚本里 | 本仓库插件 |
+|---|---|
+| `u = mda.Universe(topology, trajectory)` | `ctx.universe`（已加载，不重复读） |
+| `group_a = u.select_atoms(...)` | `ctx.groups["a"].atoms` |
+| `rmin, rmax, nbins` 硬编码 | `PARAMS["range"/"nbins"]` + `ctx.params[...]` |
+| `analysis.run(start=0, stop=len(u.trajectory))` | `analysis.run(start=ctx.start, stop=ctx.stop)` |
+| `r, g = analysis.results...` | `{"rdf": DataFrame({"r_angstrom": ..., "g_r": ...})}` |
+| `plt.plot(...); plt.savefig(...)` | `figures(ctx, tables)` 只用表，返回 Figure |
+
+RDF 的半盒检查放在 `run`，不放在 `figures`；MSD 声明 `COORDINATES = "continuous"`，因为它需要连续坐标，而不是盒内坐标。两者都把库参数、时间窗口和标签分别放进 `PARAMS`、`ctx.start/stop`、`LABELS`，绘图只读 `tables`。
+
 每个适配至少做一次**与库原始调用一致或可手算**的小样本核对，再跑 `run → replot`。契约检查通过不代表物理算法正确。
 
 ## 5. 插件作者验收清单

@@ -109,7 +109,9 @@
 
 ### 4. 四种标注
 
-![四种标注](assets/recipes/annotate/lineardensity_z.png)
+| 原图 | 标注后 |
+|---|---|
+| ![原线密度](assets/gallery/lineardensity.png) | ![四种标注](assets/recipes/annotate/lineardensity_z.png) |
 
 - 配置：[`example/recipes/plot-annotate.yaml`](../example/recipes/plot-annotate.yaml)
 - 命令：

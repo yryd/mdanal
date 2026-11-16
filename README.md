@@ -56,7 +56,7 @@ data.lmp + dump + system.yaml
 CSV / 自己的数组 + Python/chart ──> 自由绘图
 ```
 
-- `run` 才读轨迹；每条分析保存 `plot.json` 和标准 CSV；
+- `run` 执行分析并读轨迹；`check` 也会加载体系做校验，但不计算；每条分析保存 `plot.json` 和标准 CSV；
 - `replot` 只读 `plot.json` + CSV，切换语言/颜色/范围/标注/格式时不用重算；
 - `compare` 只读多个 `run` 的输出；
 - 表是稳定机器列名，图内文字才随 `--lang` 改变。

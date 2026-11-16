@@ -40,3 +40,11 @@
 - MSD 曲线短且噪声大，只用于演示出图和重绘。
 
 生成文档图的脚本是 `scripts/build_docs_assets.py`；它只写 `docs/assets/`，不复制大轨迹。
+
+
+## 本轮文档状态
+
+- 重写 `README.md`，新增本手册 10 页、`example/quickstart` 与 `example/recipes`；
+- 图库、色卡、改图示例、插件模板图由 `scripts/build_docs_assets.py` 从 tiny 数据生成；
+- 已验证 quickstart 的 run/replot、`check-analysis --system tests/fixtures/tiny`、临时插件的 list/check/run/replot；
+- hbond 颜色统一、密度色标范围、逐条标注样式仍未实现，见 [排错与限制](troubleshooting.md#限制)。

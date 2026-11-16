@@ -80,6 +80,8 @@ python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-en \
 └── msd/figures/msd.svg
 ```
 
+SVG 示例：[quickstart-msd-en.svg](assets/quickstart-msd-en.svg)。
+
 `replot` 只读 `plot.json` 和 CSV，不加载轨迹。中文/英文、PNG/SVG/PDF、标题、范围、颜色和标注都属于这一层。
 
 ## 4. 换成自己的数据

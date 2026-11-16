@@ -10,16 +10,16 @@
 
 八套命名色板：
 
-| 名称 | 颜色（按顺序） |
-|---|---|
-| `retro`（默认） | `#4165c0` `#e770a2` `#5ac3be` `#696969` `#f79a1e` `#ba7dcd` |
-| `bright` | `#4477AA` `#EE6677` `#228833` `#CCBB44` `#66CCEE` `#AA3377` `#BBBBBB` |
-| `high-contrast` | `#004488` `#DDAA33` `#BB5566` |
-| `high-vis` | `#0d49fb` `#e6091c` `#26eb47` `#8936df` `#fec32d` `#25d7fd` |
-| `light` | `#77AADD` `#EE8866` `#EEDD88` `#FFAABB` `#99DDFF` `#44BB99` `#BBCC33` `#AAAA00` `#DDDDDD` |
-| `muted` | `#CC6677` `#332288` `#DDCC77` `#117733` `#88CCEE` `#882255` `#44AA99` `#999933` `#AA4499` `#DDDDDD` |
-| `vibrant` | `#EE7733` `#0077BB` `#33BBEE` `#EE3377` `#CC3311` `#009988` `#BBBBBB` |
-| `std-colors` | `#0C5DA5` `#00B945` `#FF9500` `#FF2C00` `#845B97` `#474747` `#9e9e9e` |
+| 名称 | 颜色数 | 颜色（按顺序） |
+|---|---:|---|
+| `retro`（默认） | 6 | `#4165c0` `#e770a2` `#5ac3be` `#696969` `#f79a1e` `#ba7dcd` |
+| `bright` | 7 | `#4477AA` `#EE6677` `#228833` `#CCBB44` `#66CCEE` `#AA3377` `#BBBBBB` |
+| `high-contrast` | 3 | `#004488` `#DDAA33` `#BB5566` |
+| `high-vis` | 6 | `#0d49fb` `#e6091c` `#26eb47` `#8936df` `#fec32d` `#25d7fd` |
+| `light` | 9 | `#77AADD` `#EE8866` `#EEDD88` `#FFAABB` `#99DDFF` `#44BB99` `#BBCC33` `#AAAA00` `#DDDDDD` |
+| `muted` | 10 | `#CC6677` `#332288` `#DDCC77` `#117733` `#88CCEE` `#882255` `#44AA99` `#999933` `#AA4499` `#DDDDDD` |
+| `vibrant` | 7 | `#EE7733` `#0077BB` `#33BBEE` `#EE3377` `#CC3311` `#009988` `#BBBBBB` |
+| `std-colors` | 7 | `#0C5DA5` `#00B945` `#FF9500` `#FF2C00` `#845B97` `#474747` `#9e9e9e` |
 
 同一组多曲线数据在八套色板下的效果：
 
@@ -61,6 +61,23 @@ figure:
   align: left
   palette: bright
 ```
+
+完整上下文示例：
+
+```yaml
+schema_version: 1
+defaults:
+  lang: zh
+  plot:
+    palette: retro
+analyses:
+  msd:
+    plot:
+      palette: ["#0077BB", "#EE7733"]
+      size: [4.2, 3.0]
+```
+
+这里单分析项覆盖了默认 `palette`；MSD 只有一条普通数据曲线，所以主要看到列表第一色。要看完整色板，请看上面的多曲线预览或 `compare`。
 
 - 命名色板：`retro`、`bright`、`high-contrast`、`high-vis`、`light`、`muted`、`vibrant`、`std-colors`；
 - 自定义列表：十六进制、CSS 颜色名或 Matplotlib 颜色；
