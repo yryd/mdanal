@@ -70,6 +70,29 @@ mdanal replot --from OUT --out FIGURES_CUSTOM --config plot.yaml
   快照默认 < 配置 defaults < 单分析配置 < CLI；
 - 初始 `run` 出图也读刚写出的 CSV，和 `replot` 共用同一渲染路径。
 
+最小 `plot.yaml`：
+
+```yaml
+schema_version: 1
+defaults:
+  lang: zh
+  dpi: 300
+  format: png
+  plot:
+    rc:
+      font.size: 9
+analyses:
+  msd:
+    plot:
+      xlim: [0, 80]
+      title: {zh: 均方位移, en: Mean squared displacement}
+    annotate:
+      - {kind: vline, axis: horizontal, at: 10,
+         text: {zh: 参考时间, en: Reference time}}
+```
+
+完整可运行示例见 `example/plot.yaml`。
+
 ## 自己画图
 
 `mdanal.chart` 是公共绘图层：程序内出图与你自己出图走同一套样式与语汇，不需要体系目录。
@@ -188,6 +211,22 @@ analyses:
 ```
 
 `text` 支持字符串或 `{zh, en}`；`vline+vertical` 等矛盾组合会报错；纵向区间文字用纵轴 transform。
+
+| kind | axis | at | 说明 |
+|---|---|---|---|
+| `vline` | `horizontal` / `x` / `y` / `z` | 数值 | 竖线；`horizontal` 用图横轴数据坐标 |
+| `hline` | 省略或 `vertical` | 数值 | 横线；用图纵轴数据坐标 |
+| `span` | `horizontal` / `vertical` / `x` / `y` / `z` | `[起, 止]` | 阴影区间 |
+| `text` | 省略 | `[横轴, 纵轴]` | 文字，数据坐标 |
+
+**标注是用户自己写的，不是程序自动识别的界面。** 程序不会根据密度剖面自动判断“界面在哪里”；
+`vline` 的 `at` 和 `span` 的 `at` 都由你给出。`--annotate` 是另一件事：它只在图角上加帧窗口/参数说明，
+和 `annotate` 列表互不影响。
+
+**标注样式边界（v1）：** 标注颜色、字号、线宽目前是固定的——竖线/横线用灰色 `0.45`、字号 6、线宽 0.8；
+区间用主色 `#4165c0`、透明度 0.12。`plot.rc` 的 `font.size` 不会覆盖这些显式样式。要统一改标注样式，
+编辑 `src/mdanal/plot/annotations.py`；要逐条改颜色/字号，暂时需要自己读 CSV 用 Matplotlib 画
+（见 `example/plot_from_data.py`）。标题、轴标签、普通文字字号可以用 `plot.rc` 或 `plot.title/xlabel/ylabel`。
 
 ### 坐标与视图
 

@@ -4,6 +4,9 @@ defaults:
   dpi: 300
   format: png
   show_run_info: false
+  plot:
+    rc:
+      font.size: 9
 analyses:
   msd:
     plot:
