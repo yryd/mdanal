@@ -1,0 +1,85 @@
+# 多体系对比
+
+`compare` 只读多个 `run` 的输出（表 + 溯源），不重读轨迹、不重算分析；把参数兼容的一维结果对齐叠图。
+
+## 1. 前置条件
+
+- 每个体系都已经 `run` 过，目录里有 `manifest.csv`、`provenance.json` 和分析子目录；
+- 各体系的同一分析**参数相同**（例如都 `dim: z`、`binsize: 0.5`）；不同参数会报错；
+- 只有一维曲线能叠；二维密度图各自出图。
+
+## 2. 空间对齐
+
+```yaml
+items:
+  - {root: runs/test1/out, label: test1}
+  - {root: runs/test5/out, label: test5, anchor: {z: 22.0}}
+figure:
+  analysis: lineardensity
+  align: left
+  palette: bright
+  xlim: [0, 45]
+out: compare
+```
+
+```bash
+python main.py compare --config compare.yaml --out compare-out
+```
+
+- `align`：`left`（盒下角 → 0）、`center`（盒心 → 0，默认）或数值；也可写 `{z: 22.0}` 逐轴指定；
+- `anchor`：只对某个体系覆盖对齐位置，单位是该轴数据单位；
+- `xlim`：显示范围，不改表；
+- `palette`：按体系分色；多列结果按线型区分，图例写成「体系 · 列名」。
+
+<a id="时间轴"></a>
+
+## 3. 时间轴
+
+时间偏移只用于**非盒坐标、列名以 `_ps` 结尾**的横轴，例如 MSD：
+
+```yaml
+items:
+  - {root: runs/a/out, label: 0 ns,  t_offset: 0}
+  - {root: runs/b/out, label: 5 ns,  t_offset: 5}
+figure:
+  analysis: msd
+  xlim: [0, 95]
+out: compare-msd
+```
+
+`t_offset` 是加到该体系横轴上的数值，单位跟横轴（这里是 ps）；它不会把不同体系的绝对时间混在一起，只是把曲线的起点平移。
+
+**空间轴不能加 `t_offset`**。`lineardensity` 的 `z_angstrom` 是盒坐标，写了会报：
+
+```text
+t_offset 只能用于时间轴...当前横轴是 'z_angstrom'
+```
+
+## 4. 输出
+
+```text
+COMPARE/
+├── lineardensity.png
+├── tables/lineardensity_z.csv
+└── provenance.json
+```
+
+- 合并表含 `item`、对齐后的 `x` 和各列；
+- `provenance.json` 记录每个体系的平移量、`t_offset`、语言、palette 和 xlim；
+- 非空输出默认拒绝，`--force` 允许覆盖；输出不能等于/位于输入结果目录内。
+
+## 5. 示例图
+
+![对齐示例](assets/recipes/compare/lineardensity-bright.png)
+
+这张图用同一体系的两帧演示对齐，不是多体系科学结论。真实使用时把 `items[].root` 换成自己的两个 `run` 输出；完整字段见 [`example/recipes/compare.yaml`](../example/recipes/compare.yaml)。
+
+## 6. 常见错误
+
+- 两个体系的 `analysis` 目录名不同：`figure.analysis` 要写实际目录名（含 tag）；
+- 参数不同：重跑成相同 `dim`/`binsize`/`range` 等；
+- `t_offset` 加在空间轴：删掉，或改用时间轴分析；
+- 输出目录在输入目录里：换独立目录；
+- 二维密度：不能 compare，直接看各自图。
+
+下一步：[分析说明](analyses.md) 或 [排错](troubleshooting.md)。

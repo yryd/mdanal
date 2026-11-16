@@ -56,6 +56,8 @@ def figures(ctx, tables):
     ax.set_xlabel(ctx.label("x"))
     ax.set_ylabel(ctx.label("y"))
     ax.set_title(ctx.label("title"))
+    # 整体质心接近常数；关掉 1e-6 的偏移标记，避免把微小数值当成大变化
+    ax.ticklabel_format(axis="y", useOffset=False, style="plain")
     annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())

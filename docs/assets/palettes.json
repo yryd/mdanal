@@ -1,0 +1,91 @@
+{
+  "scienceplots": "2.2.2",
+  "palettes": {
+    "retro": [
+      "#4165c0",
+      "#e770a2",
+      "#5ac3be",
+      "#696969",
+      "#f79a1e",
+      "#ba7dcd"
+    ],
+    "bright": [
+      "#4477AA",
+      "#EE6677",
+      "#228833",
+      "#CCBB44",
+      "#66CCEE",
+      "#AA3377",
+      "#BBBBBB"
+    ],
+    "high-contrast": [
+      "#004488",
+      "#DDAA33",
+      "#BB5566"
+    ],
+    "high-vis": [
+      "#0d49fb",
+      "#e6091c",
+      "#26eb47",
+      "#8936df",
+      "#fec32d",
+      "#25d7fd"
+    ],
+    "light": [
+      "#77AADD",
+      "#EE8866",
+      "#EEDD88",
+      "#FFAABB",
+      "#99DDFF",
+      "#44BB99",
+      "#BBCC33",
+      "#AAAA00",
+      "#DDDDDD"
+    ],
+    "muted": [
+      "#CC6677",
+      "#332288",
+      "#DDCC77",
+      "#117733",
+      "#88CCEE",
+      "#882255",
+      "#44AA99",
+      "#999933",
+      "#AA4499",
+      "#DDDDDD"
+    ],
+    "vibrant": [
+      "#EE7733",
+      "#0077BB",
+      "#33BBEE",
+      "#EE3377",
+      "#CC3311",
+      "#009988",
+      "#BBBBBB"
+    ],
+    "std-colors": [
+      "#0C5DA5",
+      "#00B945",
+      "#FF9500",
+      "#FF2C00",
+      "#845B97",
+      "#474747",
+      "#9e9e9e"
+    ]
+  },
+  "fixed": {
+    "primary": "#4165c0",
+    "secondary": "#c05040",
+    "reference": "0.5",
+    "guide": "0.45",
+    "label": "0.35"
+  },
+  "density_colors": [
+    "#ffffff",
+    "#dcecf7",
+    "#9ec9e4",
+    "#4a90c2",
+    "#1d5b8f",
+    "#0b2d5c"
+  ]
+}

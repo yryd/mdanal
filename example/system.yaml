@@ -60,12 +60,12 @@ groups:
   slit_water: "type 17 18 and prop z > 17.58 and prop z < 29.37"
 
 # 要跑的分析：按顺序执行，一个分析一条。
-# 每条只有 name 必填；sel 的长度必须等于该分析声明的槽位数；
+# name 和 sel 必填；sel 的长度必须等于该分析声明的槽位数；
 # 其余键覆盖该分析 PARAMS 中的默认参数（可用 `mdanal list <name>` 查看契约）。
 # 同一种分析可以写多条，用 tag 区分输出子目录（name-tag）。
 # 另外两个可选键：
 #   section: [起, 止]   在体系帧窗口内再切一段（相对偏移），只影响该分析
-#   plot:               图件选项，目前支持 window: {轴: [下界, 上界]}
+#   plot:               图件选项；常用 window/size/xlim/ylim/title/xlabel/ylabel/palette/rc
 analyses:
   # 密度：沿 y 求和投影到 x–z（δ = 1 Å 的网格）
   - name: density
@@ -128,9 +128,10 @@ analyses:
     msd_type: xyz
     fft: true
 
-  # 流速剖面：槽位依次为计算组、参考组（决定剖面零点）。
+  # 流速剖面：槽位依次为计算组、参考组。
+  # 当前剖面按原盒坐标分箱；ref 只记录质心位置到 meta，不改变速度或坐标参考系。
   # dim 为分箱轴、vdim 为速度分量，都写轴名 x/y/z。
-  # sym: true 时以参考组质心为对称面把 ±坐标折叠平均，样本翻倍并强制对称。
+  # sym: true 时对相反 bin 的 profile/error 做现有算术平均，不是样本翻倍。
   - name: velocity
     sel: [water, walls]
     bin_width: 1.0

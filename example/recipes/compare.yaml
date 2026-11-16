@@ -1,0 +1,9 @@
+# 把 root 改成你自己的 run 输出目录；这里只是字段参考。
+items:
+  - {root: runs/test1/out, label: test1}
+  - {root: runs/test5/out, label: test5}
+figure:
+  analysis: lineardensity
+  align: left
+  palette: bright
+  xlim: [0, 45]

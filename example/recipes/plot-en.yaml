@@ -1,0 +1,10 @@
+schema_version: 1
+defaults:
+  lang: en
+  dpi: 300
+  format: png
+analyses:
+  msd:
+    plot:
+      title: {zh: 均方位移, en: Mean squared displacement}
+      xlim: [0, 95]

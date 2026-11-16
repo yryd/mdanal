@@ -1,0 +1,8 @@
+schema_version: 1
+analyses:
+  lineardensity:
+    annotate:
+      - {kind: vline, axis: horizontal, at: 18.5, text: {zh: 参考位置, en: Reference}}
+      - {kind: span, axis: horizontal, at: [22, 27], text: {zh: 观察区间, en: Window}}
+      - {kind: hline, at: 0.5, text: {zh: 半密度, en: Half density}}
+      - {kind: text, at: [5, 0.35], text: {zh: 体相, en: Bulk}}

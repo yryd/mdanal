@@ -1,0 +1,7 @@
+schema_version: 1
+analyses:
+  density-xy:
+    plot:
+      xlim: [5, 25]
+      ylim: [5, 25]
+      title: {zh: 局部密度, en: Local density}

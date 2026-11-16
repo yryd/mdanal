@@ -1,0 +1,105 @@
+# 颜色
+
+颜色分两层：**离散曲线循环**（`palette`）和**连续密度色标**（density 自己的 colormap）。两者不是一回事。
+
+## 1. 当前色板
+
+![SciencePlots 颜色循环](assets/palette-preview.png)
+
+图片由当前实现生成：`scripts/build_docs_assets.py` 调用 `resolve_palette` 和 `chart.density_cmap`，数据在 [`palettes.json`](assets/palettes.json)。
+
+八套命名色板：
+
+| 名称 | 颜色（按顺序） |
+|---|---|
+| `retro`（默认） | `#4165c0` `#e770a2` `#5ac3be` `#696969` `#f79a1e` `#ba7dcd` |
+| `bright` | `#4477AA` `#EE6677` `#228833` `#CCBB44` `#66CCEE` `#AA3377` `#BBBBBB` |
+| `high-contrast` | `#004488` `#DDAA33` `#BB5566` |
+| `high-vis` | `#0d49fb` `#e6091c` `#26eb47` `#8936df` `#fec32d` `#25d7fd` |
+| `light` | `#77AADD` `#EE8866` `#EEDD88` `#FFAABB` `#99DDFF` `#44BB99` `#BBCC33` `#AAAA00` `#DDDDDD` |
+| `muted` | `#CC6677` `#332288` `#DDCC77` `#117733` `#88CCEE` `#882255` `#44AA99` `#999933` `#AA4499` `#DDDDDD` |
+| `vibrant` | `#EE7733` `#0077BB` `#33BBEE` `#EE3377` `#CC3311` `#009988` `#BBBBBB` |
+| `std-colors` | `#0C5DA5` `#00B945` `#FF9500` `#FF2C00` `#845B97` `#474747` `#9e9e9e` |
+
+同一组多曲线数据在八套色板下的效果：
+
+![八套色板的曲线效果](assets/palette-curves.png)
+
+实际颜色来自安装的 **SciencePlots 2.2.2**。`retro` 的六色与下面的“固定主色/对照色”不是同一套逻辑。
+
+## 2. 怎么用
+
+### run / system.yaml
+
+```yaml
+analyses:
+  - name: lineardensity
+    sel: [water_o]
+    dim: z
+    plot:
+      palette: bright
+```
+
+### replot / plot.yaml
+
+```yaml
+schema_version: 1
+defaults:
+  plot:
+    palette: bright
+analyses:
+  msd:
+    plot:
+      palette: ["#0077BB", "#EE7733"]
+```
+
+### compare
+
+```yaml
+figure:
+  analysis: lineardensity
+  align: left
+  palette: bright
+```
+
+- 命名色板：`retro`、`bright`、`high-contrast`、`high-vis`、`light`、`muted`、`vibrant`、`std-colors`；
+- 自定义列表：十六进制、CSS 颜色名或 Matplotlib 颜色；
+- YAML 中 `#` 开头的值要加引号，否则会被当成注释；
+- 颜色数不够时循环复用；单条曲线通常只看到第一色；每张图重新开始循环。
+
+<a id="生效范围"></a>
+
+## 3. 生效范围
+
+| 图 | `palette` 是否生效 | 说明 |
+|---|---|---|
+| `rdf` / `msd` / `lineardensity` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
+| `hbond` | 否 | 曲线显式使用固定主色 |
+| `hbond_lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
+| `hbond_type` | 否 | 条形图显式使用主色 |
+| `density` | 否 | 使用白→蓝连续色标 |
+| `compare` | 是（`figure.palette`） | 按体系分色，多列按线型区分 |
+| 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
+
+固定主色/对照色：
+
+| 名称 | 值 | 用在哪 |
+|---|---|---|
+| primary | `#4165c0` | hbond、hbond_lifetime、hbond_type、部分标记 |
+| secondary | `#c05040` | hbond_lifetime 的第二条曲线 |
+
+`hbond_lifetime` 的第二色是 `#c05040`，**不是** `retro` 的第二色 `#e770a2`；这是当前实现的固定色，`palette` 不会改它。
+
+## 4. 密度色标
+
+密度图使用单独的白→蓝连续色标，低值接近白色，高值深蓝；它不受 `palette` 影响。当前 YAML 也没有色标上下限字段。
+
+![固定主色、对照色与密度色标](assets/palette-preview.png)
+
+如果要在密度图上用 `viridis`、`cividis` 或统一范围，需要 Python 读表重画；这是后续建议，不是当前 `plot` 字段。
+
+## 5. 不是“色盲保证”
+
+上表只描述颜色顺序，不保证每套色板都色盲友好，也不把 “nature/ieee” 当作可读性认证。多曲线时优先看实际预览和线型/标记的区分。
+
+下一步：[图库](gallery.md) 或 [绘图与重绘](plotting.md)。
