@@ -161,7 +161,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。验收：`pytest` 80 条、`pytest tests/analyses` 28 条全部通过；
+其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：
@@ -178,7 +178,7 @@ velocity/tables/velocity.csv
 | 问题 | 修复 | 回归 |
 |---|---|---|
 | 多段续跑 TIMESTEP 归零导致 MSD 时间轴不一致 | 加载层统一 `ts.time = 全局帧号 × 帧间隔`；内存/读盘同源 | `test_frame_times_ignore_timestep_reset`、`test_segmented_reset_steps_keep_frame_time` |
-| 双列/缩放坐标的判断与读取器不一致 | 扫描全部约定并按视图显式传 `lammps_coordinate_convention`；无未包裹坐标且无键时拒绝连续位移 | `test_scan_matches_reader_coordinate_precedence`、`test_dual_coordinate_columns_use_unwrapped` |
+| 双列/缩放坐标的判断与读取器不一致 | 扫描全部约定并按视图显式传 `lammps_coordinate_convention`；连续视图用显式包装器逐帧展开，回退从 0 重放 | `test_scan_matches_reader_coordinate_precedence`、`test_dual_coordinate_columns_use_unwrapped`、`test_wrapped_no_bond_continuous_view` |
 | velocity 的参考组居中坐标被误当盒坐标 | 改为逐帧按原盒坐标分箱，实验室系速度；参考组只记 meta | `test_nonuniform_profile_uses_box_coordinates`、`test_moving_reference_does_not_shift_profile` |
 | compare 覆盖输入目录的溯源 | 输出与输入目录重叠时先失败；非空输出需 `--force` | `test_compare_refuses_to_write_into_input_directory`、`test_compare_refuses_nonempty_output_without_force` |
 | 依赖声明缺 `tidynamics`、MDAnalysis 下限过低 | `MDAnalysis>=2.10`、`tidynamics>=1.1`；velocity 不再需要 maicos | 安装声明 |

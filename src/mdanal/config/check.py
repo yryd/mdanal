@@ -7,7 +7,7 @@ import tempfile
 from pathlib import Path
 from typing import Sequence
 
-from ..errors import ValidationError
+from ..errors import MdanalError, ValidationError
 from ..run.runner import RunOptions, execute, prepare
 from .registry import Discovery, build_plan
 from .system import read_system
@@ -59,7 +59,7 @@ def check_analysis(
                 prepared = prepare(cfg, plan)
                 out = root / lang
                 execute(prepared, out, RunOptions(lang=lang, force=True), {})
-            except ValidationError as exc:
+            except (ValidationError, MdanalError) as exc:
                 problems.append(f"[{lang}] {exc}")
                 continue
             provenance = json.loads(

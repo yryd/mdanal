@@ -301,3 +301,7 @@ def test_pooled_samples_mean_and_naive_sem():
     row = table.iloc[0]
     assert row["vx_A_per_ps"] == pytest.approx(7.5)
     assert row["error_A_per_ps"] == pytest.approx(2.5)
+    info = velocity_module.meta(ctx, {"velocity": table})
+    assert info["averaging"] == "pooled_unit_samples"
+    assert info["error_method"].startswith("naive_sample_sem")
+    assert info["reference_role"] == "metadata_only"

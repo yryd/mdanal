@@ -257,6 +257,7 @@ def meta(ctx, tables) -> dict:
         "averaging": "pooled_unit_samples",
         "error_method": "naive_sample_sem_without_time_correlation_correction",
         "reference_role": "metadata_only",
+        "sym": bool(ctx.params["sym"]),
     }
 
 
