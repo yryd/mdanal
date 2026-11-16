@@ -16,8 +16,7 @@
 ## 环境要求
 
 - Python 3.10 及以上
-- MDAnalysis 2.8+、NumPy、pandas、Matplotlib、PyYAML、SciencePlots
-- MAICoS 0.12+（仅流速剖面需要）
+- MDAnalysis 2.10+、NumPy、pandas、Matplotlib、PyYAML、SciencePlots、tidynamics（MSD 的 FFT 路径）
 
 ## 安装
 
@@ -85,7 +84,7 @@ out: compare
 ```
 
 ```bash
-mdanal compare --config compare.yaml [--out DIR] [--lang zh|en]
+mdanal compare --config compare.yaml [--out DIR] [--lang zh|en] [--force]
 ```
 
 - 只叠一维曲线（`lineardensity`、`velocity`、`rdf`、`msd`、`hbond`、`hbond_lifetime`）；
@@ -96,6 +95,7 @@ mdanal compare --config compare.yaml [--out DIR] [--lang zh|en]
   用在空间轴上会直接报错；
 - 多列结果（如氢键寿命的连续/间歇）按体系分色、按列分线型，图例写成「体系 · 列名」；
 - 轴标签取该分析 `COLUMN_LABELS` 里的中英文案，可用 `figure.xlabel/ylabel` 覆盖；`--lang` 切换语言；
+- 输出目录不能等于或位于任一输入结果目录内；已存在的非空输出默认拒绝，需 `--force`；
 - 输出：一张 PNG、合并后的对齐表 `tables/<表名>.csv`、`provenance.json`（每个体系的平移量与所用语言）。
 
 ## 配置
@@ -260,7 +260,7 @@ groups:
 
 | 输出 | 单位 | 来源 |
 |---|---|---|
-| 坐标列（`x (Å)`、`r (Å)`、`滞后 (ps)` 等） | Å / ps | MDAnalysis、MAICoS |
+| 坐标列（`x (Å)`、`r (Å)`、`滞后 (ps)` 等） | Å / ps | MDAnalysis |
 | 质量密度 | g·cm⁻³ | 由 amu/Å³ 换算（1 amu = 1/N_A g） |
 | `charge_density_e_A3` | e·Å⁻³ | 自实现直方图（电荷 / bin 体积） |
 | `number_density_A3` | Å⁻³ | 自实现三维直方图（坐标按盒折回） |
@@ -268,10 +268,13 @@ groups:
 | `msd_A2` / `dt_ps` | Å² / ps | `EinsteinMSD` |
 | `hbond_count` / `count` / `frames_present` | 个 | `HydrogenBondAnalysis` |
 | `tau_1e_ps` / `lag_ps` | ps | 库给出以帧为单位的 τ，乘帧间隔得到 ps；τ 为 1/e 交叉 |
-| `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ | MAICoS `VelocityPlanar`，误差列是标准误 |
+| `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ | 按盒坐标逐帧分箱，误差列是逐帧均值的标准误 |
 
-`density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。`velocity` 的剖面坐标已换算为盒坐标（MAICoS 的 `bin_pos` 加平均盒心）；参考组质心只用于库内部的
-相对剖面，记入 `provenance.json`。盒子变化时坐标按窗口平均盒长换算并给出警告。
+`density` 需要盒内坐标，`msd` 需要连续坐标，其余分析对两者都不敏感；程序按需选视图，`system.yaml` 无需声明。
+坐标约定也由加载层显式指定：同时存在 `x` 与 `xu` 时，盒内分析读 `x`、连续位移读 `xu`；
+`xs`/`xsu` 也能识别。只有包裹坐标、又没有键或镜像标志时，`msd` 会明确拒绝而不是静默算错。
+时间轴统一为"全局帧号 × 帧间隔"，不跟随 LAMMPS 的 TIMESTEP 重置（多段续跑归零时尤其重要）。`velocity` 直接按原盒坐标分箱（不把参考组平移到盒心），速度是实验室系速度；参考组只记入
+`provenance.json`。盒子变化时按首帧参考盒坐标平均并给出警告。
 
 ### 表头（机器名）
 
@@ -337,7 +340,7 @@ LABELS = {                              # 必填：图内文字，中英各一�
 
 COORDINATES = "any"                     # 可选：in_box / continuous / any
 REQUIRES = ()                           # 可选：("velocities",)
-PACKAGE = None                          # 可选：{"name": "maicos", "min_version": "0.12"}
+PACKAGE = None                          # 可选：{"name": "package-name", "min_version": "1.0"}
 COMPARE = None                          # 可选：{"table": ..., "x": ..., "y": [...], "box_axis": bool}
 MUTATES_POSITIONS = False               # 可选：分析会就地改坐标
 

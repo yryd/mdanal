@@ -16,7 +16,7 @@
 
 ## 环境
 
-- MDAnalysis 2.10.0；numpy 2.4.6；pandas 3.0.5；matplotlib 3.11.1；maicos 0.12
+- MDAnalysis 2.10.0；numpy 2.4.6；pandas 3.0.5；matplotlib 3.11.1；tidynamics 1.1.2
 - 修正前基线：`/tmp/mdanal-audit-base`（13 张表、8 张图），哈希见 `docs/audit-baseline.sha256`
 
 ## 标签审计（A1）
@@ -103,18 +103,18 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `dt_ps` | `results.delta_t_values` | ps | MDAnalysis | **已核对**：匀速 MSD=(v·Δt)² |
+| `dt_ps` | 全局帧号 × 帧间隔 | ps | 加载层统一 | **已修**：不再跟随 TIMESTEP 重置 |
 | `msd_A2` | `results.timeseries` | Å² | MDAnalysis | **已核对** |
 
 ### velocity
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `{axis}_angstrom` | `bin_pos` + 平均盒长/2 | Å | MAICoS | **已修**：原实现加的是首帧参考组质心，只有参考组恰在盒心时才正确 |
-| `v{vdim}_A_per_ps` | `results.profile` | Å·ps⁻¹ | MAICoS | **已核对**：匀速测试为常数 |
-| `error_A_per_ps` | `results.dprofile`（标准误） | Å·ps⁻¹ | MAICoS | **已核对**：匀速时误差为 0 |
+| `{axis}_angstrom` | 逐帧按原盒坐标分箱后的 bin 中心 | Å | 自实现 | **已修**：不再用 MAICoS 的参考框架坐标 |
+| `v{vdim}_A_per_ps` | 逐帧实验室系速度的 bin 平均 | Å·ps⁻¹ | 自实现 | **已核对**：匀速/非均匀场 |
+| `error_A_per_ps` | 逐帧样本的标准误（未做相关时间校正） | Å·ps⁻¹ | 自实现 | **已核对**：匀速时为 0 |
 
-盒子变化时坐标按窗口平均盒长换算并警告。
+盒子变化时按首帧参考盒坐标平均并警告；参考组只记入 meta，不参与分箱或速度相减。
 
 ## 修正前后记录
 
@@ -144,8 +144,8 @@
 | hbond | 已修（选择串、归一化） | `tests/analyses/test_hbond.py` | 4 |
 | hbond_type | 已核对（总数/份额） | `tests/analyses/test_hbond_type.py` | 2 |
 | hbond_lifetime | 已改名 + 文档（1/e 交叉） | `tests/analyses/test_hbond_lifetime.py` | 2 |
-| msd | 已核对（匀速解析） | `tests/analyses/test_msd.py` | 2 |
-| velocity | 已修（盒坐标原点） | `tests/analyses/test_velocity.py` | 5 |
+| msd | 已修时间轴 + 已核对（匀速解析） | `tests/analyses/test_msd.py` | 4 |
+| velocity | 已改为原盒坐标分箱 | `tests/analyses/test_velocity.py` | 7 |
 
 相对修正前基线的输出变化（9 项）：
 
@@ -159,7 +159,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。验收：`pytest` 76 条、`pytest tests/analyses` 23 条全部通过；
+其余表与图逐字节不变。验收：`pytest` 80 条、`pytest tests/analyses` 27 条全部通过；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：
@@ -169,3 +169,14 @@ velocity/tables/velocity.csv
 - `tau_1e_ps` 是 1/e 交叉时间，不做指数拟合与误差估计；
 - `hbond_lifetime`（H–受体对）与 `hbond_occupancy`（三元组）的身份定义不同；
 - `velocity` 的盒子变化时坐标按平均盒长换算，跨帧比较需注意。
+
+
+## 框架修复（审计后）
+
+| 问题 | 修复 | 回归 |
+|---|---|---|
+| 多段续跑 TIMESTEP 归零导致 MSD 时间轴不一致 | 加载层统一 `ts.time = 全局帧号 × 帧间隔`；内存/读盘同源 | `test_frame_times_ignore_timestep_reset`、`test_segmented_reset_steps_keep_frame_time` |
+| 双列/缩放坐标的判断与读取器不一致 | 扫描全部约定并按视图显式传 `lammps_coordinate_convention`；无未包裹坐标且无键时拒绝连续位移 | `test_scan_matches_reader_coordinate_precedence`、`test_dual_coordinate_columns_use_unwrapped` |
+| velocity 的参考组居中坐标被误当盒坐标 | 改为逐帧按原盒坐标分箱，实验室系速度；参考组只记 meta | `test_nonuniform_profile_uses_box_coordinates`、`test_moving_reference_does_not_shift_profile` |
+| compare 覆盖输入目录的溯源 | 输出与输入目录重叠时先失败；非空输出需 `--force` | `test_compare_refuses_to_write_into_input_directory`、`test_compare_refuses_nonempty_output_without_force` |
+| 依赖声明缺 `tidynamics`、MDAnalysis 下限过低 | `MDAnalysis>=2.10`、`tidynamics>=1.1`；velocity 不再需要 maicos | 安装声明 |
