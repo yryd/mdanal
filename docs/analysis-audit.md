@@ -144,7 +144,7 @@
 | hbond | 已修（选择串、归一化） | `tests/analyses/test_hbond.py` | 4 |
 | hbond_type | 已核对（总数/份额） | `tests/analyses/test_hbond_type.py` | 2 |
 | hbond_lifetime | 已改名 + 文档（1/e 交叉） | `tests/analyses/test_hbond_lifetime.py` | 2 |
-| msd | 已修时间轴 + 已核对（匀速解析） | `tests/analyses/test_msd.py` | 4 |
+| msd | 已修时间轴 + 已核对（匀速解析） | `tests/analyses/test_msd.py` | 5 |
 | velocity | 已改为原盒坐标分箱 | `tests/analyses/test_velocity.py` | 7 |
 
 相对修正前基线的输出变化（9 项）：
@@ -159,7 +159,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。验收：`pytest` 80 条、`pytest tests/analyses` 27 条全部通过；
+其余表与图逐字节不变。验收：`pytest` 80 条、`pytest tests/analyses` 28 条全部通过；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：

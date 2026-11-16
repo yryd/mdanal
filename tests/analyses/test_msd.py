@@ -173,3 +173,30 @@ def test_segmented_reset_steps_keep_frame_time(tmp_path):
         pd.testing.assert_frame_equal(memory, disk)
         assert memory["dt_ps"].min() >= 0
         assert np.allclose(memory["dt_ps"], np.arange(total) * 5.0)
+
+
+def test_merged_reset_segments_match_single_file(tmp_path):
+    """单段与"第二段 TIMESTEP 归零"的拼接段，MSD 数值和时间必须一致。"""
+    first, second, total = split_trajectory(tmp_path, reset_second_steps=True)
+    analyses = "  - {name: msd, sel: [all_atoms], fft: false}\n"
+    single = write_system(
+        tmp_path / "single",
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        analyses,
+        frames=f"[0, {total}]",
+    )
+    merged = write_system(
+        tmp_path / "merged",
+        SYSTEM / "data.lmp",
+        f"[{first}, {second}]",
+        analyses,
+        frames=f"[0, {total}]",
+    )
+    out_single = tmp_path / "single/out"
+    out_merged = tmp_path / "merged/out"
+    assert cli.main(["run", "--system", str(single), "--out", str(out_single)]) == 0
+    assert cli.main(["run", "--system", str(merged), "--out", str(out_merged)]) == 0
+    a = pd.read_csv(out_single / "msd/tables/msd.csv", encoding="utf-8-sig")
+    b = pd.read_csv(out_merged / "msd/tables/msd.csv", encoding="utf-8-sig")
+    pd.testing.assert_frame_equal(a, b)
