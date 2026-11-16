@@ -200,3 +200,226 @@ def test_merged_reset_segments_match_single_file(tmp_path):
     a = pd.read_csv(out_single / "msd/tables/msd.csv", encoding="utf-8-sig")
     b = pd.read_csv(out_merged / "msd/tables/msd.csv", encoding="utf-8-sig")
     pd.testing.assert_frame_equal(a, b)
+
+
+def _no_bond_system(
+    tmp_path, *, scaled=False, wrapped_scaled=False, analyses=None, frames="[0, 3]"
+):
+    data = tmp_path / "data.lmp"
+    data.write_text(
+        """LAMMPS data file
+
+1 atoms
+1 atom types
+
+0.0 10.0 xlo xhi
+0.0 10.0 ylo yhi
+0.0 10.0 zlo zhi
+
+Masses
+
+1 1.0
+
+Atoms # full
+
+1 1 1 0.0 0.5 0.5 0.5
+""",
+        encoding="utf-8",
+    )
+    trajectory = tmp_path / "run.lammpstrj"
+    lines = []
+    values = [9.0, 11.0, 13.0] if scaled else [9.0, 1.0, 3.0]
+    if wrapped_scaled:
+        values = [value / 10.0 for value in [9.0, 1.0, 3.0]]
+        columns = "id type xs ys zs"
+    else:
+        columns = "id type xsu ysu zsu" if scaled else "id type x y z"
+    for step, value in enumerate(values):
+        lines += [
+            "ITEM: TIMESTEP",
+            str(step),
+            "ITEM: NUMBER OF ATOMS",
+            "1",
+            "ITEM: BOX BOUNDS pp pp pp",
+            "0 10",
+            "0 10",
+            "0 10",
+            f"ITEM: ATOMS {columns}",
+        ]
+        if wrapped_scaled:
+            lines.append(f"1 1 {value} 0.5 0.5")
+        else:
+            lines.append(
+                f"1 1 {value / 10 if scaled else value} 0.5 0.5"
+            )
+    trajectory.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return write_system(
+        tmp_path,
+        data,
+        trajectory,
+        analyses or "  - {name: msd, sel: [all_atoms], fft: false}\n",
+        frames=frames,
+    )
+
+
+def test_wrapped_no_bond_continuous_view(tmp_path):
+    """无键、只有包裹坐标时，按最小镜像逐帧展开后 MSD 应为 [0,4,16]。"""
+    path = _no_bond_system(tmp_path)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
+    assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
+
+
+def test_wrapped_no_bond_section_replays_from_zero(tmp_path):
+    """section 从非零帧开始时，连续视图必须从 0 重放。"""
+    path = _no_bond_system(
+        tmp_path,
+        analyses="  - {name: msd, sel: [all_atoms], fft: false, section: [1, 3]}\n",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
+    assert table["msd_A2"].round(6).tolist() == [0.0, 4.0]
+
+
+def test_wrapped_scaled_unwrapped_no_bond(tmp_path):
+    """xsu/ysu/zsu 也应走未包裹路径并得到同样 MSD。"""
+    path = _no_bond_system(tmp_path, scaled=True)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
+    assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
+
+
+def test_repeated_analyses_on_wrapped_view(tmp_path):
+    """同一条连续视图被多条分析按不同 section 读取时，结果仍一致。"""
+    path = _no_bond_system(
+        tmp_path,
+        analyses=(
+            "  - {name: msd, tag: full, sel: [all_atoms], fft: false}\n"
+            "  - {name: msd, tag: late, sel: [all_atoms], fft: false, section: [1, 3]}\n"
+        ),
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    full = pd.read_csv(out / "msd-full/tables/msd.csv", encoding="utf-8-sig")
+    late = pd.read_csv(out / "msd-late/tables/msd.csv", encoding="utf-8-sig")
+    assert full["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
+    assert late["msd_A2"].round(6).tolist() == [0.0, 4.0]
+
+
+def test_wrapped_no_bond_multi_segment_with_reset_steps(tmp_path):
+    """两段包裹坐标、第二段 TIMESTEP 归零时，连续视图仍跨段展开。"""
+    data = tmp_path / "data.lmp"
+    data.write_text(
+        """LAMMPS data file
+
+1 atoms
+1 atom types
+
+0.0 10.0 xlo xhi
+0.0 10.0 ylo yhi
+0.0 10.0 zlo zhi
+
+Masses
+
+1 1.0
+
+Atoms # full
+
+1 1 1 0.0 0.5 0.5 0.5
+""",
+        encoding="utf-8",
+    )
+    def frame(step, x):
+        return [
+            "ITEM: TIMESTEP", str(step), "ITEM: NUMBER OF ATOMS", "1",
+            "ITEM: BOX BOUNDS pp pp pp", "0 10", "0 10", "0 10",
+            "ITEM: ATOMS id type x y z", f"1 1 {x} 0.5 0.5",
+        ]
+    first = tmp_path / "a.lammpstrj"
+    second = tmp_path / "b.lammpstrj"
+    first.write_text("\n".join(frame(0, 9.0) + frame(1, 1.0)) + "\n", encoding="utf-8")
+    second.write_text("\n".join(frame(0, 3.0)) + "\n", encoding="utf-8")
+    path = write_system(
+        tmp_path,
+        data,
+        f"[{first}, {second}]",
+        "  - {name: msd, sel: [all_atoms], fft: false}\n",
+        frames="[0, 3]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
+    assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
+    assert np.allclose(table["dt_ps"], [0.0, 5.0, 10.0])
+
+
+def test_wrapped_no_bond_memory_and_disk_agree(tmp_path):
+    data = tmp_path / "data.lmp"
+    data.write_text(
+        """LAMMPS data file
+
+1 atoms
+1 atom types
+
+0.0 10.0 xlo xhi
+0.0 10.0 ylo yhi
+0.0 10.0 zlo zhi
+
+Masses
+
+1 1.0
+
+Atoms # full
+
+1 1 1 0.0 0.5 0.5 0.5
+""",
+        encoding="utf-8",
+    )
+    values = [9.0, 1.0, 3.0, 5.0, 7.0, 9.0, 1.0, 3.0]
+    lines = []
+    for step, value in enumerate(values):
+        lines += [
+            "ITEM: TIMESTEP", str(step), "ITEM: NUMBER OF ATOMS", "1",
+            "ITEM: BOX BOUNDS pp pp pp", "0 10", "0 10", "0 10",
+            "ITEM: ATOMS id type x y z", f"1 1 {value} 0.5 0.5",
+        ]
+    trajectory = tmp_path / "run.lammpstrj"
+    trajectory.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    path = write_system(
+        tmp_path,
+        data,
+        trajectory,
+        "  - {name: msd, tag: one, sel: [all_atoms], fft: false}\n"
+        "  - {name: msd, tag: two, sel: [all_atoms], fft: false}\n",
+        frames="[0, 8]",
+    )
+    memory = tmp_path / "memory"
+    disk = tmp_path / "disk"
+    assert cli.main(["run", "--system", str(path), "--out", str(memory)]) == 0
+    assert (
+        cli.main(
+            ["run", "--system", str(path), "--out", str(disk), "--no-memory"]
+        )
+        == 0
+    )
+    provenance = json.loads(
+        (memory / "provenance.json").read_text(encoding="utf-8")
+    )
+    assert provenance["memory"]["enabled"] is True
+    for tag in ("one", "two"):
+        a = pd.read_csv(memory / f"msd-{tag}/tables/msd.csv", encoding="utf-8-sig")
+        b = pd.read_csv(disk / f"msd-{tag}/tables/msd.csv", encoding="utf-8-sig")
+        pd.testing.assert_frame_equal(a, b)
+        assert np.allclose(a["msd_A2"], 4.0 * np.arange(8) ** 2)
+
+
+def test_wrapped_scaled_no_bond(tmp_path):
+    """xs/ys/zs 的包裹坐标也应按同一连续视图展开。"""
+    path = _no_bond_system(tmp_path, wrapped_scaled=True)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
+    assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]

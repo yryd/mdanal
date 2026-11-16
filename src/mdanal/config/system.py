@@ -9,6 +9,8 @@ from typing import Any
 
 import MDAnalysis as mda
 import MDAnalysis.transformations as tr
+
+from .continuous import ContinuousView
 import numpy as np
 import yaml
 
@@ -32,7 +34,7 @@ WRAPPED_CONVENTIONS = ("unscaled", "scaled")
 
 UNKNOWN_INPUT_WARNING = "无法从轨迹表头判断坐标是否包裹，按未包裹坐标处理。"
 NOJUMP_WARNING = (
-    "输入为包裹坐标，已用 NoJump 重建连续坐标；"
+    "输入为包裹坐标，连续视图按最小镜像逐帧展开；"
     "相邻帧位移超过半个盒长时结果可能失真。"
 )
 
@@ -267,20 +269,20 @@ def load_universe(
         )
 
     wrapped = convention in WRAPPED_CONVENTIONS
-    if coordinates == "continuous" and wrapped:
-        has_bonds = hasattr(universe.atoms, "bonds") and len(universe.atoms.bonds) > 0
-        if not has_bonds:
-            raise ValidationError(
-                "连续位移需要未包裹坐标（xu/xsu）或可用来重建的键；"
-                f"当前只检测到包裹坐标（{convention}）。请在 LAMMPS 输出中加 xu/yu/zu，"
-                "或改用只含单帧/固定盒的窗口。",
-                where=str(cfg.trajectory),
-            )
     transforms = []
     if coordinates == "in_box":
         transforms.append(tr.wrap(universe.atoms))
     if coordinates == "continuous" and wrapped:
-        transforms.append(tr.NoJump())
+        # 独立的原始读取器只用于按帧重放，不再叠加 transformation，避免递归。
+        raw = mda.Universe(
+            str(cfg.topology),
+            target,
+            format="LAMMPSDUMP",
+            topology_format="data",
+            dt=frame_dt,
+            **reader_kwargs,
+        )
+        transforms.append(ContinuousView(raw))
     if scale_velocity:
         transforms.append(_scale_velocity)
 
