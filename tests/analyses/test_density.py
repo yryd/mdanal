@@ -54,6 +54,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     assert provenance["input"] == {
         "coordinates": "unwrapped",
         "detected_from": "xu yu zu",
+        "conventions": ["unwrapped"],
     }
     assert provenance["selection"]["frame"] == START
     assert provenance["view"]["origin"] == [0.0, 0.0, 0.0]

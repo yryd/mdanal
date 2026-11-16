@@ -59,15 +59,26 @@ def raw_universe(cfg) -> mda.Universe:
     )
 
 
-def split_trajectory(directory: Path) -> tuple[Path, Path, int]:
-    """把夹具轨迹从中间切成两段，返回 (第一段, 第二段, 总帧数)。"""
+def split_trajectory(
+    directory: Path, *, reset_second_steps: bool = False
+) -> tuple[Path, Path, int]:
+    """把夹具轨迹从中间切成两段，返回 (第一段, 第二段, 总帧数)。
+
+    reset_second_steps=True 时把第二段每帧的 TIMESTEP 改成 0，模拟续跑归零。
+    """
     lines = (SYSTEM / "run.lammpstrj").read_text(encoding="utf-8").splitlines(keepends=True)
     starts = [i for i, line in enumerate(lines) if line.startswith("ITEM: TIMESTEP")]
     cut = starts[len(starts) // 2]
+    first_lines = lines[:cut]
+    second_lines = lines[cut:]
+    if reset_second_steps:
+        for index, line in enumerate(second_lines):
+            if line.startswith("ITEM: TIMESTEP"):
+                second_lines[index + 1] = "0\n"
     first = directory / "a.lammpstrj"
     second = directory / "b.lammpstrj"
-    first.write_text("".join(lines[:cut]), encoding="utf-8")
-    second.write_text("".join(lines[cut:]), encoding="utf-8")
+    first.write_text("".join(first_lines), encoding="utf-8")
+    second.write_text("".join(second_lines), encoding="utf-8")
     return first, second, len(starts)
 
 

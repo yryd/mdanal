@@ -152,10 +152,14 @@ def test_memory_and_disk_runs_agree(tmp_path):
         '  - {name: fake, tag: two, sel: [all_atoms, all_atoms]}'
     )
     path = write_system(
-        tmp_path, SYSTEM / "data.lmp", SYSTEM / "run.lammpstrj", analyses, frames="[0, 5]"
+        tmp_path, SYSTEM / "data.lmp", SYSTEM / "run.lammpstrj", analyses, frames="[0, 20]"
     )
     run_fake(path, tmp_path / "memory", memory=True)
     run_fake(path, tmp_path / "disk", memory=False)
+    provenance = json.loads(
+        (tmp_path / "memory/provenance.json").read_text(encoding="utf-8")
+    )
+    assert provenance["memory"]["enabled"] is True
 
     for directory in ("fake-one", "fake-two"):
         a = pd.read_csv(
@@ -208,3 +212,26 @@ def test_language_switch_renders_figure(tmp_path):
         (tmp_path / "en/provenance.json").read_text(encoding="utf-8")
     )
     assert provenance["render"]["language"] == "en"
+
+
+def test_frame_times_ignore_timestep_reset(tmp_path):
+    """多段续跑 TIMESTEP 归零时，所有视图仍按全局帧号计时。"""
+    from mdanal.config.system import load_universe, read_system
+
+    first, second, total = split_trajectory(tmp_path, reset_second_steps=True)
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        f"[{first}, {second}]",
+        FAKE,
+        frames=f"[0, {total}]",
+    )
+    cfg = read_system(path)
+    expected = np.arange(total) * (cfg.dump_every * cfg.dt_ps)
+    for view in ("in_box", "continuous"):
+        universe = load_universe(cfg, coordinates=view)
+        times = []
+        for frame in range(len(universe.trajectory)):
+            universe.trajectory[frame]
+            times.append(universe.trajectory.ts.time)
+        assert np.allclose(times, expected)

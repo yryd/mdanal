@@ -262,3 +262,36 @@ def test_seam_time_backward_is_reported(tmp_path):
     _, prepared = run_fake(path, tmp_path / "out")
     notes = prepared.cfg.seam_notes
     assert any("时间倒退" in note for note in notes)
+
+
+def _write_dump_header(path, columns: str) -> None:
+    path.write_text(
+        "ITEM: TIMESTEP\n0\nITEM: NUMBER OF ATOMS\n1\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        f"ITEM: ATOMS {columns}\n1 1 0.5 0.5 0.5\n",
+        encoding="utf-8",
+    )
+
+
+def test_scan_matches_reader_coordinate_precedence(tmp_path):
+    """扫描器必须和 MDAnalysis 的自动选列顺序一致：unscaled → scaled → unwrapped。"""
+    from mdanal.config.system import _scan_dump
+
+    both = tmp_path / "both.lammpstrj"
+    _write_dump_header(both, "id type x y z xu yu zu")
+    scan = _scan_dump(both)
+    assert scan.conventions == ("unscaled", "unwrapped")
+    assert scan.state == "wrapped"
+    assert scan.evidence == "x y z"
+
+    scaled = tmp_path / "scaled.lammpstrj"
+    _write_dump_header(scaled, "id type xs ys zs")
+    scan = _scan_dump(scaled)
+    assert scan.conventions == ("scaled",)
+    assert scan.state == "wrapped"
+
+    scaled_unwrapped = tmp_path / "scaled_unwrapped.lammpstrj"
+    _write_dump_header(scaled_unwrapped, "id type xsu ysu zsu")
+    scan = _scan_dump(scaled_unwrapped)
+    assert scan.conventions == ("scaled_unwrapped",)
+    assert scan.state == "unwrapped"

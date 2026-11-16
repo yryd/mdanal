@@ -16,6 +16,7 @@ from .. import __version__
 from ..config.naming import NamingSummary, apply_naming, build_plan
 from ..errors import MdanalError, ValidationError
 from ..config.registry import PlanItem
+from ..config.system import is_wrapped_convention
 from ..config.system import (
     NOJUMP_WARNING,
     Group,
@@ -119,8 +120,6 @@ def prepare(
     in_box = views["in_box"]
     start, stop = frame_window(cfg, in_box)
     segment_frames = tuple(_segment_frames(in_box))
-    # MAICoS 会就地改写坐标（unwrap/pack），内存读取下这些改写会留给同一次运行的下一条分析，
-    # 故只要有 velocity 就不读入内存。
     # 读入要扫完整个文件，只有当"重复读的帧数"确实超过文件总帧数时才划算。
     total_frames = len(in_box.trajectory)
     window = stop - start
@@ -290,6 +289,7 @@ def execute(
             "input": {
                 "coordinates": cfg.input_state,
                 "detected_from": cfg.input_evidence,
+                "conventions": list(cfg.coordinate_conventions),
             },
             "box": {
                 "length": _box_length(prepared),
@@ -343,7 +343,11 @@ def _naming_payload(summary: NamingSummary | None) -> dict[str, Any] | None:
 
 def _view_warnings(cfg: SystemConfig, item: PlanItem) -> list[str]:
     """框架级提示：该分析所用视图在构建时做过什么。"""
-    if item.view == "continuous" and cfg.input_state == "wrapped":
+    from ..config.system import coordinate_convention
+
+    if item.view == "continuous" and is_wrapped_convention(
+        coordinate_convention(cfg, "continuous")
+    ):
         return [NOJUMP_WARNING]
     return []
 
@@ -490,7 +494,7 @@ def _library_versions() -> dict[str, str]:
     from importlib.metadata import PackageNotFoundError, version
 
     versions: dict[str, str] = {}
-    for package in ("MDAnalysis", "numpy", "pandas", "matplotlib", "maicos"):
+    for package in ("MDAnalysis", "numpy", "pandas", "matplotlib", "tidynamics"):
         try:
             versions[package] = version(package)
         except PackageNotFoundError:

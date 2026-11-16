@@ -21,6 +21,15 @@ TRAJECTORY_SUFFIXES = (".lammpstrj",)
 AXES = ("x", "y", "z")
 VIEWS = ("in_box", "continuous")
 
+# LAMMPS dump 可能出现的坐标列，顺序与 MDAnalysis 的 auto 优先级一致
+COORDINATE_CONVENTIONS = {
+    "unscaled": ("x", "y", "z"),
+    "scaled": ("xs", "ys", "zs"),
+    "unwrapped": ("xu", "yu", "zu"),
+    "scaled_unwrapped": ("xsu", "ysu", "zsu"),
+}
+WRAPPED_CONVENTIONS = ("unscaled", "scaled")
+
 UNKNOWN_INPUT_WARNING = "无法从轨迹表头判断坐标是否包裹，按未包裹坐标处理。"
 NOJUMP_WARNING = (
     "输入为包裹坐标，已用 NoJump 重建连续坐标；"
@@ -75,6 +84,7 @@ class SystemConfig:
     )
     input_state: str = "unknown"
     input_evidence: str = ""
+    coordinate_conventions: tuple[str, ...] = ()
     trajectories: tuple[Path, ...] = ()
     seam_notes: tuple[str, ...] = ()
     segment_steps: tuple[tuple[int | None, int | None], ...] = ()
@@ -94,6 +104,7 @@ class DumpScan:
     evidence: str
     first_step: int | None
     last_step: int | None
+    conventions: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -165,11 +176,14 @@ def read_system(path: str | Path) -> SystemConfig:
     )
     trajectory = _resolve_trajectories(data.get("trajectory"), directory, where)
     scans = [_scan_dump(path) for path in trajectory]
-    states = {scan.state for scan in scans}
-    if len(states) > 1:
-        detail = "、".join(f"{p.name}: {s.state}" for p, s in zip(trajectory, scans))
+    conventions = {scan.conventions for scan in scans}
+    if len(conventions) > 1:
+        detail = "、".join(
+            f"{p.name}: {','.join(s.conventions) or '未知'}"
+            for p, s in zip(trajectory, scans)
+        )
         raise ValidationError(
-            f"各段轨迹的坐标状态不一致（{detail}）；同一体系的各段必须用同样的坐标列",
+            f"各段轨迹的坐标列不一致（{detail}）；同一体系的各段必须用同样的坐标列",
             where=f"{where}:trajectory",
         )
     box_low = scans[0].box_low
@@ -196,6 +210,7 @@ def read_system(path: str | Path) -> SystemConfig:
         view=view,
         input_state=input_state,
         input_evidence=input_evidence,
+        coordinate_conventions=scans[0].conventions,
         trajectories=trajectory,
         seam_notes=seam_notes,
         segment_steps=tuple((scan.first_step, scan.last_step) for scan in scans),
@@ -222,13 +237,20 @@ def load_universe(
 
     files = [str(path) for path in cfg.all_trajectories]
     target: str | list[str] = files[0] if len(files) == 1 else files
+    frame_dt = cfg.dump_every * cfg.dt_ps
+    convention = coordinate_convention(cfg, coordinates)
+    reader_kwargs: dict[str, Any] = {}
+    if convention is not None:
+        # 显式指定坐标列，避免"扫描器以为读了 xu、读取器其实选了 x"
+        reader_kwargs["lammps_coordinate_convention"] = convention
     try:
         universe = mda.Universe(
             str(cfg.topology),
             target,
             format="LAMMPSDUMP",
             topology_format="data",
-            dt=cfg.dt_ps,
+            dt=frame_dt,
+            **reader_kwargs,
         )
     except Exception as exc:  # MDAnalysis 的异常类型较杂，统一转成可读信息
         raise ValidationError(
@@ -244,17 +266,50 @@ def load_universe(
             "有分析需要速度，但轨迹不含速度列", where=str(cfg.trajectory)
         )
 
-    wrapped_input = cfg.input_state == "wrapped"
+    wrapped = convention in WRAPPED_CONVENTIONS
+    if coordinates == "continuous" and wrapped:
+        has_bonds = hasattr(universe.atoms, "bonds") and len(universe.atoms.bonds) > 0
+        if not has_bonds:
+            raise ValidationError(
+                "连续位移需要未包裹坐标（xu/xsu）或可用来重建的键；"
+                f"当前只检测到包裹坐标（{convention}）。请在 LAMMPS 输出中加 xu/yu/zu，"
+                "或改用只含单帧/固定盒的窗口。",
+                where=str(cfg.trajectory),
+            )
     transforms = []
-    if coordinates == "in_box" or wrapped_input:
+    if coordinates == "in_box":
         transforms.append(tr.wrap(universe.atoms))
-    if coordinates == "continuous" and wrapped_input:
+    if coordinates == "continuous" and wrapped:
         transforms.append(tr.NoJump())
     if scale_velocity:
         transforms.append(_scale_velocity)
 
+    def _frame_time(ts):
+        """统一时间轴：全局帧号 × 帧间隔，不跟随 TIMESTEP 的重置。"""
+        ts.time = ts.frame * frame_dt
+        return ts
+
+    transforms.append(_frame_time)
     universe.trajectory.add_transformations(*transforms)
     return universe
+
+
+def coordinate_convention(cfg: SystemConfig, view: str) -> str | None:
+    """该视图实际使用的 LAMMPS 坐标约定；没有可用列时返回 None。"""
+    if view == "continuous":
+        order = ("unwrapped", "scaled_unwrapped", "unscaled", "scaled")
+    elif view == "in_box":
+        order = ("unscaled", "scaled", "unwrapped", "scaled_unwrapped")
+    else:
+        raise ValidationError(f"未知的坐标视图 {view!r}")
+    for key in order:
+        if key in cfg.coordinate_conventions:
+            return key
+    return None
+
+
+def is_wrapped_convention(convention: str | None) -> bool:
+    return convention in WRAPPED_CONVENTIONS
 
 
 def frame_window(cfg: SystemConfig, universe: mda.Universe) -> tuple[int, int]:
@@ -500,13 +555,19 @@ def _scan_dump(trajectory: Path) -> DumpScan:
 
     box_low = _box_low(bounds)
     names = set(columns)
-    if {"xu", "yu", "zu"} <= names:
-        state, evidence = "unwrapped", "xu yu zu"
-    elif {"x", "y", "z"} <= names:
-        state, evidence = "wrapped", "x y z"
+    conventions = tuple(
+        key for key, columns_ in COORDINATE_CONVENTIONS.items()
+        if set(columns_) <= names
+    )
+    if conventions:
+        first = conventions[0]
+        state = "wrapped" if first in WRAPPED_CONVENTIONS else "unwrapped"
+        evidence = " ".join(COORDINATE_CONVENTIONS[first])
     else:
         state, evidence = "unknown", ""
-    return DumpScan(box_low, state, evidence, first_step, _last_step(trajectory))
+    return DumpScan(
+        box_low, state, evidence, first_step, _last_step(trajectory), conventions
+    )
 
 
 def _last_step(path: Path, chunk: int = 1 << 16) -> int | None:
