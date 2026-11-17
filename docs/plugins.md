@@ -37,7 +37,7 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
 | `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图 |
 
-未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会明确失败，不会静默继续。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
+未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会打印非物理警告并继续，不会静默；定量结果仍要求满足声明。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
 
 ### 输出契约
 

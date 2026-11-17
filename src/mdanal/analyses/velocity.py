@@ -173,9 +173,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         raise ValidationError("轨迹不含速度列，无法计算流速剖面")
     dimensions = universe.dimensions
     if dimensions is not None and not np.allclose(np.asarray(dimensions[3:]), 90.0, atol=1e-3):
-        raise ValidationError(
-            f"只支持正交盒；检测到盒角 {np.asarray(dimensions[3:]).tolist()}，"
-            "当前三斜盒的分子复原/分箱尚未验证"
+        ctx.warn(
+            f"检测到三斜盒角 {np.asarray(dimensions[3:]).tolist()}；"
+            "当前按三个盒长做分子复原/分箱，结果仅供定性参考。"
         )
 
     index, first = _unit_layout(atoms, grouping)
@@ -238,10 +238,10 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         else:
             coordinate = wrapped[:, dim]
             if np.any(coordinate < 0.0) or np.any(coordinate > lengths_ref[dim]):
-                raise ValidationError(
+                ctx.warn(
                     f"非周期方向 {axis} 有统计单元落在参考盒 "
-                    f"[0, {lengths_ref[dim]:g}] 之外；请确认 BOX BOUNDS/坐标列，"
-                    "或缩小分析窗口。"
+                    f"[0, {lengths_ref[dim]:g}] 之外；这些单元会被边界 bin 截断，"
+                    "结果仅供定性参考。"
                 )
         bins = np.clip((coordinate / bin_width_ref).astype(int), 0, n_bins - 1)
         sums += np.bincount(bins, weights=relative, minlength=n_bins)

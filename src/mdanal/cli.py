@@ -204,6 +204,15 @@ def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
         print()
         for message in warnings:
             print(f"提示：{message}")
+    geometry_warnings = [
+        (item.directory, message)
+        for item in prepared.plan
+        for message in prepared.geometry_warnings.get(item.order, ())
+    ]
+    if geometry_warnings:
+        print()
+        for directory, message in geometry_warnings:
+            print(f"几何提示（{directory}）：{message}")
 
 
 def _input_text(cfg: SystemConfig) -> str:

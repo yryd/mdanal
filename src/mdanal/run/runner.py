@@ -73,6 +73,7 @@ class Prepared:
     materialized: Mapping[str, bool] = field(default_factory=dict)
     segment_frames: tuple[int, ...] = ()
     frames: Mapping[int, tuple[int, int]] = field(default_factory=dict)
+    geometry_warnings: Mapping[int, tuple[str, ...]] = field(default_factory=dict)
 
     def item_frames(self, item: PlanItem) -> tuple[int, int]:
         """该分析实际使用的帧窗口（体系窗口 + section 偏移）。"""
@@ -164,9 +165,12 @@ def prepare(
 
     if cfg.geometry is None:
         raise ValidationError("缺少每帧几何；无法检查插件支持条件")
+    geometry_warnings: dict[int, tuple[str, ...]] = {}
     for item in plan:
         item_start, item_stop = frames[item.order]
-        _check_geometry(item, cfg.geometry, item_start, item_stop)
+        geometry_warnings[item.order] = tuple(
+            _check_geometry(item, cfg.geometry, item_start, item_stop)
+        )
 
     seek_frame(in_box, start)
     groups = {
@@ -188,24 +192,24 @@ def prepare(
         materialized=materialized,
         segment_frames=segment_frames,
         frames=frames,
+        geometry_warnings=geometry_warnings,
     )
 
 
 def _check_geometry(
     item: PlanItem, track: GeometryTrack, start: int, stop: int
-) -> None:
-    """在 run 之前检查插件声明的几何能力。未声明时按保守默认处理。"""
+) -> list[str]:
+    """检查插件的几何声明；不阻止运行，只返回明确的非物理警告。"""
     window = track.window(start, stop)
     declared = dict(item.definition.geometry or {})
     cell = declared.get("cell", "orthorhombic")
     periodicity = declared.get("periodicity", "full")
+    warnings: list[str] = []
 
     if cell == "orthorhombic" and not window.orthorhombic:
-        reference = window.reference
-        raise ValidationError(
-            f"{item.directory}：当前插件要求正交盒，但分析窗口包含三斜盒 "
-            f"（首帧 cell={reference.cell}）。请换正交盒轨迹，或使用已声明 cell=any 的插件。",
-            where=str(item.definition.name),
+        warnings.append(
+            f"当前插件声明正交盒，但分析窗口包含三斜盒"
+            f"（首帧 cell={window.reference.cell}）；继续计算仅供定性参考。"
         )
     required = {
         "full": (0, 1, 2),
@@ -214,21 +218,26 @@ def _check_geometry(
         "yz": (1, 2),
         "any": (),
     }.get(periodicity, (0, 1, 2))
+    if item.view == "continuous" and window.cell_changed:
+        warnings.append(
+            "连续视图分析窗口内盒矩阵在变化；逐帧按当前盒展开，"
+            "结果仅供定性参考，不能当作严格 NPT 扩散。"
+        )
     if not window.pbc_known:
-        raise ValidationError(
-            f"{item.directory}：无法识别 BOX BOUNDS 的边界类型，"
-            f"不能确认插件所需的周期方向。",
-            where=str(item.definition.name),
+        warnings.append(
+            "无法从 BOX BOUNDS 识别边界类型；按“非周期”继续，"
+            "涉及周期镜像的分析结果仅供定性参考。"
         )
-    missing = [AXES[axis] for axis in required if not window.pbc_all[axis]]
-    if missing:
-        requirement = "三向周期（full）" if periodicity == "full" else periodicity
-        raise ValidationError(
-            f"{item.directory}：分析窗口边界为 {window.reference.boundary_types}；"
-            f"当前插件要求 {requirement}，缺少周期方向 {missing}。"
-            "非周期方向不能通过盒镜像计算。",
-            where=str(item.definition.name),
-        )
+    else:
+        missing = [AXES[axis] for axis in required if not window.pbc_all[axis]]
+        if missing:
+            requirement = "三向周期（full）" if periodicity == "full" else periodicity
+            warnings.append(
+                f"分析窗口边界为 {window.reference.boundary_types}；"
+                f"插件声明要求 {requirement}，缺少周期方向 {missing}。"
+                "继续计算会把缺少的方向按非周期处理，结果仅供定性参考。"
+            )
+    return warnings
 
 
 def _labels_for_snapshot(item: PlanItem, common_labels: Mapping[str, Mapping[str, str]]):
@@ -279,7 +288,8 @@ def execute(
             figure_sizes=options.figure_sizes,
             view=item.view,
             selection_frame=prepared.selection_frame,
-            warnings=_view_warnings(cfg, item),
+            warnings=list(prepared.geometry_warnings.get(item.order, ()))
+            + _view_warnings(cfg, item),
             geometry=cfg.geometry.frame(item_start) if cfg.geometry else None,
             geometry_window=geometry_window,
         )

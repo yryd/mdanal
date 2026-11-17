@@ -26,15 +26,15 @@ from helpers import SYSTEM, START, STOP, raw_universe, selection_count, write_sy
 pytestmark = pytest.mark.analysis
 
 
-def test_rdf_range_beyond_half_box_is_rejected(real, tmp_path):
+def test_rdf_range_beyond_half_box_warns_but_runs(real, tmp_path):
     cfg, _ = real
     analyses = (
         '  - {name: rdf, sel: [all_atoms, all_atoms], range: [0.5, 40.0], nbins: 100}'
     )
     path = write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
     out = tmp_path / "out"
-    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
-    assert not (out / "rdf").exists()
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    assert (out / "rdf").exists()
 
 
 def test_ideal_gas_rdf_is_unity():

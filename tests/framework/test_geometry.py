@@ -193,9 +193,18 @@ ITEM: ATOMS id type x y z
         "  - {name: hbond, sel: [all_atoms, all_atoms, all_atoms]}\n",
     )
     out = tmp_path / "out"
-    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 3
-    assert "三向周期" in capsys.readouterr().err
-    assert not (out / "hbond").exists()
+    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 0
+    captured = capsys.readouterr()
+    assert "三向周期" in captured.out
+    assert "仅供定性参考" in captured.out
+    assert (out / "hbond").exists()
+    provenance = __import__("json").loads(
+        (out / "provenance.json").read_text(encoding="utf-8")
+    )
+    assert any(
+        "缺少周期方向" in message
+        for message in provenance["analyses"][0]["warnings"]
+    )
 
 
 def test_velocity_rejects_triclinic_before_run(tmp_path, capsys):
@@ -223,8 +232,11 @@ ITEM: ATOMS id type x y z vx vy vz
         "  - {name: velocity, sel: [all_atoms, all_atoms]}\n",
     )
     out = tmp_path / "out"
-    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 3
-    assert "正交盒" in capsys.readouterr().err
+    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 0
+    captured = capsys.readouterr()
+    assert "三斜盒" in captured.out
+    assert "仅供定性参考" in captured.out
+    assert (out / "velocity").exists()
 
 
 def test_rdf_half_box_uses_whole_window(tmp_path, capsys):
@@ -266,8 +278,10 @@ ITEM: ATOMS id type x y z
     )
     out = tmp_path / "out"
     code = cli.main(["run", "--system", str(config), "--out", str(out)])
-    assert code in (3, 4)
-    assert "半" in capsys.readouterr().err
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "球壳归一化" in captured.out
+    assert (out / "rdf").exists()
 
 
 def test_periodicity_change_is_rejected(tmp_path, capsys):
@@ -308,8 +322,10 @@ ITEM: ATOMS id type x y z
         frames="[0, 2]",
     )
     out = tmp_path / "out"
-    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 3
-    assert "三向周期" in capsys.readouterr().err
+    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 0
+    captured = capsys.readouterr()
+    assert "缺少周期方向" in captured.out
+    assert (out / "hbond").exists()
 
 
 def test_negative_box_origin_scaled_coordinate(tmp_path):

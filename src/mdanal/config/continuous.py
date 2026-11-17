@@ -101,11 +101,9 @@ class ContinuousView:
         if self._reference_cell is None:
             self._reference_cell = cell.copy()
         elif not np.allclose(cell, self._reference_cell, rtol=1e-8, atol=1e-8):
-            raise ValidationError(
-                "连续坐标视图要求分析窗口内盒矩阵不变；"
-                "当前轨迹的盒在变化，请改用 x/xu 已在文件里展开的坐标，"
-                "或先把窗口裁到固定盒。"
-            )
+            # 用户明确要求：允许继续，但由 runner 在窗口摘要中给出非物理警告。
+            # 这里保留逐帧当前盒矩阵，不把旧盒长强行套到新帧。
+            self._reference_cell = cell
 
     def _advance(self, frame: int) -> None:
         self._check_cell(frame)

@@ -47,5 +47,5 @@
 - 重写 `README.md`，新增本手册 10 页、`example/quickstart` 与 `example/recipes`；
 - 图库、色卡、改图示例、插件模板图由 `scripts/build_docs_assets.py` 从 tiny 数据生成；
 - 已验证 quickstart 的 run/replot、`check-analysis --system tests/fixtures/tiny`、临时插件的 list/check/run/replot；
-- 坐标轮已完成：每帧盒原点/盒矩阵/PBC、`x/xs/xu/xsu` 归一化、移动原点 MSD、`ppf/pps` 的 lineardensity/density/velocity、非周期与三斜拒绝、RDF 半盒窗口检查；旧结果仍按旧快照重绘；
+- 坐标轮已完成：每帧盒原点/盒矩阵/PBC、`x/xs/xu/xsu` 归一化、移动原点 MSD、`ppf/pps` 的 lineardensity/density/velocity、非周期/三斜警告但继续、RDF 半盒窗口检查；旧结果仍按旧快照重绘；
 - 尚未实施：density 的真实体积归一化、RDF 自配对、hbond 颜色统一、密度色标范围、逐条标注样式，见 [排错与限制](troubleshooting.md#限制)。

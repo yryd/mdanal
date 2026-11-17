@@ -102,7 +102,7 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 | hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期（当前插件声明 full） |
 | msd | 连续视图按输入路径限制 | 包裹坐标只支持固定盒矩阵；已给 `xu/xsu` 按输入定义 |
 
-不满足条件时会在 `run`/`check` 阶段明确失败，并写出边界类型或盒形状；不支持时不要靠改 YAML 假装周期。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。
+不满足声明时 `run`/`check` 会打印“非物理/仅供定性参考”警告并继续执行，不会阻止运行；警告会写入 provenance。不要靠改 YAML 假装周期；需要定量结果时仍应使用满足条件的数据。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。
 
 ### 时间
 

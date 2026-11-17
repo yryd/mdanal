@@ -69,9 +69,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     if dimensions is not None and not np.allclose(
         np.asarray(dimensions[3:]), 90.0, atol=1e-3
     ):
-        raise ValidationError(
-            f"只支持正交盒；检测到盒角 {np.asarray(dimensions[3:]).tolist()}，"
-            "三斜盒的球壳范围/归一化尚未验证"
+        ctx.warn(
+            f"检测到三斜盒角 {np.asarray(dimensions[3:]).tolist()}；"
+            "RDF 的球壳范围/归一化尚未验证，结果仅供定性参考。"
         )
     window = getattr(ctx, "geometry_window", None)
     if window is not None:
@@ -82,9 +82,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         limit = 0.5 * float(min(dimensions[:3])) if dimensions is not None else 0.0
         source = "当前帧最短盒长的一半"
     if limit and rmax > limit:
-        raise ValidationError(
+        ctx.warn(
             f"range 上限 {rmax:g} Å 超过{source}（{limit:g} Å）；"
-            "距离超过该范围时球壳归一化不适用，请缩小 range"
+            "距离超过该范围时球壳归一化不适用，结果仅供定性参考。"
         )
 
     # 单位：range 与 edges 为 Å；g(r) 无量纲

@@ -83,10 +83,10 @@ def _reject_outside(positions: np.ndarray, lengths: np.ndarray,
             continue
         values = positions[:, axis]
         if values.size and (values.min() < 0.0 or values.max() > lengths[axis]):
-            raise ValidationError(
+            ctx.warn(
                 f"非周期方向 {AXES[axis]} 有原子落在盒外 "
                 f"[{values.min():g}, {values.max():g}]，盒范围 [0, {lengths[axis]:g}]；"
-                "请确认 BOX BOUNDS 与坐标列，或缩小分析窗口。"
+                "这些原子不会进入直方图，结果仅供定性参考。"
             )
 
 
@@ -122,8 +122,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         raise ValidationError("轨迹缺少盒信息，无法做密度投影")
     angles = np.asarray(universe.dimensions[3:], dtype=float)
     if not np.allclose(angles, 90.0, atol=1e-3):
-        raise ValidationError(
-            f"只支持正交盒子；检测到盒角 {angles.tolist()}（三斜盒未支持）"
+        ctx.warn(
+            f"检测到三斜盒角 {angles.tolist()}；当前实现按三个盒长计算，"
+            "结果仅供定性参考，不能与正交盒结果比较。"
         )
 
     stop, changed = _fixed_box_stop(ctx)
