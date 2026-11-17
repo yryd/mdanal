@@ -29,8 +29,9 @@ TOP_KEYS = {"items", "figure", "out"}
 ITEM_KEYS = {"root", "label", "anchor", "t_offset"}
 FIGURE_KEYS = {
     "analysis", "table", "align", "xlim", "ylim", "xlabel", "ylabel", "title", "y",
-    "palette",
+    "palette", "panels", "layout",
 }
+PANEL_KEYS = {"analysis", "table", "x", "y", "xlim", "ylim", "xlabel", "ylabel", "title", "legend"}
 
 
 @dataclass
@@ -85,6 +86,10 @@ def run_compare(
     config = _load_config(config_path)
     items = [_load_item(entry, config_path) for entry in config["items"]]
     figure = config["figure"]
+    if "panels" in figure:
+        return _run_panel_compare(
+            config_path, config, items, out_dir=out_dir, lang=lang, force=force
+        )
     directory = str(figure["analysis"])
 
     # 同一次对比必须来自同一分析；参数（如 dim）可由 figure.table 覆盖
@@ -303,6 +308,217 @@ def run_compare(
     return out
 
 
+def _run_panel_compare(
+    config_path: Path,
+    config: Mapping[str, Any],
+    items: list[CompareItem],
+    *,
+    out_dir: str | Path | None,
+    lang: str,
+    force: bool,
+) -> Path:
+    """一个 compare 配置组织多个 Panel；每个 Panel 内部可叠多个 Series。"""
+    figure = config["figure"]
+    panel_specs = list(figure["panels"])
+    align = _parse_align(figure.get("align"), config_path)
+    ncols = int((figure.get("layout") or {}).get("ncols", len(panel_specs)))
+
+    out = (
+        Path(out_dir).expanduser().resolve()
+        if out_dir
+        else (config_path.parent / str(config.get("out", "compare"))).resolve()
+    )
+    _guard_output(out, items, config_path, force=force)
+    (out / "tables").mkdir(parents=True, exist_ok=True)
+    chart.apply_style()
+    colors = (
+        list(figure["palette"])
+        if figure.get("palette")
+        else rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
+    )
+    styles = ("-", "--", ":", "-.")
+
+    rendered_panels = []
+    panel_records: list[dict[str, Any]] = []
+    for panel_spec in panel_specs:
+        directory = str(panel_spec["analysis"])
+        module_name, params = _resolve_analysis(items[0], directory)
+        comparison = _module_compare(module_name, params)
+        for item in items[1:]:
+            other_module, other_params = _resolve_analysis(item, directory)
+            if other_module != module_name or other_params != params:
+                raise ValidationError(
+                    f"{item.root} 的 {directory} 与第一个体系的分析参数不同；"
+                    "同一 Panel 只能叠同一种分析、同一组参数",
+                    where=str(item.root),
+                )
+        renderer = getattr(
+            importlib.import_module(str(comparison["module"])), "render_panel", None
+        )
+        if not callable(renderer):
+            raise ValidationError(
+                f"分析 {module_name!r} 没有 render_panel，不能用于多 Panel compare"
+            )
+
+        table_name = str(panel_spec.get("table") or comparison["table"])
+        x_column = str(panel_spec.get("x") or comparison["x"])
+        y_columns = [
+            str(column)
+            for column in (panel_spec.get("y") or comparison["y"])
+        ]
+        labels = comparison.get("labels", {}).get(lang, {})
+        box_axis = bool(comparison["box_axis"])
+        x_axis = x_column[0] if x_column[:1] in AXES else None
+        time_axis = _is_time_axis(box_axis, x_column)
+        if not time_axis:
+            offenders = [item.label for item in items if item.t_offset]
+            if offenders:
+                raise ValidationError(
+                    "t_offset 只能用于时间轴（列名以 _ps 结尾且非盒坐标轴）；"
+                    f"{offenders} 设了非零偏移，而当前横轴是 {x_column!r}",
+                    where=str(config_path),
+                )
+
+        blocks: list[pd.DataFrame] = []
+        for item in items:
+            frame = _read_table(item, directory, table_name)
+            _require_columns(frame, [x_column, *y_columns], item, directory)
+            shift = 0.0
+            if box_axis and x_axis:
+                shift = _axis_shift(item, x_axis, align)
+                item.shift[x_axis] = shift
+            offset = item.t_offset if time_axis else 0.0
+            block = pd.DataFrame(
+                {
+                    "item": item.label,
+                    "x": frame[x_column].to_numpy(dtype=float) + shift + offset,
+                }
+            )
+            for column in y_columns:
+                block[column] = frame[column].to_numpy(dtype=float)
+            blocks.append(block)
+        merged = pd.concat(blocks, ignore_index=True)
+        table_file = out / "tables" / f"{directory}__{table_name}.csv"
+        merged.to_csv(
+            table_file, index=False, encoding="utf-8-sig", float_format="%.8g"
+        )
+
+        xlim = panel_spec.get("xlim") or figure.get("xlim")
+        if xlim is not None:
+            x_low, x_high = (float(value) for value in xlim)
+        else:
+            x_low, x_high = _default_range(items, align, box_axis, x_axis, merged)
+        ylim = panel_spec.get("ylim") or figure.get("ylim")
+        if ylim is not None:
+            y_low, y_high = (float(value) for value in ylim)
+            if y_high <= y_low:
+                raise ValidationError(
+                    f"ylim 必须递增，收到 {ylim!r}", where=str(config_path)
+                )
+        else:
+            y_low = y_high = None
+
+        show_legend = bool(
+            panel_spec.get("legend", len(items) > 1 or len(y_columns) > 1)
+        )
+        series: list[Series] = []
+        for column_index, column in enumerate(y_columns):
+            curves: list[Curve] = []
+            for block_index, block in enumerate(blocks):
+                item_label = str(block["item"].iloc[0])
+                if not show_legend:
+                    curve_label = ""
+                elif len(y_columns) > 1:
+                    curve_label = f"{item_label} · {labels.get(column, column)}"
+                else:
+                    curve_label = item_label
+                curves.append(
+                    Curve(
+                        x=block["x"].to_numpy(dtype=float),
+                        y=block[column].to_numpy(dtype=float),
+                        label=curve_label,
+                        color=colors[block_index % len(colors)],
+                        linestyle=styles[column_index % len(styles)],
+                        source=item_label,
+                    )
+                )
+            series.append(
+                Series(name=column, curves=curves, label=labels.get(column, column))
+            )
+
+        panel_labels = (comparison.get("panel_labels") or {}).get(lang)
+        if panel_labels is None:
+            raise ValidationError(
+                f"分析 {module_name!r} 缺少语言 {lang!r} 的 Panel 标签",
+                where=str(config_path),
+            )
+        context = _CompareContext(panel_labels, lang)
+        xlabel = (
+            panel_spec.get("xlabel")
+            or figure.get("xlabel")
+            or labels.get(x_column, x_column)
+        )
+        ylabel = (
+            panel_spec.get("ylabel")
+            or figure.get("ylabel")
+            or ", ".join(labels.get(column, column) for column in y_columns)
+        )
+        request = PanelRequest(
+            recipe=module_name,
+            series=series,
+            title=str(panel_spec.get("title") or directory),
+            xlabel=str(xlabel),
+            ylabel=str(ylabel),
+            options={"axis": x_axis, "legend": show_legend},
+        )
+        panel = renderer(context, request)
+        panel.xlim = (x_low, x_high)
+        panel.ylim = (y_low, y_high) if y_low is not None else None
+        rendered_panels.append(panel)
+        panel_records.append(
+            {
+                "analysis": directory,
+                "module": module_name,
+                "table": table_name,
+                "x": x_column,
+                "y": y_columns,
+                "xlim": [x_low, x_high],
+                "ylim": [y_low, y_high] if y_low is not None else None,
+                "table_file": table_file.relative_to(out).as_posix(),
+            }
+        )
+
+    fig = Figure(
+        rendered_panels,
+        ncols=ncols,
+        title=str(figure.get("title")) if figure.get("title") else None,
+    ).build()
+    chart.save(fig, out / "compare.png", dpi=300)
+
+    write_provenance(
+        out,
+        {
+            "config": str(config_path),
+            "lang": lang,
+            "palette": list(figure["palette"]) if figure.get("palette") else None,
+            "align": dict(align),
+            "layout": {"ncols": ncols},
+            "panels": panel_records,
+            "items": [
+                {
+                    "root": str(item.root),
+                    "label": item.label,
+                    "shift": dict(item.shift),
+                    "t_offset": item.t_offset,
+                    "box": list(item.box),
+                }
+                for item in items
+            ],
+        },
+    )
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # 配置
 # --------------------------------------------------------------------------- #
@@ -342,8 +558,38 @@ def _load_config(path: Path) -> dict[str, Any]:
             f"figure 含未知字段 {sorted(unknown)}；允许 {sorted(FIGURE_KEYS)}",
             where=f"{path}:figure",
         )
-    if not isinstance(figure.get("analysis"), str):
+    panels = figure.get("panels")
+    if panels is not None:
+        if not isinstance(panels, list) or not panels:
+            raise ValidationError("figure.panels 必须是非空列表", where=f"{path}:figure")
+        for index, entry in enumerate(panels, start=1):
+            if not isinstance(entry, dict):
+                raise ValidationError(
+                    f"figure.panels[{index}] 必须是映射", where=f"{path}:figure"
+                )
+            unknown = set(entry) - PANEL_KEYS
+            if unknown:
+                raise ValidationError(
+                    f"figure.panels[{index}] 含未知字段 {sorted(unknown)}；允许 {sorted(PANEL_KEYS)}",
+                    where=f"{path}:figure",
+                )
+            if not isinstance(entry.get("analysis"), str):
+                raise ValidationError(
+                    f"figure.panels[{index}] 缺少 analysis", where=f"{path}:figure"
+                )
+    elif not isinstance(figure.get("analysis"), str):
         raise ValidationError("figure.analysis 必须是字符串", where=f"{path}:figure")
+    layout = figure.get("layout")
+    if layout is not None:
+        if not isinstance(layout, dict) or set(layout) - {"ncols"}:
+            raise ValidationError(
+                "figure.layout 只允许 ncols", where=f"{path}:figure"
+            )
+        ncols = layout.get("ncols")
+        if isinstance(ncols, bool) or not isinstance(ncols, int) or ncols < 1:
+            raise ValidationError(
+                "figure.layout.ncols 必须是正整数", where=f"{path}:figure"
+            )
     if "palette" in figure:
         figure = dict(figure)
         figure["palette"] = list(

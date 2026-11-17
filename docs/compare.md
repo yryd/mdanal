@@ -56,7 +56,32 @@ out: compare-msd
 t_offset 只能用于时间轴...当前横轴是 'z_angstrom'
 ```
 
-## 4. 输出
+## 4. 多 Panel 一次输出
+
+一个 `compare` 也可以组织多个 Panel；每个 Panel 仍由对应插件的 `render_panel` 绘制。
+
+```yaml
+items:
+  - {root: runs/tma/out, label: TMA}
+  - {root: runs/pip/out, label: PIP}
+
+figure:
+  align: left
+  layout:
+    ncols: 3
+  panels:
+    - {analysis: lineardensity-x, title: x, y: [mass_density_g_cm3], ylim: [0, 0.26]}
+    - {analysis: lineardensity-y, title: y, y: [mass_density_g_cm3], ylim: [0, 0.26]}
+    - {analysis: lineardensity-z, title: z, y: [mass_density_g_cm3], ylim: [0, 0.26]}
+```
+
+- 每个 Panel 的 `analysis` 是某个 run 里的实际输出目录；
+- 不同 Panel 可以使用不同分析/方向；
+- 同一 Panel 内每个 item 必须使用相同分析、相同参数；
+- `layout.ncols` 只控制一行放几个 Panel；
+- 输出是一张 `compare.png`，表按 Panel 分别写到 `tables/`。
+
+## 5. 输出
 
 ```text
 COMPARE/
@@ -69,13 +94,13 @@ COMPARE/
 - `provenance.json` 记录每个体系的平移量、`t_offset`、语言、palette 和 xlim；
 - 非空输出默认拒绝，`--force` 允许覆盖；输出不能等于/位于输入结果目录内。
 
-## 5. 示例图
+## 6. 示例图
 
 ![对齐示例](assets/recipes/compare/lineardensity-bright.png)
 
 这张图用同一体系的两帧演示对齐，不是多体系科学结论。真实使用时把 `items[].root` 换成自己的两个 `run` 输出；完整字段见 [`example/recipes/compare.yaml`](../example/recipes/compare.yaml)。
 
-## 6. 常见错误
+## 7. 常见错误
 
 - 两个体系的 `analysis` 目录名不同：`figure.analysis` 要写实际目录名（含 tag）；
 - 参数不同：重跑成相同 `dim`/`binsize`/`range` 等；

@@ -217,3 +217,44 @@ def test_compare_defaults_to_mdanal_theme_colors(tmp_path, monkeypatch):
         compare_module.chart.COLORS["primary"],
         compare_module.chart.COLORS["secondary"],
     ]
+
+
+def test_compare_multi_panel_one_command(tmp_path):
+    """一个 compare 配置组织 x/y/z 三个 Panel，每个 Panel 两条曲线。"""
+    from mdanal import cli
+
+    system = write_system(
+        tmp_path / "system",
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - {name: lineardensity, tag: x, sel: [all_atoms], dim: x}\n"
+        "  - {name: lineardensity, tag: y, sel: [all_atoms], dim: y}\n"
+        "  - {name: lineardensity, tag: z, sel: [all_atoms], dim: z}\n",
+        frames="[0, 5]",
+    )
+    root = tmp_path / "system" / "out"
+    assert cli.main(["run", "--system", str(system), "--out", str(root)]) == 0
+
+    config = tmp_path / "compare.yaml"
+    config.write_text(
+        f"items:\n"
+        f"  - {{root: {root}, label: A}}\n"
+        f"  - {{root: {root}, label: B}}\n"
+        "figure:\n"
+        "  align: left\n"
+        "  layout: {ncols: 3}\n"
+        "  panels:\n"
+        "    - {analysis: lineardensity-x, title: x, y: [mass_density_g_cm3]}\n"
+        "    - {analysis: lineardensity-y, title: y, y: [mass_density_g_cm3]}\n"
+        "    - {analysis: lineardensity-z, title: z, y: [mass_density_g_cm3]}\n",
+        encoding="utf-8",
+    )
+    out = tmp_path / "out"
+    run_compare(config, out, lang="zh")
+    assert (out / "compare.png").is_file()
+    provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
+    assert [p["analysis"] for p in provenance["panels"]] == [
+        "lineardensity-x",
+        "lineardensity-y",
+        "lineardensity-z",
+    ]
