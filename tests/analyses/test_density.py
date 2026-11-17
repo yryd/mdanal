@@ -243,3 +243,31 @@ def test_density_custom_color_list(real, tmp_path):
         "analyses"
     ][0]["meta"]
     assert meta["colors"] == ["#ffffff", "#c05040", "#4165c0"]
+
+
+def test_density_native_panels_and_ncols(real, tmp_path):
+    cfg, _ = real
+    path = write_system(
+        tmp_path,
+        cfg.topology,
+        cfg.trajectory,
+        "  - name: density\n"
+        "    sel: [all_atoms]\n"
+        "    delta: 1.0\n"
+        "    panels:\n"
+        "      - {section: [0, 1], directions: [xy]}\n"
+        "      - {section: [1, 2], directions: [xy]}\n"
+        "      - {section: [2, 3], directions: [xy]}\n"
+        "    ncols: 2\n",
+        frames="[0, 3]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    for name in ("density_xy_f0", "density_xy_f1", "density_xy_f2"):
+        assert (out / "density" / "tables" / f"{name}.csv").is_file()
+    assert (out / "density" / "figures" / "density.png").is_file()
+    meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))[
+        "analyses"
+    ][0]["meta"]
+    assert meta["ncols"] == 2
+    assert [panel["start"] for panel in meta["panels"]] == [0, 1, 2]
