@@ -13,14 +13,18 @@
 ```python
 run(run_ctx) -> dict[str, pandas.DataFrame]
 meta(run_ctx, tables) -> dict                 # 可选
-figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选
+figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选，旧接口
+render_panel(plot_ctx, request) -> Panel      # 可选，新接口
 ```
 
 - `run`：唯一可以访问轨迹、原子组和选择的地方；
 - `meta`：只导出结果摘要，在绘图前执行；
-- `figures`：只使用已保存的表和摘要，不读 Universe、不补算、不落盘；
+- `figures`：旧绘图接口，只使用已保存的表和摘要，不读 Universe、不补算、不落盘；
+- `render_panel`：新 Panel 接口。插件只负责 Panel 的呈现（坐标轴、注释、参考线、标点、色标），平台负责选择数据、排版和保存；
 - 没有 `figures` 的数据分析是合法的；
 - 图由框架统一保存和关闭；一个插件可以返回多张图。
+
+`render_panel` 的 `request` 是 `plot.specs.PanelRequest`，其中 `series` 是 `Series` 列表，每个 `Series` 含 `Curve`（一维曲线）或 `Field`（二维场）。原生运行和 `compare` 多曲线叠加都调用同一个 `render_panel`。尚未迁移的插件继续走旧 `figures` 路径。
 
 ### 声明参考
 
@@ -35,7 +39,8 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选
 | `REQUIRES` | 当前已识别 `velocities`；不要写未识别的字符串假装检查了其他能力 |
 | `PACKAGE` | 外部包名和最低版本；不是安装器 |
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
-| `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图 |
+| `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图；声明后 `compare` 可读该分析 |
+| `render_panel` | 可选；有它时 `compare` 用插件自己的 Panel 模板，而不是通用曲线绘制 |
 
 未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会打印非物理警告并继续，不会静默；定量结果仍要求满足声明。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
 

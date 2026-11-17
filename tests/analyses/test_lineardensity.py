@@ -116,3 +116,40 @@ def test_binsize_not_dividing_box(real, tmp_path):
     assert np.allclose(table["mass_density_g_cm3"], mass)
     assert np.allclose(table["charge_density_e_A3"], charge)
     assert len(table) == int(np.floor(np.asarray(_load(cfg)[0])[2] / 0.7))
+
+
+def test_lineardensity_render_panel_accepts_multiple_series():
+    """compare 走插件 Panel：多条曲线仍由 lineardensity 绘制。"""
+    from types import SimpleNamespace
+
+    from mdanal.analyses import lineardensity
+    from mdanal.plot.panels import compose_panels
+    from mdanal.plot.specs import Curve, PanelRequest, Series
+
+    labels = {"mass": "mass density", "title": "Linear density"}
+    ctx = SimpleNamespace(
+        params={"dim": "z"},
+        shift=(0.0, 0.0, 0.0),
+        annotate=False,
+        annotations=(),
+        label=lambda key: labels[key],
+        window=lambda axis: None,
+        size=lambda name="single": (3.5, 2.6),
+    )
+    x = [0.0, 1.0, 2.0]
+    request = PanelRequest(
+        recipe="lineardensity",
+        series=[
+            Series(name="mass", curves=[Curve(x=x, y=[1.0, 2.0, 3.0], label="Water")]),
+            Series(name="mass", curves=[Curve(x=x, y=[0.1, 0.2, 0.3], label="Other")]),
+        ],
+        title="Linear density",
+        xlabel="$z$ (Å)",
+        ylabel="mass density",
+        options={"axis": "z", "legend": True},
+    )
+    panel = lineardensity.render_panel(ctx, request)
+    fig = compose_panels([panel], ncols=1)
+    lines = fig.axes[0].get_lines()
+    assert [line.get_label() for line in lines] == ["Water", "Other"]
+    assert fig.axes[0].get_legend() is not None

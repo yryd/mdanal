@@ -5,6 +5,7 @@
 
 from __future__ import annotations
 
+import importlib
 import json
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -15,7 +16,10 @@ import yaml
 from matplotlib import rcParams
 
 from ..plot import chart
+from ..plot.panels import compose_panels
+from ..plot.plotutil import Labels
 from ..plot.settings import resolve_palette
+from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import MdanalError, ValidationError
 from ..run.writers import write_provenance
 
@@ -37,6 +41,37 @@ class CompareItem:
     t_offset: float = 0.0
     shift: dict[str, float] = field(default_factory=dict)
     box: tuple[float, float, float] = (0.0, 0.0, 0.0)
+
+
+class _CompareContext:
+    """供插件 render_panel 使用的最小绘图上下文；compare 不读轨迹。"""
+
+    def __init__(self, labels: Mapping[str, str], lang: str):
+        self._labels = Labels(labels)
+        self.lang = lang
+        self.annotate = False
+        self.annotations = ()
+        self.shift = (0.0, 0.0, 0.0)
+        self.params: dict[str, Any] = {}
+        self.meta: dict[str, Any] = {}
+        self.extras: dict[str, Any] = {}
+        self.start = 0
+        self.stop = 1
+        self.frame_dt_ps = 1.0
+        self.selection_frame = 0
+        self.windows: dict[str, tuple[float, float]] = {}
+
+    def label(self, key: str, **fmt: Any) -> str:
+        return self._labels(key, **fmt)
+
+    def window(self, axis: str):
+        return self.windows.get(axis)
+
+    def annotation(self) -> str:
+        return ""
+
+    def size(self, name: str = "single") -> tuple[float, float]:
+        return (3.5, 2.6)
 
 
 def run_compare(
@@ -112,7 +147,6 @@ def run_compare(
         float_format="%.8g",
     )
 
-    fig, ax = chart.figure("single")
     multi_column = len(y_columns) > 1
     show_legend = len(items) > 1 or multi_column
     colors = (
@@ -121,42 +155,104 @@ def run_compare(
         else rcParams["axes.prop_cycle"].by_key().get("color") or ["C0"]
     )
     styles = ("-", "--", ":", "-.")
-    for block_index, block in enumerate(blocks):
-        item_label = str(block["item"].iloc[0])
-        color = colors[block_index % len(colors)]
-        for column_index, column in enumerate(y_columns):
-            if not show_legend:
-                label = None
-            elif multi_column:
-                label = f"{item_label} · {labels.get(column, column)}"
-            else:
-                label = item_label
-            chart.line(
-                ax,
-                block["x"],
-                block[column],
-                lw=1.2,
-                color=color,
-                ls=styles[column_index % len(styles)],
-                label=label,
-            )
-
     xlabel = str(figure.get("xlabel") or labels.get(x_column, x_column))
     ylabel = str(
         figure.get("ylabel")
         or ", ".join(labels.get(column, column) for column in y_columns)
     )
-    ax.set_xlabel(xlabel)
-    ax.set_ylabel(ylabel)
-    if figure.get("title"):
-        ax.set_title(str(figure["title"]))
     xlim = figure.get("xlim")
     if xlim is not None:
         low, high = (float(value) for value in xlim)
     else:
         low, high = _default_range(items, align, box_axis, x_axis, merged)
+
+    # 新路径：插件声明 render_panel 时，compare 只提供 Curve/Series/PanelRequest，
+    # 最终仍由插件自己的 Panel 模板绘制（注释/参考线/标点不会丢）。
+    renderer = None
+    comparison_module = comparison.get("module")
+    if comparison_module:
+        try:
+            module = importlib.import_module(str(comparison_module))
+        except ImportError as exc:
+            raise MdanalError(f"无法导入对比分析模块 {comparison_module!r}: {exc}") from exc
+        renderer = getattr(module, "render_panel", None)
+
+    if callable(renderer):
+        series: list[Series] = []
+        for column_index, column in enumerate(y_columns):
+            curves: list[Curve] = []
+            for block_index, block in enumerate(blocks):
+                item_label = str(block["item"].iloc[0])
+                if not show_legend:
+                    curve_label = ""
+                elif multi_column:
+                    curve_label = f"{item_label} · {labels.get(column, column)}"
+                else:
+                    curve_label = item_label
+                curves.append(
+                    Curve(
+                        x=block["x"].to_numpy(dtype=float),
+                        y=block[column].to_numpy(dtype=float),
+                        label=curve_label,
+                        color=colors[block_index % len(colors)],
+                        linestyle=styles[column_index % len(styles)],
+                        source=item_label,
+                    )
+                )
+            series.append(
+                Series(
+                    name=column,
+                    curves=curves,
+                    label=labels.get(column, column),
+                )
+            )
+        panel_labels = (comparison.get("panel_labels") or {}).get(lang)
+        if panel_labels is None:
+            raise ValidationError(
+                f"分析 {module_name!r} 缺少语言 {lang!r} 的 Panel 标签",
+                where=str(config_path),
+            )
+        context = _CompareContext(panel_labels, lang)
+        request = PanelRequest(
+            recipe=module_name,
+            series=series,
+            title=str(figure.get("title") or ""),
+            xlabel=xlabel,
+            ylabel=ylabel,
+            options={"axis": x_axis, "legend": show_legend},
+        )
+        panel = renderer(context, request)
+        fig = compose_panels([panel], ncols=1)
+        ax = fig.axes[0]
+    else:
+        # 兼容尚未迁移到 render_panel 的插件。
+        fig, ax = chart.figure("single")
+        for block_index, block in enumerate(blocks):
+            item_label = str(block["item"].iloc[0])
+            color = colors[block_index % len(colors)]
+            for column_index, column in enumerate(y_columns):
+                if not show_legend:
+                    label = None
+                elif multi_column:
+                    label = f"{item_label} · {labels.get(column, column)}"
+                else:
+                    label = item_label
+                chart.line(
+                    ax,
+                    block["x"],
+                    block[column],
+                    lw=1.2,
+                    color=color,
+                    ls=styles[column_index % len(styles)],
+                    label=label,
+                )
+
+    ax.set_xlabel(xlabel)
+    ax.set_ylabel(ylabel)
+    if figure.get("title"):
+        ax.set_title(str(figure["title"]))
     ax.set_xlim(low, high)
-    if show_legend:
+    if show_legend and not callable(renderer):
         chart.legend(ax)
     chart.save(fig, out / f"{directory}.png", dpi=300)
 
@@ -356,6 +452,8 @@ def _module_compare(
         "table": str(comparison.get("table", module_name)).format(**values),
         "box_axis": bool(comparison.get("box_axis")),
         "labels": dict(definition.column_labels),
+        "panel_labels": dict(definition.labels),
+        "module": str(definition.module),
     }
 
 

@@ -12,6 +12,8 @@ import pandas as pd
 from MDAnalysis.units import constants
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
@@ -191,20 +193,80 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     return tables
 
 
+def build_series(ctx, tables) -> list[Series]:
+    """把原生表转成绘图 Series；一个逻辑量 mass density。"""
+    axis = str(ctx.params["dim"]).lower()
+    table = tables[f"lineardensity_{axis}"]
+    shift = ctx.shift[AXES.index(axis)]
+    curve = Curve(
+        x=np.asarray(table[f"{axis}_angstrom"], dtype=float) + shift,
+        y=np.asarray(table["mass_density_g_cm3"], dtype=float),
+        label=ctx.label("mass"),
+        unit="g cm^-3",
+    )
+    return [
+        Series(
+            name="mass_density_g_cm3",
+            curves=[curve],
+            label=ctx.label("mass"),
+            unit="g cm^-3",
+        )
+    ]
+
+
+def panel_request(ctx, tables) -> PanelRequest:
+    axis = str(ctx.params["dim"]).lower()
+    return PanelRequest(
+        recipe="lineardensity",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label(f"axis_{axis}"),
+        ylabel=ctx.label("mass"),
+        options={"axis": axis, "legend": False},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    """插件自己的 Panel 模板；原生曲线和 compare 多曲线共用这一处。"""
+    axis = str(request.options.get("axis") or ctx.params.get("dim") or "z").lower()
+
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = bool(request.options.get("legend")) or len(curves) > 1
+        for series in request.series:
+            for curve in series.curves:
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
+                )
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx, x_axis=axis)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name=request.recipe,
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel,
+        ylabel=request.ylabel,
+        aspect="auto",
+        xlim=ctx.window(axis),
+        panel_size=ctx.size("single"),
+    )
+
+
 def figures(ctx, tables):
     axis = str(ctx.params["dim"]).lower()
-    name = f"lineardensity_{axis}"
-    table = tables[name]
-    cols = list(table.columns)
-
-    shift = ctx.shift[AXES.index(axis)]
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, np.asarray(table[cols[0]]) + shift, table[cols[1]], lw=1.2)
-    ax.set_xlabel(ctx.label(f"axis_{axis}"))
-    ax.set_ylabel(ctx.label("mass"))
-    ax.set_title(ctx.label("title"))
-    plotutil.limit(ax, "x", ctx.window(axis))
-    annotations.draw(ax, ctx, x_axis=axis)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
-    return [(name, fig)]
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
+    return [(f"lineardensity_{axis}", fig)]
