@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
@@ -292,26 +294,80 @@ def meta(ctx, tables) -> dict:
     }
 
 
-def figures(ctx, tables):
-    name, table = next(iter(tables.items()))
+def build_series(ctx, tables) -> list[Series]:
+    table = tables["velocity"]
     dim, vdim, axis = _axes(ctx)
-    coordinate = table[f"{axis}_angstrom"].to_numpy()
-    velocity = table[f"v{AXES[vdim]}_A_per_ps"].to_numpy()
+    coordinate = table[f"{axis}_angstrom"].to_numpy(dtype=float)
+    velocity = table[f"v{AXES[vdim]}_A_per_ps"].to_numpy(dtype=float)
+    curve = Curve(
+        x=coordinate + ctx.shift[dim],
+        y=velocity,
+        label=ctx.label(f"v_{AXES[vdim]}"),
+        color=chart.COLORS["primary"],
+    )
+    return [
+        Series(
+            name=f"v{AXES[vdim]}_A_per_ps",
+            curves=[curve],
+            label=ctx.label(f"v_{AXES[vdim]}"),
+        )
+    ]
 
-    # 没有样本的 bin 用 NaN 占位，让折线在该处断开而不是跨空档直连
-    velocity_plot = np.where(np.isfinite(velocity), velocity, np.nan)
 
-    shift = ctx.shift[dim]
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, coordinate + shift, velocity_plot, lw=1.2)
-    ax.set_xlabel(ctx.label(f"axis_{axis}"))
-    ax.set_ylabel(ctx.label(f"v_{AXES[vdim]}"))
-    ax.set_title(ctx.label("title"))
-    plotutil.limit(ax, "x", ctx.window(axis))
-    annotations.draw(ax, ctx, x_axis=axis)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
-    return [(name, fig)]
+def panel_request(ctx, tables) -> PanelRequest:
+    dim, vdim, axis = _axes(ctx)
+    return PanelRequest(
+        recipe="velocity",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label(f"axis_{axis}"),
+        ylabel=ctx.label(f"v_{AXES[vdim]}"),
+        options={"axis": axis, "legend": False},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    axis = str(request.options.get("axis") or _axes(ctx)[2]).lower()
+
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = len(curves) > 1
+        for series in request.series:
+            for curve in series.curves:
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
+                )
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx, x_axis=axis)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name="velocity",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel or ctx.label(f"axis_{axis}"),
+        ylabel=request.ylabel or ctx.label("title"),
+        aspect="auto",
+        xlim=ctx.window(axis),
+        panel_size=ctx.size("single"),
+    )
+
+
+def figures(ctx, tables):
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
+    return [("velocity", fig)]
 
 
 def _axes(ctx) -> tuple[int, int, str]:

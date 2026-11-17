@@ -21,7 +21,7 @@ def test_series_requires_one_layer_kind():
     series = Series(name="mass", curves=[curve])
     assert series.curves == (curve,)
     field = Field(x=[0, 1], y=[0, 1], values=[[1, 2], [3, 4]])
-    with pytest.raises(ValueError, match="不能同时"):
+    with pytest.raises(ValueError, match="只能含一种"):
         Series(name="mixed", curves=[curve], fields=[field])
 
 
@@ -32,3 +32,14 @@ def test_panel_request_requires_series():
     assert request.series == (series,)
     with pytest.raises(ValueError, match="至少"):
         PanelRequest(recipe="lineardensity", series=[])
+
+
+def test_all_builtin_plugins_have_panel_renderer():
+    """所有内置插件都必须走 render_panel，包括不支持 compare 的 density/hbond_type。"""
+    import importlib
+
+    from mdanal.config.registry import discover
+
+    for name, definition in discover().definitions.items():
+        module = importlib.import_module(definition.module)
+        assert callable(getattr(module, "render_panel", None)), name

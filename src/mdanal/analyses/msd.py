@@ -7,6 +7,8 @@ import pandas as pd
 from MDAnalysis.analysis.msd import EinsteinMSD
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 
 
 SLOTS = ("group",)
@@ -74,17 +76,68 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     return {"msd": table}
 
 
+def build_series(ctx, tables) -> list[Series]:
+    table = tables["msd"]
+    curve = Curve(
+        x=table["dt_ps"].to_numpy(dtype=float),
+        y=table["msd_A2"].to_numpy(dtype=float),
+        label=ctx.label("y"),
+    )
+    return [Series(name="msd_A2", curves=[curve], label=ctx.label("y"))]
+
+
+def panel_request(ctx, tables) -> PanelRequest:
+    return PanelRequest(
+        recipe="msd",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label("x"),
+        ylabel=ctx.label("y"),
+        options={"legend": False, "marker": "o", "markersize": 2},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = len(curves) > 1
+        marker = request.options.get("marker")
+        for series in request.series:
+            for curve in series.curves:
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    marker=marker,
+                    ms=request.options.get("markersize"),
+                    label=curve.label if show_legend else None,
+                )
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name="msd",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel or ctx.label("x"),
+        ylabel=request.ylabel or ctx.label("y"),
+        aspect="auto",
+        xlim=ctx.window("x"),
+        ylim=ctx.window("y"),
+        panel_size=ctx.size("single"),
+    )
+
+
 def figures(ctx, tables):
-    name, table = next(iter(tables.items()))
-    cols = list(table.columns)
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, table[cols[0]], table[cols[1]], marker="o", ms=2, lw=1.0)
-    ax.set_xlabel(ctx.label("x"))
-    ax.set_ylabel(ctx.label("y"))
-    plotutil.limit(ax, "x", ctx.window("x"))
-    plotutil.limit(ax, "y", ctx.window("y"))
-    ax.set_title(ctx.label("title"))
-    annotations.draw(ax, ctx)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
-    return [(name, fig)]
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
+    return [("msd", fig)]

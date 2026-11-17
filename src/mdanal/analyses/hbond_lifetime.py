@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
@@ -185,56 +187,129 @@ def meta(ctx, tables) -> dict:
     return dict(ctx.extras.get("hbond_lifetime", {}))
 
 
-def figures(ctx, tables):
+def build_series(ctx, tables) -> list[Series]:
     table = tables["hbond_lifetime"]
     info = ctx.extras.get("hbond_lifetime", {})
-    lag = table["lag_ps"].to_numpy()
     intermittency = int(info.get("intermittency", 0))
+    lag = table["lag_ps"].to_numpy(dtype=float)
+    return [
+        Series(
+            name="continuous",
+            curves=[
+                Curve(
+                    x=lag,
+                    y=table["continuous"].to_numpy(dtype=float),
+                    label=ctx.label("cont"),
+                    color=chart.COLORS["primary"],
+                    linewidth=1.3,
+                )
+            ],
+            label=ctx.label("cont"),
+        ),
+        Series(
+            name="intermittent",
+            curves=[
+                Curve(
+                    x=lag,
+                    y=table["intermittent"].to_numpy(dtype=float),
+                    label=ctx.label("inter", n=intermittency),
+                    color=chart.COLORS["secondary"],
+                    linestyle="--",
+                    linewidth=1.3,
+                )
+            ],
+            label=ctx.label("inter", n=intermittency),
+        ),
+    ]
 
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(
-        ax, lag, table["continuous"], lw=1.3, color=chart.COLORS["primary"],
-        label=ctx.label("cont"),
-    )
-    chart.line(
-        ax, lag, table["intermittent"], lw=1.3, ls="--", color=chart.COLORS["secondary"],
-        label=ctx.label("inter", n=intermittency),
-    )
-    chart.refline(ax, LEVEL, ls=":", lw=0.8, color=chart.COLORS["guide"])
-    chart.text(
-        ax,
-        lag[0] + 0.02 * (lag[-1] - lag[0]),
-        LEVEL,
-        "1/e",
-        va="bottom",
-        ha="left",
-        fontsize=6,
-        color=chart.COLORS["label"],
+
+def panel_request(ctx, tables) -> PanelRequest:
+    return PanelRequest(
+        recipe="hbond_lifetime",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label("x"),
+        ylabel=ctx.label("y"),
+        options={"legend": True, "native": True},
     )
 
-    for key, color, height in (
-        ("tau_cont", chart.COLORS["primary"], 0.66),
-        ("tau_inter", chart.COLORS["secondary"], 0.46),
-    ):
-        value = info.get(key)
-        if value is None or not np.isfinite(value):
-            continue
-        chart.vline(ax, value, ls=":", lw=0.8, color=color)
-        chart.point_label(
-            ax, value, height, f"{value:.2f} ps", offset=(3, 0), fontsize=6, color=color
-        )
 
-    ax.set_xlim(0, lag[-1])
-    ax.set_ylim(0, 1.02)
-    ax.set_xlabel(ctx.label("x"))
-    ax.set_ylabel(ctx.label("y"))
-    plotutil.limit(ax, "x", ctx.window("x"))
-    plotutil.limit(ax, "y", ctx.window("y"))
-    ax.set_title(ctx.label("title"))
-    chart.legend(ax)
-    annotations.draw(ax, ctx)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    info = ctx.extras.get("hbond_lifetime", {})
+    intermittency = int(info.get("intermittency", 0))
+    native = bool(request.options.get("native"))
+
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = bool(request.options.get("legend")) or len(curves) > 1
+        lag = None
+        for series in request.series:
+            for curve in series.curves:
+                lag = curve.x
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
+                )
+        if native and lag is not None and len(lag):
+            chart.refline(ax, LEVEL, ls=":", lw=0.8, color=chart.COLORS["guide"])
+            chart.text(
+                ax,
+                lag[0] + 0.02 * (lag[-1] - lag[0]),
+                LEVEL,
+                "1/e",
+                va="bottom",
+                ha="left",
+                fontsize=6,
+                color=chart.COLORS["label"],
+            )
+            for key, color, height in (
+                ("tau_cont", chart.COLORS["primary"], 0.66),
+                ("tau_inter", chart.COLORS["secondary"], 0.46),
+            ):
+                value = info.get(key)
+                if value is None or not np.isfinite(value):
+                    continue
+                chart.vline(ax, value, ls=":", lw=0.8, color=color)
+                chart.point_label(
+                    ax, value, height, f"{value:.2f} ps",
+                    offset=(3, 0), fontsize=6, color=color,
+                )
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    xlim = None
+    ylim = (0.0, 1.02) if native else None
+    if native and request.series:
+        first_curve = request.series[0].curves[0]
+        if len(first_curve.x):
+            xlim = (0.0, float(first_curve.x[-1]))
+    return Panel(
+        name="hbond_lifetime",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel or ctx.label("x"),
+        ylabel=request.ylabel or ctx.label("y"),
+        aspect="auto",
+        xlim=xlim,
+        ylim=ylim,
+        panel_size=ctx.size("single"),
+    )
+
+
+def figures(ctx, tables):
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
     return [("hbond_lifetime", fig)]
 
 

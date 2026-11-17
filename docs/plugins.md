@@ -24,7 +24,7 @@ render_panel(plot_ctx, request) -> Panel      # 可选，新接口
 - 没有 `figures` 的数据分析是合法的；
 - 图由框架统一保存和关闭；一个插件可以返回多张图。
 
-`render_panel` 的 `request` 是 `plot.specs.PanelRequest`，其中 `series` 是 `Series` 列表，每个 `Series` 含 `Curve`（一维曲线）或 `Field`（二维场）。原生运行和 `compare` 多曲线叠加都调用同一个 `render_panel`。尚未迁移的插件继续走旧 `figures` 路径。
+`render_panel` 的 `request` 是 `plot.specs.PanelRequest`，其中 `series` 是 `Series` 列表，每个 `Series` 含 `Curve`（一维曲线）、`Field`（二维场）或 `Bars`（离散柱）。原生运行和 `compare` 多曲线叠加都调用同一个 `render_panel`。当前八个内置插件都已提供 `render_panel`；旧 `figures` 只作为外部插件的兼容回退。
 
 ### 声明参考
 
@@ -40,7 +40,7 @@ render_panel(plot_ctx, request) -> Panel      # 可选，新接口
 | `PACKAGE` | 外部包名和最低版本；不是安装器 |
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
 | `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图；声明后 `compare` 可读该分析 |
-| `render_panel` | 可选；有它时 `compare` 用插件自己的 Panel 模板，而不是通用曲线绘制 |
+| `render_panel` | 内置插件均已提供；`compare` 用插件自己的 Panel 模板，而不是通用曲线绘制 |
 
 未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会打印非物理警告并继续，不会静默；定量结果仍要求满足声明。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
 

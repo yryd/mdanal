@@ -7,6 +7,8 @@ import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -113,22 +115,72 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     }
 
 
-def figures(ctx, tables):
+def build_series(ctx, tables) -> list[Series]:
     table = tables["hbond_count"]
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(
-        ax, table["time_ps"], table["hbond_count"], lw=0.9, color=chart.COLORS["primary"]
+    curve = Curve(
+        x=table["time_ps"].to_numpy(dtype=float),
+        y=table["hbond_count"].to_numpy(dtype=float),
+        label=ctx.label("y"),
+        color=chart.COLORS["primary"],
+        linewidth=0.9,
     )
-    mean = float(table["hbond_count"].mean())
-    chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
-    ax.set_xlabel(ctx.label("x"))
-    ax.set_ylabel(ctx.label("y"))
-    plotutil.limit(ax, "x", ctx.window("x"))
-    plotutil.limit(ax, "y", ctx.window("y"))
-    ax.set_title(ctx.label("title"))
-    annotations.draw(ax, ctx)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
+    return [Series(name="hbond_count", curves=[curve], label=ctx.label("y"))]
+
+
+def panel_request(ctx, tables) -> PanelRequest:
+    return PanelRequest(
+        recipe="hbond",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label("x"),
+        ylabel=ctx.label("y"),
+        options={"legend": False, "show_mean": True},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = len(curves) > 1
+        for series in request.series:
+            for curve in series.curves:
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
+                )
+        if request.options.get("show_mean") and curves:
+            mean = float(np.mean([curve.y.mean() for curve in curves]))
+            chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name="hbond_count",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel or ctx.label("x"),
+        ylabel=request.ylabel or ctx.label("y"),
+        aspect="auto",
+        xlim=ctx.window("x"),
+        ylim=ctx.window("y"),
+        panel_size=ctx.size("single"),
+    )
+
+
+def figures(ctx, tables):
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
     return [("hbond_count", fig)]
 
 
@@ -153,7 +205,7 @@ def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
 
 
 def _summary(counts: np.ndarray, donor) -> pd.DataFrame:
-    """归一化分别按供体原子数与供体残基数给出，避免"每分子"含义含糊。"""
+    """归一化分别按供体原子数与供体残基数给出，避免“每分子”含义含糊。"""
     n_atoms = donor.atoms.n_atoms
     n_residues = donor.atoms.residues.n_residues
     if counts.size == 0:

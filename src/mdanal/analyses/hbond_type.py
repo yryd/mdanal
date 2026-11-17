@@ -6,6 +6,8 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Bars, PanelRequest, Series
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
@@ -108,21 +110,75 @@ def meta(ctx, tables) -> dict:
     }
 
 
-def figures(ctx, tables):
+def build_series(ctx, tables) -> list[Series]:
     table = tables["hbond_type"]
-    if table.empty:
+    axis = str(ctx.params["figure_axis"]).lower()
+    column, suffix = ("per_frame", "rate") if axis == "rate" else ("count", "count")
+    shown = table.head(FIGURE_ROWS)
+    labels = (shown["donor"] + " → " + shown["acceptor"]).tolist()
+    values = shown[column].to_numpy(dtype=float)
+    shares = shown["share"].to_numpy(dtype=float)
+    bars = Bars(
+        labels=labels,
+        values=values,
+        notes=tuple(f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)),
+        label=ctx.label(suffix),
+        color=chart.COLORS["primary"],
+    )
+    return [Series(name="hbond_type", bars=[bars], label=ctx.label(suffix))]
+
+
+def panel_request(ctx, tables) -> PanelRequest:
+    axis = str(ctx.params["figure_axis"]).lower()
+    suffix = "rate" if axis == "rate" else "count"
+    return PanelRequest(
+        recipe="hbond_type",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label(suffix),
+        options={},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    def draw(ax):
+        for series in request.series:
+            for bars in series.bars:
+                chart.bars(
+                    ax,
+                    bars.labels,
+                    bars.values,
+                    notes=list(bars.notes),
+                    height=0.7,
+                    color=bars.color or chart.COLORS["primary"],
+                    note_fontsize=6,
+                    headroom=1.35,
+                )
+        annotations.draw(ax, ctx)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name="hbond_type",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel,
+        aspect="auto",
+        xlim=ctx.window("x"),
+        panel_size=ctx.size("wide"),
+    )
+
+
+def figures(ctx, tables):
+    if tables["hbond_type"].empty:
         ctx.warn("窗口内没有氢键，跳过类型分布图")
         return []
-
-    axis = str(ctx.params["figure_axis"]).lower()
-    if axis not in ("rate", "total"):
-        raise ValidationError(
-            f"figure_axis 只能是 rate 或 total，收到 {axis!r}"
-        )
-    column, label = ("per_frame", "rate") if axis == "rate" else ("count", "count")
-
-    shown = table.head(FIGURE_ROWS)
-    return [("hbond_type", _bars(ctx, shown, column, label))]
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
+    return [("hbond_type", fig)]
 
 
 # --------------------------------------------------------------------------- #

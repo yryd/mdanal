@@ -59,6 +59,27 @@ class Field:
             raise ValueError(f"Field values 必须是二维，收到 shape={self.values.shape}")
 
 
+
+
+@dataclass
+class Bars:
+    """离散柱状/条形数据；hbond_type 使用。"""
+
+    labels: Sequence[str]
+    values: Sequence[float]
+    notes: Sequence[str] = field(default_factory=tuple)
+    label: str = ""
+    unit: str = ""
+    color: str | None = None
+    source: str = ""
+    metadata: Mapping[str, Any] = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        self.labels = tuple(str(label) for label in self.labels)
+        self.values = tuple(float(value) for value in self.values)
+        if len(self.labels) != len(self.values):
+            raise ValueError("Bars labels/values 长度不一致")
+
 @dataclass
 class Series:
     """一个逻辑量的曲线集合；是选择结果，不是固定结构层。"""
@@ -66,6 +87,7 @@ class Series:
     name: str
     curves: Sequence[Curve] = field(default_factory=tuple)
     fields: Sequence[Field] = field(default_factory=tuple)
+    bars: Sequence[Bars] = field(default_factory=tuple)
     label: str = ""
     unit: str = ""
     legend_title: str = ""
@@ -74,10 +96,12 @@ class Series:
     def __post_init__(self) -> None:
         self.curves = tuple(self.curves)
         self.fields = tuple(self.fields)
-        if not self.curves and not self.fields:
-            raise ValueError(f"Series {self.name!r} 至少需要一个 Curve 或 Field")
-        if self.curves and self.fields:
-            raise ValueError(f"Series {self.name!r} 不能同时含 Curve 和 Field")
+        self.bars = tuple(self.bars)
+        kinds = sum(bool(item) for item in (self.curves, self.fields, self.bars))
+        if kinds == 0:
+            raise ValueError(f"Series {self.name!r} 至少需要一个 Curve/Field/Bars")
+        if kinds > 1:
+            raise ValueError(f"Series {self.name!r} 只能含一种图层类型")
 
 
 @dataclass

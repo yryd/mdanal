@@ -12,6 +12,7 @@ from matplotlib.colors import LinearSegmentedColormap, is_color_like
 
 from ..plot import annotations, chart, plotutil
 from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Field, PanelRequest, Series
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
@@ -456,6 +457,46 @@ def _panel_data(ctx, table, x_axis: str, y_axis: str):
     return x, y, pivot.to_numpy()
 
 
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    """density 的 Panel 模板：Field + 坐标轴 + 注释 + 色标。"""
+    options = request.options
+    a = str(options.get("a", "x"))
+    b = str(options.get("b", "y"))
+    x_range = options.get("xlim")
+    y_range = options.get("ylim")
+
+    def draw(ax):
+        mesh = None
+        for series in request.series:
+            for field in series.fields:
+                mesh = ax.pcolormesh(
+                    field.x,
+                    field.y,
+                    field.values,
+                    shading="auto",
+                    cmap=options.get("cmap"),
+                    vmin=options.get("vmin"),
+                    vmax=options.get("vmax"),
+                )
+        annotations.draw(ax, ctx, x_axis=a)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return mesh
+
+    return Panel(
+        name="density",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel,
+        ylabel=request.ylabel,
+        aspect="equal",
+        xlim=x_range,
+        ylim=y_range,
+        colorbar_label=options.get("colorbar_label"),
+        panel_size=ctx.size("map"),
+    )
+
+
 def figures(ctx, tables):
     items = list(tables.items())
     if not items:
@@ -484,7 +525,6 @@ def figures(ctx, tables):
     names = {info["table"] for info in infos}
     for name, table in items:
         if name not in names:
-            raising = str(list(table.columns)[0]).split("_", 1)[0]
             infos.append(
                 {
                     "table": name,
@@ -492,7 +532,7 @@ def figures(ctx, tables):
                     "stop": ctx.stop,
                     "direction": None,
                     "label": None,
-                    "a": raising,
+                    "a": str(list(table.columns)[0]).split("_", 1)[0],
                     "b": str(list(table.columns)[1]).split("_", 1)[0],
                 }
             )
@@ -511,8 +551,9 @@ def figures(ctx, tables):
     cmap = _color_map(ctx)
 
     frame_count = len({info["start"] for info in infos})
-    direction_count = len({info.get("direction") for info in infos if info.get("direction")})
-    base_w, base_h = ctx.size("map")
+    direction_count = len(
+        {info.get("direction") for info in infos if info.get("direction")}
+    )
     panels: list[Panel] = []
     for index, info in enumerate(infos):
         table = tables[info["table"]]
@@ -521,34 +562,35 @@ def figures(ctx, tables):
         x_range = plotutil.clip_window(ctx.window(a), (float(x.min()), float(x.max())))
         y_range = plotutil.clip_window(ctx.window(b), (float(y.min()), float(y.max())))
         title = _panel_label(ctx, info, frame_count, direction_count)
-
-        def draw(ax, x=x, y=y, values=values, a=a):
-            mesh = ax.pcolormesh(
-                x, y, values,
-                shading="auto",
-                cmap=cmap,
-                vmin=vmin,
-                vmax=vmax,
-            )
-            annotations.draw(ax, ctx, x_axis=a)
-            if ctx.annotate:
-                chart.note(ax, ctx.annotation())
-            return mesh
-
-        panels.append(
-            Panel(
-                name=info["table"],
-                draw=draw,
-                title=title,
-                xlabel=ctx.label(f"axis_{a}"),
-                ylabel=ctx.label(f"axis_{b}"),
-                aspect="equal",
-                xlim=x_range,
-                ylim=y_range,
-                colorbar_label=ctx.label("cbar") if index == len(infos) - 1 else "",
-                panel_size=(base_w, base_h),
-            )
+        field = Field(
+            x=x,
+            y=y,
+            values=values,
+            label=ctx.label("cbar"),
+            unit="Å^-3",
+            colorbar_label=ctx.label("cbar"),
         )
+        series = Series(name=info["table"], fields=[field], label=ctx.label("cbar"))
+        request = PanelRequest(
+            recipe="density",
+            series=[series],
+            title=title,
+            xlabel=ctx.label(f"axis_{a}"),
+            ylabel=ctx.label(f"axis_{b}"),
+            options={
+                "a": a,
+                "b": b,
+                "cmap": cmap,
+                "vmin": vmin,
+                "vmax": vmax,
+                "xlim": x_range,
+                "ylim": y_range,
+                "colorbar_label": (
+                    ctx.label("cbar") if index == len(infos) - 1 else ""
+                ),
+            },
+        )
+        panels.append(render_panel(ctx, request))
 
     chart.apply_style()
     fig = compose_panels(

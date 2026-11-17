@@ -7,6 +7,8 @@ import pandas as pd
 from MDAnalysis.analysis.rdf import InterRDF
 
 from ..plot import annotations, chart, plotutil
+from ..plot.panels import Panel, compose_panels
+from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 
 
@@ -105,18 +107,66 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     return {"rdf": pd.DataFrame({"r_angstrom": centers, "g_r": rdf})}
 
 
+def build_series(ctx, tables) -> list[Series]:
+    table = tables["rdf"]
+    curve = Curve(
+        x=table["r_angstrom"].to_numpy(dtype=float),
+        y=table["g_r"].to_numpy(dtype=float),
+        label=ctx.label("y"),
+    )
+    return [Series(name="g_r", curves=[curve], label=ctx.label("y"))]
+
+
+def panel_request(ctx, tables) -> PanelRequest:
+    return PanelRequest(
+        recipe="rdf",
+        series=build_series(ctx, tables),
+        title=ctx.label("title"),
+        xlabel=ctx.label("x"),
+        ylabel=ctx.label("y"),
+        options={"legend": False},
+    )
+
+
+def render_panel(ctx, request: PanelRequest) -> Panel:
+    def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = len(curves) > 1
+        for series in request.series:
+            for curve in series.curves:
+                chart.line(
+                    ax,
+                    curve.x,
+                    curve.y,
+                    lw=curve.linewidth,
+                    color=curve.color,
+                    ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
+                )
+        chart.refline(ax, 1.0, ls="--", lw=0.6, color="0.6")
+        if show_legend:
+            chart.legend(ax)
+        annotations.draw(ax, ctx)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+        return None
+
+    return Panel(
+        name="rdf",
+        draw=draw,
+        title=request.title,
+        xlabel=request.xlabel or ctx.label("x"),
+        ylabel=request.ylabel or ctx.label("y"),
+        aspect="auto",
+        xlim=ctx.window("x"),
+        ylim=ctx.window("y"),
+        panel_size=ctx.size("single"),
+    )
+
+
 def figures(ctx, tables):
-    name, table = next(iter(tables.items()))
-    cols = list(table.columns)
-    fig, ax = chart.figure(ctx.size("single"))
-    chart.line(ax, table[cols[0]], table[cols[1]], lw=1.2)
-    chart.refline(ax, 1.0, ls="--", lw=0.6, color="0.6")
-    ax.set_xlabel(ctx.label("x"))
-    ax.set_ylabel(ctx.label("y"))
-    plotutil.limit(ax, "x", ctx.window("x"))
-    plotutil.limit(ax, "y", ctx.window("y"))
-    ax.set_title(ctx.label("title"))
-    annotations.draw(ax, ctx)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
-    return [(name, fig)]
+    request = panel_request(ctx, tables)
+    panel = render_panel(ctx, request)
+    chart.apply_style()
+    fig = compose_panels([panel], ncols=1)
+    return [("rdf", fig)]
