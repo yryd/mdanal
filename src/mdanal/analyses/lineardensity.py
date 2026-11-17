@@ -91,6 +91,11 @@ def _fixed_box_stop(ctx) -> tuple[int, int | None]:
     return ctx.stop, None
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     binsize = float(ctx.params["binsize"])
     if binsize <= 0:

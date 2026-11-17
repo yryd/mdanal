@@ -22,6 +22,7 @@ LABELS = {
 }
 
 COORDINATES = "in_box"
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
 REQUIRES = ()
 MUTATES_POSITIONS = False
 

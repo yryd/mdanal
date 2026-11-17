@@ -149,6 +149,11 @@ def _unit_vectors(
     return com, velocity
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     dim, vdim, axis = _axes(ctx)
     grouping = str(ctx.params["grouping"])
@@ -161,6 +166,12 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     ref = ctx.groups["ref"].atoms
     if not universe.trajectory.ts.has_velocities:
         raise ValidationError("轨迹不含速度列，无法计算流速剖面")
+    dimensions = universe.dimensions
+    if dimensions is not None and not np.allclose(np.asarray(dimensions[3:]), 90.0, atol=1e-3):
+        raise ValidationError(
+            f"只支持正交盒；检测到盒角 {np.asarray(dimensions[3:]).tolist()}，"
+            "当前三斜盒的分子复原/分箱尚未验证"
+        )
 
     index, first = _unit_layout(atoms, grouping)
     if len(first) == 0:

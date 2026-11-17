@@ -111,6 +111,11 @@ def _build(ctx) -> HydrogenBondAnalysis:
     )
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     tau_max_ps = float(ctx.params["tau_max_ps"])
     intermittency = int(ctx.params["intermittency"])

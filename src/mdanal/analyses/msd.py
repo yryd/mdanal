@@ -54,6 +54,9 @@ COMPARE = {
 }
 
 
+GEOMETRY = {"cell": "any", "periodicity": "any"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     analysis = EinsteinMSD(
         ctx.groups["group"].atoms,

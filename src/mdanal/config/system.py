@@ -8,14 +8,14 @@ from pathlib import Path
 from typing import Any
 
 import MDAnalysis as mda
-import MDAnalysis.transformations as tr
-
-from .continuous import ContinuousView
 import numpy as np
 import yaml
 
 from ..errors import ValidationError
+from .continuous import ContinuousView
+from .geometry import GeometryTrack, read_geometry
 from .naming import NamingConfig, parse_naming
+from .views import InBoxView, LabView
 
 SYSTEM_FILENAME = "system.yaml"
 TOPOLOGY_SUFFIXES = (".lmp", ".data")
@@ -90,6 +90,7 @@ class SystemConfig:
     trajectories: tuple[Path, ...] = ()
     seam_notes: tuple[str, ...] = ()
     segment_steps: tuple[tuple[int | None, int | None], ...] = ()
+    geometry: GeometryTrack | None = None
 
     @property
     def all_trajectories(self) -> tuple[Path, ...]:
@@ -188,7 +189,8 @@ def read_system(path: str | Path) -> SystemConfig:
             f"各段轨迹的坐标列不一致（{detail}）；同一体系的各段必须用同样的坐标列",
             where=f"{where}:trajectory",
         )
-    box_low = scans[0].box_low
+    geometry = read_geometry(trajectory)
+    box_low = geometry.frames[0].origin
     input_state = scans[0].state
     input_evidence = scans[0].evidence
     seam_notes = _seam_notes(trajectory, scans)
@@ -216,6 +218,7 @@ def read_system(path: str | Path) -> SystemConfig:
         trajectories=trajectory,
         seam_notes=seam_notes,
         segment_steps=tuple((scan.first_step, scan.last_step) for scan in scans),
+        geometry=geometry,
     )
 
 
@@ -237,14 +240,20 @@ def load_universe(
             f"未知的坐标视图 {coordinates!r}；只能是 {list(VIEWS)}"
         )
 
+    geometry = cfg.geometry or read_geometry(cfg.all_trajectories)
     files = [str(path) for path in cfg.all_trajectories]
     target: str | list[str] = files[0] if len(files) == 1 else files
     frame_dt = cfg.dump_every * cfg.dt_ps
     convention = coordinate_convention(cfg, coordinates)
-    reader_kwargs: dict[str, Any] = {}
-    if convention is not None:
+    if convention is None:
+        raise ValidationError(
+            "轨迹没有可识别的 LAMMPS 坐标列（x/xs/xu/xsu）；无法建立坐标视图",
+            where=str(cfg.trajectory),
+        )
+    reader_kwargs: dict[str, Any] = {
         # 显式指定坐标列，避免"扫描器以为读了 xu、读取器其实选了 x"
-        reader_kwargs["lammps_coordinate_convention"] = convention
+        "lammps_coordinate_convention": convention,
+    }
     try:
         universe = mda.Universe(
             str(cfg.topology),
@@ -260,6 +269,12 @@ def load_universe(
             where=f"{cfg.topology} + " + " + ".join(cfg.all_trajectories[i].name for i in range(len(files))),
         ) from exc
 
+    if len(geometry) != len(universe.trajectory):
+        raise ValidationError(
+            f"几何表头帧数 {len(geometry)} 与轨迹帧数 {len(universe.trajectory)} 不一致",
+            where=str(cfg.trajectory),
+        )
+
     if not hasattr(universe.atoms, "molnums"):
         universe.add_TopologyAttr("molnums", universe.residues.resids)
 
@@ -268,12 +283,11 @@ def load_universe(
             "有分析需要速度，但轨迹不含速度列", where=str(cfg.trajectory)
         )
 
-    wrapped = convention in WRAPPED_CONVENTIONS
     transforms = []
     if coordinates == "in_box":
-        transforms.append(tr.wrap(universe.atoms))
-    if coordinates == "continuous" and wrapped:
-        # 独立的原始读取器只用于按帧重放，不再叠加 transformation，避免递归。
+        transforms.append(InBoxView(geometry, convention))
+    elif convention in WRAPPED_CONVENTIONS:
+        # 独立的原始读取器只用于按帧重放，不叠加 transformation，避免递归。
         raw = mda.Universe(
             str(cfg.topology),
             target,
@@ -282,8 +296,12 @@ def load_universe(
             dt=frame_dt,
             **reader_kwargs,
         )
-        transforms.append(ContinuousView(raw))
-    if scale_velocity:
+        transforms.append(ContinuousView(raw, geometry=geometry, convention=convention))
+    else:
+        transforms.append(LabView(geometry, convention))
+    if universe.trajectory.ts.has_velocities:
+        # 单位换算与“本轮是否包含 velocity 分析”无关，避免同一轨迹因分析列表
+        # 不同而出现 Å/fs 与 Å/ps 两种速度。
         transforms.append(_scale_velocity)
 
     def _frame_time(ts):
@@ -346,7 +364,12 @@ def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Grou
     named = value in cfg.groups
     selection = cfg.groups[value] if named else value
 
-    shift = np.asarray(cfg.view.shift, dtype=np.float32)
+    frame = int(universe.trajectory.ts.frame)
+    if cfg.geometry is not None:
+        origin = np.asarray(cfg.geometry.frame(frame).origin, dtype=np.float32)
+    else:
+        origin = np.asarray(cfg.box_low, dtype=np.float32)
+    shift = origin - np.asarray(cfg.view.origin, dtype=np.float32)
     universe.atoms.positions += shift
     try:
         atoms = universe.select_atoms(selection)

@@ -12,6 +12,7 @@ import numpy as np
 import pandas as pd
 import pytest
 from MDAnalysis.analysis.msd import EinsteinMSD
+from MDAnalysis.coordinates.memory import MemoryReader
 from PIL import Image
 
 from mdanal import cli
@@ -39,13 +40,27 @@ def test_msd_matches_raw_coordinates(real):
     continuous = load_universe(cfg, coordinates="continuous")
     raw = raw_universe(cfg)
 
+    lab_positions = []
+    dimensions = []
     for frame in range(START, STOP):
         continuous.trajectory[frame]
         raw.trajectory[frame]
-        assert np.allclose(continuous.atoms.positions, raw.atoms.positions, atol=1e-9)
+        # 新契约的 continuous 是实验室绝对坐标；raw 读取器返回盒局部坐标。
+        origin = np.asarray(cfg.geometry.frame(frame).origin, dtype=float)
+        lab = raw.atoms.positions + origin
+        assert np.allclose(continuous.atoms.positions, lab, atol=1e-6)
+        lab_positions.append(lab.copy())
+        dimensions.append(raw.trajectory.ts.dimensions.copy())
+
+    lab_universe = mda.Universe.empty(continuous.atoms.n_atoms, trajectory=True)
+    lab_universe.load_new(
+        np.asarray(lab_positions),
+        dimensions=np.asarray(dimensions),
+        format=MemoryReader,
+    )
 
     results = []
-    for universe in (continuous, raw):
+    for universe in (continuous, lab_universe):
         analysis = EinsteinMSD(
             universe.atoms, select="all", msd_type="xyz", fft=True
         )

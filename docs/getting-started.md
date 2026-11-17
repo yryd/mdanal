@@ -53,10 +53,10 @@ python main.py run   --system example/quickstart --out /tmp/mdanal-demo --force
 
 ```text
 dt_ps,msd_A2
-0,-5.98e-12
-5,5.83
-10,4.98
-15,4.41
+0,-8.73e-12
+5,5.80
+10,4.93
+15,4.34
 ```
 
 `dt_ps` 是滞后时间（ps），`msd_A2` 是均方位移（Å²）。第一行接近 0 的负数来自浮点舍入。

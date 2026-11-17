@@ -30,11 +30,14 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选
 | `PARAMS` | 必须存在，可为 `{}`；有参数时写 `type/default/unit/min/max/choices/help`；单位字符串不会自动换算 |
 | `LABELS` | `zh`/`en` 两套图内文字；公共标签和 `window` 占位符来自 `labels.yaml` |
 | `COLUMN_LABELS` | 机器列名 → 展示标签；compare 使用 |
-| `COORDINATES` | `in_box`/`continuous`/`any`；`any` 当前实际等于 `in_box` |
+| `COORDINATES` | `in_box`/`continuous`/`any`；`any` 是“无特殊连续需求”，当前实际按 `in_box` 运行，不代表任意几何 |
+| `GEOMETRY` | `{cell: orthorhombic/any, periodicity: full/any}`；`any` 表示作者已自行验证，框架不替算法补能力 |
 | `REQUIRES` | 当前已识别 `velocities`；不要写未识别的字符串假装检查了其他能力 |
 | `PACKAGE` | 外部包名和最低版本；不是安装器 |
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
 | `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图 |
+
+未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会明确失败，不会静默继续。
 
 ### 输出契约
 
@@ -88,7 +91,7 @@ time_ps,com_z_angstrom
 ### 模板的三个限制
 
 1. 它是**所有选中原子的整体质心**，质量加权；不是某个分子的迁移轨迹；
-2. 跨周期边界时整体质心接近常数，图上只剩 1e-6 Å 量级的漂移；这正是“整体质心不能代表分子运动”的例子；
+2. 这个例子的整体质心只在这个 tiny 体系中近似不变；包裹坐标下的普通质心也可能突跳。不要把“质心接近常数”当成周期边界的一般性质；
 3. 若要看分子/界面迁移，应选更小的组、按分子分组，或写新的分析；不要靠改这个模板的标签来冒充。
 
 ### 加一个参数
@@ -130,7 +133,9 @@ PARAMS = {
 |---|---|---|
 | `ctx.params` / `ctx.meta` / `ctx.extras` | mapping | 计算参数 + 结果摘要 |
 | `ctx.start` / `ctx.stop` / `ctx.frame_dt_ps` | int/float | 图注/轴 |
-| `ctx.shift` | 三元组 | 盒坐标 → 显示坐标 |
+| `ctx.shift` | 三元组 | 位置列的显示平移；不参与科学计算 |
+| `ctx.geometry` | `FrameGeometry` | 当前分析起始帧的盒原点、矩阵、边界；需要逐帧时按帧号读取 |
+| `ctx.geometry_window` | `GeometryWindow` | 实际窗口的正交性、PBC、最小盒长等摘要 |
 | `ctx.lang` / `ctx.dpi` | str/int | 语言/分辨率 |
 | `ctx.annotate` | bool | 是否显示自动说明 |
 | `ctx.annotations` | tuple | 用户标注 |

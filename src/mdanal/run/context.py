@@ -7,6 +7,7 @@ from typing import Any, Mapping
 
 import MDAnalysis as mda
 
+from ..config.geometry import FrameGeometry, GeometryWindow
 from ..config.registry import PlanItem
 from ..config.system import Group, SystemConfig
 from ..plot import plotutil
@@ -31,6 +32,8 @@ class RunContext:
     selection_frame: int
     warnings: list[str] = field(default_factory=list)
     extras: dict[str, Any] = field(default_factory=dict)
+    geometry: FrameGeometry | None = None
+    geometry_window: GeometryWindow | None = None
 
     @property
     def params(self) -> Mapping[str, Any]:

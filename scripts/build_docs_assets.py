@@ -44,6 +44,15 @@ PALETTES = (
 )
 
 
+def _readable_text(color: str) -> str:
+    """按相对亮度选择黑/白文字，避免深色上黑字、浅色上白字。"""
+    value = color.lstrip("#")
+    if len(value) != 6:
+        return "black"
+    r, g, b = (int(value[index:index + 2], 16) / 255 for index in (0, 2, 4))
+    return "white" if 0.2126 * r + 0.7152 * g + 0.0722 * b < 0.5 else "black"
+
+
 def run_cli(args: list[str]) -> None:
     code = cli.main(args)
     if code != 0:
@@ -126,7 +135,7 @@ def build_palette_preview() -> None:
             ax.text(
                 x + 0.66, y + 0.35, color,
                 fontsize=5.8, ha="center", va="center",
-                color="white" if index % 5 != 0 else "black",
+                color=_readable_text(color),
             )
     # fixed colors and density gradient
     y = 0.55

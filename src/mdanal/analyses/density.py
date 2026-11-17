@@ -90,6 +90,9 @@ def _fixed_box_stop(ctx) -> tuple[int, int | None]:
     return ctx.stop, None
 
 
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     params = ctx.params
     sum_axis = str(params["sum_axis"]).lower()

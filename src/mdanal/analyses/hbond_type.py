@@ -76,6 +76,11 @@ def _build(ctx) -> HydrogenBondAnalysis:
     )
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     if not hasattr(ctx.universe.atoms, "resnames"):
         raise ValidationError(

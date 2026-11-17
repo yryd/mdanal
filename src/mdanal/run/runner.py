@@ -16,6 +16,7 @@ from .. import __version__
 from ..config.naming import NamingSummary, apply_naming, build_plan
 from ..errors import MdanalError, ValidationError
 from ..config.registry import PlanItem
+from ..config.geometry import GeometryTrack
 from ..config.system import is_wrapped_convention
 from ..config.system import (
     NOJUMP_WARNING,
@@ -161,6 +162,12 @@ def prepare(
             "\n".join(frame_problems), where=f"{cfg.yaml_path}:analyses"
         )
 
+    if cfg.geometry is None:
+        raise ValidationError("缺少每帧几何；无法检查插件支持条件")
+    for item in plan:
+        item_start, item_stop = frames[item.order]
+        _check_geometry(item, cfg.geometry, item_start, item_stop)
+
     seek_frame(in_box, start)
     groups = {
         item.order: {
@@ -182,6 +189,37 @@ def prepare(
         segment_frames=segment_frames,
         frames=frames,
     )
+
+
+def _check_geometry(
+    item: PlanItem, track: GeometryTrack, start: int, stop: int
+) -> None:
+    """在 run 之前检查插件声明的几何能力。未声明时按保守默认处理。"""
+    window = track.window(start, stop)
+    declared = dict(item.definition.geometry or {})
+    cell = declared.get("cell", "orthorhombic")
+    periodicity = declared.get("periodicity", "full")
+
+    if cell == "orthorhombic" and not window.orthorhombic:
+        reference = window.reference
+        raise ValidationError(
+            f"{item.directory}：当前插件要求正交盒，但分析窗口包含三斜盒 "
+            f"（首帧 cell={reference.cell}）。请换正交盒轨迹，或使用已声明 cell=any 的插件。",
+            where=str(item.definition.name),
+        )
+    if periodicity == "full":
+        if not window.pbc_known:
+            raise ValidationError(
+                f"{item.directory}：无法识别 BOX BOUNDS 的边界类型，"
+                f"当前插件要求三向周期。",
+                where=str(item.definition.name),
+            )
+        if not window.full_periodic:
+            raise ValidationError(
+                f"{item.directory}：分析窗口边界为 {window.reference.boundary_types}，"
+                f"当前插件要求三向周期（pp pp pp）；非周期方向不能通过盒镜像计算。",
+                where=str(item.definition.name),
+            )
 
 
 def _labels_for_snapshot(item: PlanItem, common_labels: Mapping[str, Mapping[str, str]]):
@@ -215,6 +253,9 @@ def execute(
             common_labels.get(options.lang),
         )
         item_start, item_stop = prepared.item_frames(item)
+        geometry_window = (
+            cfg.geometry.window(item_start, item_stop) if cfg.geometry else None
+        )
         ctx = RunContext(
             system=cfg,
             plan_item=item,
@@ -230,6 +271,8 @@ def execute(
             view=item.view,
             selection_frame=prepared.selection_frame,
             warnings=_view_warnings(cfg, item),
+            geometry=cfg.geometry.frame(item_start) if cfg.geometry else None,
+            geometry_window=geometry_window,
         )
 
         module = _import_module(item)
@@ -338,6 +381,7 @@ def execute(
                 "status": "render_failed" if error else "ok",
                 "error": error,
                 "meta": record["meta"],
+                "geometry": ctx.geometry_window.to_dict() if ctx.geometry_window else None,
             }
         )
         print(
@@ -385,6 +429,18 @@ def execute(
                 "shift": list(cfg.view.shift),
             },
             "selection": {"frame": prepared.selection_frame},
+            "geometry": {
+                "window": (
+                    cfg.geometry.window(prepared.start, prepared.stop).to_dict()
+                    if cfg.geometry
+                    else None
+                ),
+                "per_analysis": {
+                    entry["directory"]: entry.get("geometry")
+                    for entry in details
+                    if entry.get("geometry") is not None
+                },
+            },
             "naming": _naming_payload(prepared.naming),
             "frames": {
                 "start": prepared.start,

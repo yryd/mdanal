@@ -31,6 +31,9 @@ COORDINATE_NEEDS = ("in_box", "continuous", "any")
 PARAM_KEYS = {"type", "default", "unit", "min", "max", "choices", "help"}
 SUPPORTED_TYPES = (bool, int, float, str, list, tuple)
 COMPARE_KEYS = {"table", "x", "y", "box_axis"}
+GEOMETRY_KEYS = {"cell", "periodicity"}
+GEOMETRY_CELL = {"orthorhombic", "any"}
+GEOMETRY_PERIODICITY = {"full", "any"}
 
 
 @dataclass
@@ -59,6 +62,7 @@ class AnalysisDef:
     coordinates: str = "any"
     mutates_positions: bool = False
     compare: Mapping[str, Any] | None = None
+    geometry: Mapping[str, str] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -243,6 +247,7 @@ def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:
 
     package = _normalise_package(getattr(module, "PACKAGE", None), where)
     compare = _normalise_compare(getattr(module, "COMPARE", None), where)
+    geometry = _normalise_geometry(getattr(module, "GEOMETRY", None), where)
 
     mutates = getattr(module, "MUTATES_POSITIONS", False)
     if not isinstance(mutates, bool):
@@ -264,7 +269,37 @@ def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:
         coordinates=str(coordinates),
         mutates_positions=mutates,
         compare=compare,
+        geometry=geometry,
     )
+
+
+def _normalise_geometry(value: Any, where: str) -> dict[str, str]:
+    """解析可选 GEOMETRY；未声明时返回空映射，由 runner 采用保守默认。"""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError(
+            "GEOMETRY 必须是 {cell, periodicity} 映射", where=f"{where}:GEOMETRY"
+        )
+    unknown = set(value) - GEOMETRY_KEYS
+    if unknown:
+        raise ValidationError(
+            f"GEOMETRY 含未知字段 {sorted(unknown)}；允许 {sorted(GEOMETRY_KEYS)}",
+            where=f"{where}:GEOMETRY",
+        )
+    cell = value.get("cell")
+    periodicity = value.get("periodicity")
+    if cell not in GEOMETRY_CELL:
+        raise ValidationError(
+            f"GEOMETRY.cell 只能是 {sorted(GEOMETRY_CELL)}，收到 {cell!r}",
+            where=f"{where}:GEOMETRY",
+        )
+    if periodicity not in GEOMETRY_PERIODICITY:
+        raise ValidationError(
+            f"GEOMETRY.periodicity 只能是 {sorted(GEOMETRY_PERIODICITY)}，收到 {periodicity!r}",
+            where=f"{where}:GEOMETRY",
+        )
+    return {"cell": str(cell), "periodicity": str(periodicity)}
 
 
 def _normalise_slots(value: Any, where: str) -> tuple[str, ...]:

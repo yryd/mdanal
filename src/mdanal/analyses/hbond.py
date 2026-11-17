@@ -81,6 +81,11 @@ COMPARE = {
 }
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     donor = ctx.groups["donor"]
 

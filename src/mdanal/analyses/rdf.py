@@ -54,6 +54,11 @@ COMPARE = {
 }
 
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     group_a = ctx.groups["a"]
     group_b = ctx.groups["b"]
@@ -61,13 +66,26 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     nbins = int(ctx.params["nbins"])
 
     dimensions = ctx.universe.dimensions
-    if dimensions is not None:
-        limit = 0.5 * float(min(dimensions[:3]))
-        if rmax > limit:
-            raise ValidationError(
-                f"range 上限 {rmax:g} Å 超过半盒长 {limit:g} Å；"
-                "距离超过半盒长时无法配对，请缩小 range"
-            )
+    if dimensions is not None and not np.allclose(
+        np.asarray(dimensions[3:]), 90.0, atol=1e-3
+    ):
+        raise ValidationError(
+            f"只支持正交盒；检测到盒角 {np.asarray(dimensions[3:]).tolist()}，"
+            "三斜盒的球壳范围/归一化尚未验证"
+        )
+    window = getattr(ctx, "geometry_window", None)
+    if window is not None:
+        limit = 0.5 * float(window.min_length)
+        source = f"分析窗口最短盒长 {window.min_length:g} Å 的一半"
+    else:
+        dimensions = ctx.universe.dimensions
+        limit = 0.5 * float(min(dimensions[:3])) if dimensions is not None else 0.0
+        source = "当前帧最短盒长的一半"
+    if limit and rmax > limit:
+        raise ValidationError(
+            f"range 上限 {rmax:g} Å 超过{source}（{limit:g} Å）；"
+            "距离超过该范围时球壳归一化不适用，请缩小 range"
+        )
 
     # 单位：range 与 edges 为 Å；g(r) 无量纲
     analysis = InterRDF(group_a.atoms, group_b.atoms, nbins=nbins, range=(rmin, rmax))
