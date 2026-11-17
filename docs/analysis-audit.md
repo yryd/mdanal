@@ -104,7 +104,8 @@
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
 | `dt_ps` | 全局帧号 × 帧间隔 | ps | 加载层统一 | **已修**：不再跟随 TIMESTEP 重置 |
-| `msd_A2` | `results.timeseries` | Å² | MDAnalysis | **已核对** |
+| `msd_A2` | 残基质心位移平方平均（默认） | Å² | 自实现 | **已改**：默认质心，`grouping: atoms` 可回退原子路径 |
+| `fit_msd_A2` / `D` | `fit_range` 内线性拟合 | Å² / Å²·ps⁻¹ | `np.polyfit` | **已加**：图中标注 D，不输出 R² |
 
 ### velocity
 
@@ -161,7 +162,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 126 + 科学 43；
+其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 126 + 科学 44；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：

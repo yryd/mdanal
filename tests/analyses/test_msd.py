@@ -438,3 +438,40 @@ def test_wrapped_scaled_no_bond(tmp_path):
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
     table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
     assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
+
+
+def test_msd_default_uses_residue_com():
+    """两个反向运动的原子同属一个残基时，质心 MSD 应接近 0。"""
+    from types import SimpleNamespace
+
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import msd as msd_module
+
+    n_frames, dt = 6, 2.0
+    coords = np.zeros((n_frames, 2, 3))
+    coords[:, 0, 0] = np.arange(n_frames) * dt
+    coords[:, 1, 0] = -np.arange(n_frames) * dt
+    universe = mda.Universe.empty(
+        2,
+        n_residues=1,
+        atom_resindex=[0, 0],
+        trajectory=True,
+    )
+    universe.load_new(coords, format=MemoryReader)
+    universe.trajectory.ts.dt = dt
+
+    ctx = SimpleNamespace(
+        groups={"group": SimpleNamespace(atoms=universe.atoms)},
+        start=0,
+        stop=n_frames,
+        params={
+            "msd_type": "xyz",
+            "grouping": "residues",
+            "fit_range": [],
+            "fft": False,
+        },
+    )
+    table = msd_module.run(ctx)["msd"]
+    assert np.allclose(table["msd_A2"], 0.0, atol=1e-12)
+    assert np.isfinite(table["fit_msd_A2"]).all()
