@@ -13,6 +13,7 @@ from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
 DIRECTIONS = {"xy": "z", "xz": "y", "yz": "x"}
+DEFAULT_COLORS = ("#ffffff", "#c05040", "#4165c0")
 
 
 SLOTS = ("group",)
@@ -39,7 +40,7 @@ PARAMS = {
     "cmap": {
         "type": str,
         "default": "mdanal",
-        "help": "Matplotlib colormap 名称；mdanal 表示当前白蓝密度色标",
+        "help": "Matplotlib colormap 名称；mdanal 表示默认白→砖红→蓝色标",
     },
     "colors": {
         "type": list,
@@ -164,17 +165,24 @@ def _optional_number(value, name: str) -> float | None:
     return result
 
 
+def _explicit_colors(ctx) -> list[str]:
+    return list(ctx.params.get("colors") or [])
+
+
 def _color_map(ctx):
-    colors = list(ctx.params.get("colors") or [])
+    colors = _explicit_colors(ctx)
+    name = str(ctx.params.get("cmap") or "mdanal")
+    if not colors and name.lower() in ("mdanal", "default"):
+        colors = list(DEFAULT_COLORS)
+
     if colors:
         bad = [color for color in colors if not is_color_like(color)]
         if bad:
             raise ValidationError(f"colors 含无效颜色：{bad}")
         if len(colors) < 2:
             raise ValidationError("colors 自定义连续色标至少需要 2 个颜色")
-        return LinearSegmentedColormap.from_list("mdanal_density_custom", colors)
+        return LinearSegmentedColormap.from_list("mdanal_density_default", colors)
 
-    name = str(ctx.params.get("cmap") or "mdanal")
     if name.lower() in ("mdanal", "default"):
         return chart.density_cmap()
     try:
@@ -296,7 +304,15 @@ def meta(ctx, tables) -> dict:
         "directions": directions,
         "delta": float(ctx.params["delta"]),
         "cmap": str(ctx.params.get("cmap") or "mdanal"),
-        "colors": list(ctx.params.get("colors") or []),
+        "colors": (
+            _explicit_colors(ctx)
+            or (
+                list(DEFAULT_COLORS)
+                if str(ctx.params.get("cmap") or "mdanal").lower()
+                in ("mdanal", "default")
+                else []
+            )
+        ),
         "vmin": ctx.params.get("vmin", "auto"),
         "vmax": ctx.params.get("vmax", "auto"),
         "grid_widths": dict(ctx.extras.get("density_widths", {})),
