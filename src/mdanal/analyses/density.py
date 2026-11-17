@@ -4,11 +4,15 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
+import matplotlib.pyplot as plt
+from matplotlib import colormaps
+from matplotlib.colors import LinearSegmentedColormap, is_color_like
 
 from ..plot import annotations, chart, plotutil
 from ..errors import ValidationError
 
 AXES = ("x", "y", "z")
+DIRECTIONS = {"xy": "z", "xz": "y", "yz": "x"}
 
 
 SLOTS = ("group",)
@@ -19,13 +23,38 @@ PARAMS = {
         "default": 1.0,
         "unit": "Å",
         "min": 0.01,
-        "help": "投影网格的边长；越小越细，代价按立方增长",
+        "help": "投影网格的目标边长；越小越细，代价按立方增长",
     },
     "sum_axis": {
         "type": str,
         "default": "y",
         "choices": AXES,
-        "help": "沿哪个轴求和，投影到另外两个轴",
+        "help": "单个投影时沿哪个轴求和；设置 directions 后忽略",
+    },
+    "directions": {
+        "type": list,
+        "default": [],
+        "help": "多面板方向，如 [xy, xz, yz]；为空时只画 sum_axis 一张",
+    },
+    "cmap": {
+        "type": str,
+        "default": "mdanal",
+        "help": "Matplotlib colormap 名称；mdanal 表示当前白蓝密度色标",
+    },
+    "colors": {
+        "type": list,
+        "default": [],
+        "help": "自定义连续色标颜色列表（至少 2 个）；非空时覆盖 cmap",
+    },
+    "vmin": {
+        "type": (float, str),
+        "default": "auto",
+        "help": "色标下限；auto 表示按数据，或写数值",
+    },
+    "vmax": {
+        "type": (float, str),
+        "default": "auto",
+        "help": "色标上限；auto 表示按数据，或写数值",
     },
 }
 
@@ -105,6 +134,84 @@ def _fixed_box_stop(ctx) -> tuple[int, int | None]:
     return ctx.stop, None
 
 
+def _parse_directions(value) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, (list, tuple)):
+        raise ValidationError("directions 必须是列表，如 [xy, xz, yz]")
+    directions: list[str] = []
+    for entry in value:
+        name = str(entry).lower().strip()
+        if name not in DIRECTIONS:
+            raise ValidationError(
+                f"directions 只能取 {list(DIRECTIONS)}，收到 {entry!r}"
+            )
+        if name in directions:
+            raise ValidationError(f"directions 不能重复：{name}")
+        directions.append(name)
+    return directions
+
+
+def _optional_number(value, name: str) -> float | None:
+    if value is None or (isinstance(value, str) and value.strip().lower() == "auto"):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValidationError(f"{name} 只能是 auto 或数值，收到 {value!r}") from exc
+    if not np.isfinite(result):
+        raise ValidationError(f"{name} 必须是有限数值，收到 {value!r}")
+    return result
+
+
+def _color_map(ctx):
+    colors = list(ctx.params.get("colors") or [])
+    if colors:
+        bad = [color for color in colors if not is_color_like(color)]
+        if bad:
+            raise ValidationError(f"colors 含无效颜色：{bad}")
+        if len(colors) < 2:
+            raise ValidationError("colors 自定义连续色标至少需要 2 个颜色")
+        return LinearSegmentedColormap.from_list("mdanal_density_custom", colors)
+
+    name = str(ctx.params.get("cmap") or "mdanal")
+    if name.lower() in ("mdanal", "default"):
+        return chart.density_cmap()
+    try:
+        return colormaps[name]
+    except KeyError as exc:
+        raise ValidationError(f"未知 colormap：{name!r}") from exc
+
+
+def _table_for_direction(grid, edges, direction: str) -> tuple[str, pd.DataFrame, str, str]:
+    sum_axis = DIRECTIONS[direction]
+    center_a, center_b, density, keep = _project_grid(grid, edges, sum_axis)
+    a, b = AXES[keep[0]], AXES[keep[1]]
+    grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")
+    table = pd.DataFrame(
+        {
+            f"{a}_angstrom": grid_a.ravel(),
+            f"{b}_angstrom": grid_b.ravel(),
+            "number_density_A3": density.ravel(),
+        }
+    )
+    return f"density_{a}{b}", table, a, b
+
+
+def _single_table(grid, edges, sum_axis: str) -> tuple[str, pd.DataFrame, str, str]:
+    center_a, center_b, density, keep = _project_grid(grid, edges, sum_axis)
+    a, b = AXES[keep[0]], AXES[keep[1]]
+    grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")
+    table = pd.DataFrame(
+        {
+            f"{a}_angstrom": grid_a.ravel(),
+            f"{b}_angstrom": grid_b.ravel(),
+            "number_density_A3": density.ravel(),
+        }
+    )
+    return f"density_{a}{b}", table, a, b
+
+
 GEOMETRY = {"cell": "orthorhombic", "periodicity": "xy"}
 
 
@@ -113,6 +220,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     sum_axis = str(params["sum_axis"]).lower()
     if sum_axis not in AXES:
         raise ValidationError(f"sum_axis 只能是 x/y/z，收到 {sum_axis!r}")
+    directions = _parse_directions(params.get("directions"))
     delta = float(params["delta"])
     if delta <= 0:
         raise ValidationError(f"delta 必须为正数，收到 {delta}")
@@ -166,72 +274,140 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     ctx.extras["density_widths"] = {
         axis: float(widths[i]) for i, axis in enumerate(AXES)
     }
+    ctx.extras["density_directions"] = list(directions)
 
-    # 表里是盒坐标（0…L）；视图平移只在出图时施加
-    center_a, center_b, density, keep = _project_grid(grid, edges, sum_axis)
-    a, b = AXES[keep[0]], AXES[keep[1]]
-
-    # 平面场要摊平成 (坐标, 坐标, 值) 三列；density[i, j] 对应 (a_i, b_j)
-    grid_a, grid_b = np.meshgrid(center_a, center_b, indexing="ij")
-    table = pd.DataFrame(
-        {
-            f"{a}_angstrom": grid_a.ravel(),
-            f"{b}_angstrom": grid_b.ravel(),
-            "number_density_A3": density.ravel(),
-        }
-    )
-    return {f"density_{a}{b}": table}
+    tables: dict[str, pd.DataFrame] = {}
+    if directions:
+        for direction in directions:
+            name, table, _, _ = _table_for_direction(grid, edges, direction)
+            tables[name] = table
+    else:
+        name, table, _, _ = _single_table(grid, edges, sum_axis)
+        tables[name] = table
+    return tables
 
 
 def meta(ctx, tables) -> dict:
-    """记录网格范围，便于用 Σρ·Δa·Δb·L_axis 核验原子数守恒。"""
+    """记录网格、方向与色标设置；meta 只放 JSON 可表示值。"""
     sum_axis = str(ctx.params["sum_axis"]).lower()
+    directions = _parse_directions(ctx.params.get("directions"))
     return {
         "sum_axis": sum_axis,
+        "directions": directions,
         "delta": float(ctx.params["delta"]),
+        "cmap": str(ctx.params.get("cmap") or "mdanal"),
+        "colors": list(ctx.params.get("colors") or []),
+        "vmin": ctx.params.get("vmin", "auto"),
+        "vmax": ctx.params.get("vmax", "auto"),
         "grid_widths": dict(ctx.extras.get("density_widths", {})),
         # 精确铺满盒子的网格；extent 等于真实盒长
         "grid_extent": dict(ctx.extras.get("density_extent", {})),
     }
 
 
-def figures(ctx, tables):
-    name, table = next(iter(tables.items()))
+def _panel_data(ctx, table, x_axis: str, y_axis: str):
     cols = list(table.columns)
     pivot = table.pivot(index=cols[1], columns=cols[0], values=cols[2])
-
-    sum_axis = str(ctx.params["sum_axis"]).lower()
-    keep = [axis for axis in AXES if axis != sum_axis]
-    a, b = keep[0], keep[1]
-
     shift = ctx.shift
-    shift_a, shift_b = shift[AXES.index(a)], shift[AXES.index(b)]
+    shift_x = shift[AXES.index(x_axis)]
+    shift_y = shift[AXES.index(y_axis)]
+    x = pivot.columns.to_numpy() + shift_x
+    y = pivot.index.to_numpy() + shift_y
+    return x, y, pivot.to_numpy()
 
-    fig, ax = chart.figure(ctx.size("map"))
-    mesh = chart.heatmap(
-        ax,
-        pivot.columns.to_numpy() + shift_a,
-        pivot.index.to_numpy() + shift_b,
-        pivot.to_numpy(),
-        shading="auto",
-        cmap=chart.density_cmap(),
-    )
 
-    x_range = plotutil.clip_window(ctx.window(a), plotutil.data_range(ax, "x"))
-    y_range = plotutil.clip_window(ctx.window(b), plotutil.data_range(ax, "y"))
-    # 画布高度按数据纵横比取，等比例坐标轴才不会在画布里留下大片空白
-    if not getattr(ctx, "size_is_explicit", False):
-        width = ctx.size("map")[0]
-        height = width * (y_range[1] - y_range[0]) / (x_range[1] - x_range[0]) + 0.9
-        fig.set_size_inches(width, max(height, 1.6))
-    ax.set_xlim(x_range)
-    ax.set_ylim(y_range)
-    ax.set_aspect("equal")
-    ax.set_xlabel(ctx.label(f"axis_{a}"))
-    ax.set_ylabel(ctx.label(f"axis_{b}"))
-    ax.set_title(ctx.label("title"))
-    chart.colorbar(fig, ax, mesh, ctx.label("cbar"))
-    annotations.draw(ax, ctx, x_axis=a)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
+def _figure_size(ctx, n_panels: int, aspect: float) -> tuple[float, float]:
+    base_w, base_h = ctx.size("map")
+    if n_panels <= 1:
+        if getattr(ctx, "size_is_explicit", False):
+            return base_w, base_h
+        return base_w, max(base_w * aspect + 0.9, 1.6)
+    if getattr(ctx, "size_is_explicit", False):
+        return base_w, base_h
+    # 多面板时每个面板保持 map 的宽度；高度按最高面板的纵横比取。
+    width = base_w * n_panels + 0.5 * (n_panels - 1)
+    height = max(base_h, base_w * aspect + 0.9)
+    return width, height
+
+
+def figures(ctx, tables):
+    directions = _parse_directions(ctx.params.get("directions"))
+    items = list(tables.items())
+    if not items:
+        return []
+
+    panels = []
+    for name, table in items:
+        cols = list(table.columns)
+        a = str(cols[0]).split("_", 1)[0]
+        b = str(cols[1]).split("_", 1)[0]
+        direction = f"{a}{b}" if f"{a}{b}" in DIRECTIONS else None
+        x, y, values = _panel_data(ctx, table, a, b)
+        panels.append((name, direction, a, b, x, y, values))
+
+    # 统一色标：多面板用全部数据的全局范围；vmin/vmax 显式值优先。
+    all_values = np.concatenate([panel[6].ravel() for panel in panels])
+    vmin_param = _optional_number(ctx.params.get("vmin"), "vmin")
+    vmax_param = _optional_number(ctx.params.get("vmax"), "vmax")
+    vmin = float(np.nanmin(all_values)) if vmin_param is None else vmin_param
+    vmax = float(np.nanmax(all_values)) if vmax_param is None else vmax_param
+    if vmin_param is not None and vmax_param is not None and vmax <= vmin:
+        raise ValidationError(f"vmax（{vmax:g}）必须大于 vmin（{vmin:g}）")
+    if vmax <= vmin:
+        vmax = vmin + 1e-12
+    cmap = _color_map(ctx)
+
+    # 估算最高的面板纵横比，用来定单图/多图高度。
+    aspect = 1.0
+    for _, _, a, b, x, y, _ in panels:
+        x_range = plotutil.clip_window(ctx.window(a), (float(x.min()), float(x.max())))
+        y_range = plotutil.clip_window(ctx.window(b), (float(y.min()), float(y.max())))
+        if x_range[1] > x_range[0]:
+            aspect = max(aspect, (y_range[1] - y_range[0]) / (x_range[1] - x_range[0]))
+    width, height = _figure_size(ctx, len(panels), aspect)
+
+    chart.apply_style()
+    if len(panels) == 1:
+        fig, axes = plt.subplots(figsize=(width, height))
+        axes_list = [axes]
+    else:
+        fig, axes_array = plt.subplots(1, len(panels), figsize=(width, height))
+        axes_list = list(np.atleast_1d(axes_array))
+
+    meshes = []
+    for ax, (_, direction, a, b, x, y, values) in zip(axes_list, panels):
+        mesh = ax.pcolormesh(
+            x, y, values,
+            shading="auto",
+            cmap=cmap,
+            vmin=vmin,
+            vmax=vmax,
+        )
+        meshes.append(mesh)
+        x_range = plotutil.clip_window(ctx.window(a), (float(x.min()), float(x.max())))
+        y_range = plotutil.clip_window(ctx.window(b), (float(y.min()), float(y.max())))
+        ax.set_xlim(x_range)
+        ax.set_ylim(y_range)
+        ax.set_aspect("equal")
+        ax.set_xlabel(ctx.label(f"axis_{a}"))
+        ax.set_ylabel(ctx.label(f"axis_{b}"))
+        title = ctx.label("title")
+        if direction is not None and len(panels) > 1:
+            title = f"{title} ({direction})"
+        ax.set_title(title)
+        annotations.draw(ax, ctx, x_axis=a)
+        if ctx.annotate:
+            chart.note(ax, ctx.annotation())
+
+    # 手动留出右侧色标条位置，避免 colorbar 与最后一个面板重叠；
+    # 色标高度固定在面板区域的中下部，不再随整张画布拉长。
+    if len(panels) > 1:
+        fig.subplots_adjust(left=0.05, right=0.86, bottom=0.13, top=0.90, wspace=0.26)
+        cax = fig.add_axes([0.885, 0.18, 0.018, 0.64])
+    else:
+        fig.subplots_adjust(left=0.14, right=0.83, bottom=0.16, top=0.90)
+        cax = fig.add_axes([0.86, 0.20, 0.025, 0.60])
+    bar = fig.colorbar(meshes[0], cax=cax)
+    bar.set_label(ctx.label("cbar"))
+    name = "density" if len(panels) > 1 else items[0][0]
     return [(name, fig)]

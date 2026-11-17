@@ -195,3 +195,51 @@ def test_projection_with_exact_box_tiling_is_uniform():
     grid = counts / width**3
     _, _, density, _ = _project_grid(grid, edges, "y")
     assert np.allclose(density, 1.0)
+
+
+def test_density_multiple_directions_share_one_scale(real, tmp_path):
+    cfg, _ = real
+    path = write_system(
+        tmp_path,
+        cfg.topology,
+        cfg.trajectory,
+        "  - name: density\n"
+        "    sel: [all_atoms]\n"
+        "    delta: 1.0\n"
+        "    directions: [xy, xz, yz]\n"
+        "    cmap: viridis\n"
+        "    vmin: 0\n"
+        "    vmax: 0.2\n",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    for name in ("density_xy", "density_xz", "density_yz"):
+        assert (out / "density" / "tables" / f"{name}.csv").is_file()
+    assert (out / "density" / "figures" / "density.png").is_file()
+    meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))[
+        "analyses"
+    ][0]["meta"]
+    assert meta["directions"] == ["xy", "xz", "yz"]
+    assert meta["cmap"] == "viridis"
+    assert float(meta["vmax"]) == 0.2
+
+
+def test_density_custom_color_list(real, tmp_path):
+    cfg, _ = real
+    path = write_system(
+        tmp_path,
+        cfg.topology,
+        cfg.trajectory,
+        "  - name: density\n"
+        "    sel: [all_atoms]\n"
+        "    sum_axis: y\n"
+        "    colors: [\"#ffffff\", \"#c05040\", \"#4165c0\"]\n"
+        "    vmin: 0\n"
+        "    vmax: 0.2\n",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))[
+        "analyses"
+    ][0]["meta"]
+    assert meta["colors"] == ["#ffffff", "#c05040", "#4165c0"]
