@@ -8,6 +8,7 @@ from typing import Sequence
 import matplotlib.pyplot as plt
 from mpl_toolkits.axes_grid1 import make_axes_locatable
 
+from . import chart
 from .panels import Panel
 
 
@@ -23,6 +24,7 @@ class Figure:
     top: float = 0.92
 
     def build(self) -> plt.Figure:
+        chart.apply_style()
         panels = list(self.panels)
         if not panels:
             raise ValueError("至少需要一个 Panel")
