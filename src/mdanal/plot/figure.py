@@ -38,8 +38,16 @@ class Figure:
         nrows = (len(panels) + self.ncols - 1) // self.ncols
         base_w = max(panel.panel_size[0] for panel in panels)
         base_h = max(panel.panel_size[1] for panel in panels)
-        # 多列时按面板高度定宽，避免 subplot 单元比正方形面板宽太多。
-        figure_width = base_w if self.ncols == 1 else base_h * self.ncols + 0.4
+        # 等比例 Field（density）按高度定宽；普通曲线/柱图按 panel 宽度定宽。
+        # 后者需要更宽的列间距容纳 y 轴标签，否则三个线图会左右重叠。
+        square_panels = all(panel.aspect == "equal" for panel in panels)
+        if self.ncols == 1:
+            figure_width = base_w
+        elif square_panels:
+            figure_width = base_h * self.ncols + 0.4
+        else:
+            figure_width = base_w * self.ncols + 0.65 * (self.ncols - 1)
+        figure_wspace = self.wspace if square_panels else max(self.wspace, 0.42)
         fig, axes_array = plt.subplots(
             nrows,
             self.ncols,
@@ -81,7 +89,7 @@ class Figure:
             right=0.97,
             bottom=0.10,
             top=self.top,
-            wspace=self.wspace,
+            wspace=figure_wspace,
             hspace=self.hspace,
         )
         return fig
