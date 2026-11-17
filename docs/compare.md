@@ -19,6 +19,7 @@ figure:
   align: left
   palette: bright
   xlim: [0, 45]
+  ylim: [0, 1.2]   # 可选：给图例留 y 方向空间
 out: compare
 ```
 

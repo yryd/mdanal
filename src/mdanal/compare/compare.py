@@ -28,7 +28,7 @@ AXES = ("x", "y", "z")
 TOP_KEYS = {"items", "figure", "out"}
 ITEM_KEYS = {"root", "label", "anchor", "t_offset"}
 FIGURE_KEYS = {
-    "analysis", "table", "align", "xlim", "xlabel", "ylabel", "title", "y",
+    "analysis", "table", "align", "xlim", "ylim", "xlabel", "ylabel", "title", "y",
     "palette",
 }
 
@@ -165,6 +165,18 @@ def run_compare(
         low, high = (float(value) for value in xlim)
     else:
         low, high = _default_range(items, align, box_axis, x_axis, merged)
+    ylim = figure.get("ylim")
+    if ylim is not None:
+        if (
+            not isinstance(ylim, (list, tuple))
+            or len(ylim) != 2
+            or any(isinstance(value, bool) or not isinstance(value, (int, float)) for value in ylim)
+            or float(ylim[1]) <= float(ylim[0])
+        ):
+            raise ValidationError(f"figure.ylim 必须是递增的两个数，收到 {ylim!r}")
+        y_low, y_high = float(ylim[0]), float(ylim[1])
+    else:
+        y_low = y_high = None
 
     # 新路径：插件声明 render_panel 时，compare 只提供 Curve/Series/PanelRequest，
     # 最终仍由插件自己的 Panel 模板绘制（注释/参考线/标点不会丢）。
@@ -252,6 +264,8 @@ def run_compare(
     if figure.get("title"):
         ax.set_title(str(figure["title"]))
     ax.set_xlim(low, high)
+    if y_low is not None and y_high is not None:
+        ax.set_ylim(y_low, y_high)
     if show_legend and not callable(renderer):
         chart.legend(ax)
     chart.save(fig, out / f"{directory}.png", dpi=300)
@@ -272,6 +286,7 @@ def run_compare(
             "ylabel": ylabel,
             "align": dict(align),
             "xlim": [low, high],
+            "ylim": [y_low, y_high] if y_low is not None else None,
             "items": [
                 {
                     "root": str(item.root),

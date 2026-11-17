@@ -245,7 +245,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     label=curve.label if show_legend else None,
                 )
         if show_legend:
-            chart.legend(ax, loc="center right")
+            chart.legend(ax)
         annotations.draw(ax, ctx, x_axis=axis)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

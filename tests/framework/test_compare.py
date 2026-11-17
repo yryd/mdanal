@@ -176,3 +176,27 @@ def test_compare_uses_configured_palette(tmp_path, monkeypatch):
     assert captured["colors"] == ["#112233", "#445566"]
     provenance = json.loads((out / "provenance.json").read_text(encoding="utf-8"))
     assert provenance["palette"] == ["#112233", "#445566"]
+
+
+def test_compare_applies_configured_ylim(tmp_path, monkeypatch):
+    roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
+    config = tmp_path / "compare.yaml"
+    config.write_text(
+        "items:\n"
+        f"  - {{root: {roots[0]}, label: A}}\n"
+        f"  - {{root: {roots[1]}, label: B}}\n"
+        "figure:\n"
+        "  analysis: fake\n"
+        "  align: left\n"
+        "  ylim: [0, 2]\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def fake_save(fig, path, dpi):
+        captured["ylim"] = fig.axes[0].get_ylim()
+        return path
+
+    monkeypatch.setattr(compare_module.chart, "save", fake_save)
+    run_compare(config, tmp_path / "out", registry=fake_registry())
+    assert captured["ylim"] == pytest.approx((0.0, 2.0))
