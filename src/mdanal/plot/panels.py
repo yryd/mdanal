@@ -30,8 +30,8 @@ def compose_panels(
     *,
     ncols: int = 1,
     title: str | None = None,
-    wspace: float = 0.55,
-    hspace: float = 0.38,
+    wspace: float = 0.12,
+    hspace: float = 0.34,
     top: float = 0.92,
 ) -> plt.Figure:
     """把所有 Panel 按 ncols 排成网格；空位隐藏，每个 Panel 各自带色标。"""
@@ -68,7 +68,7 @@ def compose_panels(
 
         if mappable is not None and panel.colorbar_label is not None:
             cax = make_axes_locatable(ax).append_axes(
-                "right", size="3.5%", pad=0.06
+                "right", size="3.5%", pad=0.03
             )
             bar = fig.colorbar(mappable, cax=cax)
             if panel.colorbar_label:
