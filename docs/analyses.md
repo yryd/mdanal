@@ -22,12 +22,12 @@
 ## density
 
 - 输入：一个原子组；
-- 参数：`delta`（目标网格宽 Å；实际格宽为 `L/ceil(L/delta)`，写入 meta 的 `grid_widths`）、`sum_axis`（默认方向）、`directions`（同一窗口的方向列表，如 `[xy, xz, yz]`）、`panels`（任意单图列表）、`ncols`（一行几个）、`cmap`/`colors`（色标）、`vmin`/`vmax`（色标范围，`auto` 或数值）；
+- 参数：`delta`（目标网格宽 Å；实际格宽为 `L/ceil(L/delta)`，写入 meta 的 `grid_widths`）、`sum_axis`（默认方向）、`directions`（同一窗口的方向列表，如 `[xy, xz, yz]`）、`panels`（任意单图列表）、`cmap`/`colors`（色标）、`vmin`/`vmax`（色标范围，`auto` 或数值）；
 - 输出：`{a}_angstrom`、`{b}_angstrom`、`number_density_A3`（Å⁻³）；
 - 含义：三维网格上的数密度沿 `sum_axis` 求和后，除以该方向格数，得到沿轴平均的数密度；网格精确铺满真实盒长，不再把扩展补零段算进平均；不是柱密度；
-- 多图：`directions`/`panels` 都只是产生“单图 panel”；`ncols` 只控制一行放几个，超过就换行。每个 panel 右侧各有一条色标，高度严格对齐该 panel 纵轴；共享全局色标范围；
+- 多图：`directions`/`panels` 都只是产生“单图 panel”；`plot.layout.ncols` 只控制一行放几个，超过就换行。每个 panel 右侧各有一条色标，高度严格对齐该 panel 纵轴；共享全局色标范围；
 - `panels` 每项是 `{section: [start, stop), directions: [xy], label: "..."}`；`section` 与顶层 `section` 同口径，相对于体系 `frames`；panel 项不能与顶层 `section` 同时使用；
-- 示例：`panels: [{section: [3,4], directions: [xy]}, {section: [55,56], directions: [xy]}, {section: [777,778], directions: [xy]}]`，配 `ncols: 2` 即两行；
+- 示例：`panels: [{section: [3,4], directions: [xy]}, {section: [55,56], directions: [xy]}, {section: [777,778], directions: [xy]}]`，配 `plot.layout.ncols: 2` 即两行；
 - 色标：默认 `cmap: mdanal` 为白 → 砖红 → 蓝；`cmap` 也可用 Matplotlib 名称（`viridis`/`cividis`/`Blues` 等）；`colors` 用颜色列表覆盖 `cmap`；`vmin/vmax` 为 `auto` 或数值；
 - 限制：只支持正交盒；x/y 必须周期，z 可非周期（`ppf/pps`），非周期 z 不 wrap。网格按首帧盒子建立；盒子变化时只使用首帧并警告。三斜盒或非周期 x/y 会打印非物理警告并继续，结果仅供定性参考。
 

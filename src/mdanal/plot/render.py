@@ -10,6 +10,7 @@ import matplotlib
 from cycler import cycler
 
 from . import chart, plotutil
+from .figure import Figure
 from ..errors import MdanalError, ValidationError
 
 SAFE_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
@@ -58,7 +59,8 @@ def render(
     """调用 figures、施加呈现覆盖，并把每张图保存到 target/figures。"""
     if fmt not in ("png", "svg", "pdf"):
         raise ValidationError(f"图件格式只能是 png/svg/pdf，收到 {fmt!r}")
-    if not hasattr(module, "figures"):
+    has_panels = hasattr(module, "panels")
+    if not has_panels and not hasattr(module, "figures"):
         return []
     plotutil.apply_style()
     settings = dict(settings or {})
@@ -67,14 +69,31 @@ def render(
         rc["axes.prop_cycle"] = cycler(color=list(settings["palette"]))
     with matplotlib.rc_context(rc):
         try:
-            produced = module.figures(ctx, dict(tables)) or []
+            if has_panels:
+                panels = module.panels(ctx, dict(tables)) or []
+                if not isinstance(panels, (list, tuple)):
+                    raise ValidationError("panels() 必须返回 Panel 列表")
+                if not panels:
+                    return []
+                ncols = int(
+                    (settings.get("layout") or {}).get("ncols", 3)
+                )
+                name_fn = getattr(module, "figure_name", None)
+                name = (
+                    str(name_fn(ctx, dict(tables)))
+                    if callable(name_fn)
+                    else str(panels[0].name)
+                )
+                produced = [(name, Figure(panels, ncols=ncols).build())]
+            else:
+                produced = module.figures(ctx, dict(tables)) or []
         except MdanalError:
             raise
         except Exception as exc:
             raise MdanalError(f"绘图失败：{exc}") from exc
 
         if not isinstance(produced, (list, tuple)):
-            raise ValidationError("figures() 必须返回 (名称, Figure) 列表")
+            raise ValidationError("绘图入口必须返回 (名称, Figure) 列表")
         names = [name for name, _ in produced]
         if len(set(names)) != len(names):
             raise ValidationError(f"figures() 产生了重名图 {names}")

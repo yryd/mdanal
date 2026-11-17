@@ -11,7 +11,7 @@ from matplotlib import colormaps
 from matplotlib.colors import LinearSegmentedColormap, is_color_like
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Field, PanelRequest, Series
 from ..errors import ValidationError
 
@@ -46,12 +46,6 @@ PARAMS = {
         "type": list,
         "default": [],
         "help": "任意单图列表；每项 {section, directions, label}，每个方向生成一个 panel",
-    },
-    "ncols": {
-        "type": int,
-        "default": 3,
-        "min": 1,
-        "help": "每行放几个 panel；5 个 panel + ncols=2 会排成两行",
     },
     "cmap": {
         "type": str,
@@ -428,7 +422,6 @@ def meta(ctx, tables) -> dict:
     return {
         "sum_axis": sum_axis,
         "directions": list(ctx.extras.get("density_directions", [])),
-        "ncols": int(ctx.params.get("ncols", 3)),
         "panels": list(ctx.extras.get("density_panels", [])),
         "delta": float(ctx.params["delta"]),
         "cmap": str(ctx.params.get("cmap") or "mdanal"),
@@ -497,7 +490,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
+def panels(ctx, tables) -> list[Panel]:
     items = list(tables.items())
     if not items:
         return []
@@ -591,11 +584,10 @@ def figures(ctx, tables):
             },
         )
         panels.append(render_panel(ctx, request))
+    return panels
 
-    chart.apply_style()
-    fig = compose_panels(
-        panels,
-        ncols=int(ctx.params.get("ncols", 3)),
-    )
-    name = "density" if len(panels) > 1 else infos[0]["table"]
-    return [(name, fig)]
+
+def figure_name(ctx, tables) -> str:
+    if len(tables) > 1:
+        return "density"
+    return str(next(iter(tables)))

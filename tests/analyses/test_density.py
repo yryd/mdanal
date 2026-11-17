@@ -258,7 +258,9 @@ def test_density_native_panels_and_ncols(real, tmp_path):
         "      - {section: [0, 1], directions: [xy]}\n"
         "      - {section: [1, 2], directions: [xy]}\n"
         "      - {section: [2, 3], directions: [xy]}\n"
-        "    ncols: 2\n",
+        "    plot:\n"
+        "      layout:\n"
+        "        ncols: 2\n",
         frames="[0, 3]",
     )
     out = tmp_path / "out"
@@ -269,5 +271,4 @@ def test_density_native_panels_and_ncols(real, tmp_path):
     meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))[
         "analyses"
     ][0]["meta"]
-    assert meta["ncols"] == 2
     assert [panel["start"] for panel in meta["panels"]] == [0, 1, 2]

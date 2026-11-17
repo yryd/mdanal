@@ -78,6 +78,7 @@ analyses:
 |---|---|---|
 | `window` | `{x/y/z: [下界, 上界]}` | 插件现有的物理轴/图轴窗口；先于 `xlim/ylim` |
 | `size` | `[宽, 高]` 英寸 | 显式画布；优先于插件自动图幅（density 不再自动调高度） |
+| `layout.ncols` | 正整数 | 平台 Figure 一行放几个 Panel；density 多面板和其他插件共用 |
 | `xlim` / `ylim` | `[下界, 上界]` | 最终显示范围；不改数据表 |
 | `title` / `xlabel` / `ylabel` | 字符串或 `{zh, en}` | 标题/轴标签；空字符串可清空 |
 | `palette` | 色板名或颜色列表 | 曲线颜色循环；见 [颜色](colors.md) |

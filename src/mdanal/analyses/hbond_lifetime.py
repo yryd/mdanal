@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
@@ -305,18 +305,13 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
+def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
-    panel = render_panel(ctx, request)
-    chart.apply_style()
-    fig = compose_panels([panel], ncols=1)
-    return [("hbond_lifetime", fig)]
+    return [render_panel(ctx, request)]
 
 
-# --------------------------------------------------------------------------- #
-# 内部
-# --------------------------------------------------------------------------- #
-
+def figure_name(ctx, tables) -> str:
+    return "hbond_lifetime"
 
 def _crossing(lag: np.ndarray, curve: np.ndarray, level: float = LEVEL) -> float:
     """曲线首次降到 level 的时间，线性插值；始终未降到则返回 nan。"""

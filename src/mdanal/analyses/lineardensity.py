@@ -12,7 +12,7 @@ import pandas as pd
 from MDAnalysis.units import constants
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 
@@ -263,10 +263,11 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
-    axis = str(ctx.params["dim"]).lower()
+def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
-    panel = render_panel(ctx, request)
-    chart.apply_style()
-    fig = compose_panels([panel], ncols=1)
-    return [(f"lineardensity_{axis}", fig)]
+    return [render_panel(ctx, request)]
+
+
+def figure_name(ctx, tables) -> str:
+    axis = str(ctx.params["dim"]).lower()
+    return f"lineardensity_{axis}"

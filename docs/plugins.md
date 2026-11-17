@@ -13,16 +13,18 @@
 ```python
 run(run_ctx) -> dict[str, pandas.DataFrame]
 meta(run_ctx, tables) -> dict                 # 可选
-figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选，旧接口
-render_panel(plot_ctx, request) -> Panel      # 可选，新接口
+panels(plot_ctx, tables) -> list[Panel]       # 当前主接口
+render_panel(plot_ctx, request) -> Panel      # 可选，compare 用
+figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 旧接口，兼容外部插件
 ```
 
 - `run`：唯一可以访问轨迹、原子组和选择的地方；
 - `meta`：只导出结果摘要，在绘图前执行；
-- `figures`：旧绘图接口，只使用已保存的表和摘要，不读 Universe、不补算、不落盘；
-- `render_panel`：新 Panel 接口。插件只负责 Panel 的呈现（坐标轴、注释、参考线、标点、色标），平台负责选择数据、排版和保存；
-- 没有 `figures` 的数据分析是合法的；
-- 图由框架统一保存和关闭；一个插件可以返回多张图。
+- `panels`：插件只产出 Panel；平台负责 `ncols` 排版、`plot.layout` 和保存；
+- `render_panel`：把一个 `PanelRequest` 渲染成 Panel；原生运行和 `compare` 共用；
+- `figures`：旧绘图接口，只留给未迁移的外部插件；内置插件不再使用；
+- 没有绘图入口的数据分析是合法的；
+- 图由框架统一保存和关闭。
 
 `render_panel` 的 `request` 是 `plot.specs.PanelRequest`，其中 `series` 是 `Series` 列表，每个 `Series` 含 `Curve`（一维曲线）、`Field`（二维场）或 `Bars`（离散柱）。原生运行和 `compare` 多曲线叠加都调用同一个 `render_panel`。当前八个内置插件都已提供 `render_panel`；旧 `figures` 只作为外部插件的兼容回退。
 

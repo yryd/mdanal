@@ -16,7 +16,7 @@ import yaml
 from matplotlib import rcParams
 
 from ..plot import chart
-from ..plot.panels import compose_panels
+from ..plot.figure import Figure
 from ..plot.plotutil import Labels
 from ..plot.settings import resolve_palette
 from ..plot.specs import Curve, PanelRequest, Series
@@ -222,7 +222,7 @@ def run_compare(
             options={"axis": x_axis, "legend": show_legend},
         )
         panel = renderer(context, request)
-        fig = compose_panels([panel], ncols=1)
+        fig = Figure([panel], ncols=1).build()
         ax = fig.axes[0]
     else:
         # 兼容尚未迁移到 render_panel 的插件。

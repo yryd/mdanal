@@ -7,7 +7,7 @@ import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
 
 
@@ -176,13 +176,13 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
+def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
-    panel = render_panel(ctx, request)
-    chart.apply_style()
-    fig = compose_panels([panel], ncols=1)
-    return [("hbond_count", fig)]
+    return [render_panel(ctx, request)]
 
+
+def figure_name(ctx, tables) -> str:
+    return "hbond_count"
 
 def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
     hbonds = np.asarray(analysis.results.hbonds)

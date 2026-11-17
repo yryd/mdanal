@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Bars, PanelRequest, Series
 from ..errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
@@ -170,15 +170,16 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
+def panels(ctx, tables) -> list[Panel]:
     if tables["hbond_type"].empty:
         ctx.warn("窗口内没有氢键，跳过类型分布图")
         return []
     request = panel_request(ctx, tables)
-    panel = render_panel(ctx, request)
-    chart.apply_style()
-    fig = compose_panels([panel], ncols=1)
-    return [("hbond_type", fig)]
+    return [render_panel(ctx, request)]
+
+
+def figure_name(ctx, tables) -> str:
+    return "hbond_type"
 
 
 # --------------------------------------------------------------------------- #

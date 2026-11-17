@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel, compose_panels
+from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
 from ..errors import ValidationError
 
@@ -362,13 +362,13 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def figures(ctx, tables):
+def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
-    panel = render_panel(ctx, request)
-    chart.apply_style()
-    fig = compose_panels([panel], ncols=1)
-    return [("velocity", fig)]
+    return [render_panel(ctx, request)]
 
+
+def figure_name(ctx, tables) -> str:
+    return "velocity"
 
 def _axes(ctx) -> tuple[int, int, str]:
     dim = _axis_index(ctx.params["dim"], "dim")

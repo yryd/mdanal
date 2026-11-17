@@ -10,7 +10,7 @@ from matplotlib.colors import is_color_like
 
 from ..errors import ValidationError
 
-PLOT_KEYS = {"window", "size", "xlim", "ylim", "title", "xlabel", "ylabel", "rc", "palette"}
+PLOT_KEYS = {"window", "size", "xlim", "ylim", "title", "xlabel", "ylabel", "rc", "palette", "layout"}
 TEXT_KEYS = {"title", "xlabel", "ylabel"}
 
 
@@ -119,6 +119,24 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
                 bounds, f"{where}.window.{axis}"
             )
         result["window"] = parsed_window
+    if "layout" in value:
+        layout = value["layout"]
+        if not isinstance(layout, Mapping):
+            raise ValidationError(f"{where}.layout 必须是映射", where=where)
+        unknown = set(layout) - {"ncols"}
+        if unknown:
+            raise ValidationError(
+                f"{where}.layout 含未知字段 {sorted(unknown)}；允许 ['ncols']",
+                where=where,
+            )
+        if "ncols" in layout:
+            ncols = layout["ncols"]
+            if isinstance(ncols, bool) or not isinstance(ncols, int) or ncols < 1:
+                raise ValidationError(
+                    f"{where}.layout.ncols 必须是正整数，收到 {ncols!r}",
+                    where=where,
+                )
+            result["layout"] = {"ncols": ncols}
     if "palette" in value:
         result["palette"] = list(resolve_palette(value["palette"], f"{where}.palette"))
     if "size" in value:
@@ -158,7 +176,7 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
 def merge_plot(base: Mapping[str, Any], override: Mapping[str, Any]) -> dict[str, Any]:
     merged = dict(base)
     for key, value in override.items():
-        if key in ("window", "rc") and isinstance(value, Mapping):
+        if key in ("window", "rc", "layout") and isinstance(value, Mapping):
             current = dict(merged.get(key) or {})
             current.update(value)
             merged[key] = current

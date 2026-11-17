@@ -43,3 +43,16 @@ def test_all_builtin_plugins_have_panel_renderer():
     for name, definition in discover().definitions.items():
         module = importlib.import_module(definition.module)
         assert callable(getattr(module, "render_panel", None)), name
+        assert callable(getattr(module, "panels", None)), name
+
+
+def test_figure_owns_ncols_and_hides_empty_cells():
+    from mdanal.plot.figure import Figure
+    from mdanal.plot.panels import Panel
+
+    panels = [
+        Panel(name=str(index), draw=lambda ax: ax.plot([0, 1], [index, index]))
+        for index in range(3)
+    ]
+    fig = Figure(panels, ncols=2).build()
+    assert sum(axis.get_visible() for axis in fig.axes) == 3
