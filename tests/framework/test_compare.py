@@ -200,3 +200,20 @@ def test_compare_applies_configured_ylim(tmp_path, monkeypatch):
     monkeypatch.setattr(compare_module.chart, "save", fake_save)
     run_compare(config, tmp_path / "out", registry=fake_registry())
     assert captured["ylim"] == pytest.approx((0.0, 2.0))
+
+
+def test_compare_defaults_to_mdanal_theme_colors(tmp_path, monkeypatch):
+    roots = [_run(tmp_path, "a"), _run(tmp_path, "b")]
+    config = _config(tmp_path, roots)
+    captured = {}
+
+    def fake_save(fig, path, dpi):
+        captured["colors"] = [line.get_color() for line in fig.axes[0].lines]
+        return path
+
+    monkeypatch.setattr(compare_module.chart, "save", fake_save)
+    run_compare(config, tmp_path / "out", registry=fake_registry())
+    assert captured["colors"] == [
+        compare_module.chart.COLORS["primary"],
+        compare_module.chart.COLORS["secondary"],
+    ]

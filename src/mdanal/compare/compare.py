@@ -149,6 +149,7 @@ def run_compare(
 
     multi_column = len(y_columns) > 1
     show_legend = len(items) > 1 or multi_column
+    chart.apply_style()
     colors = (
         list(figure["palette"])
         if figure.get("palette")

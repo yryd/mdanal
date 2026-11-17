@@ -8,11 +8,12 @@
 
 图片由当前实现生成：`scripts/build_docs_assets.py` 调用 `resolve_palette` 和 `chart.density_cmap`，数据在 [`palettes.json`](assets/palettes.json)。
 
-八套命名色板：
+不写 `palette` 时使用 mdanal 主题色；也可显式选择八套命名色板：
 
 | 名称 | 颜色数 | 颜色（按顺序） |
 |---|---:|---|
-| `retro`（默认） | 6 | `#4165c0` `#e770a2` `#5ac3be` `#696969` `#f79a1e` `#ba7dcd` |
+| `mdanal`（默认） | 6 | `#4165c0` `#c05040` `#4a90c2` `#d08a3e` `#5b9e7a` `#8a6bb0` |
+| `retro` | 6 | `#4165c0` `#e770a2` `#5ac3be` `#696969` `#f79a1e` `#ba7dcd` |
 | `bright` | 7 | `#4477AA` `#EE6677` `#228833` `#CCBB44` `#66CCEE` `#AA3377` `#BBBBBB` |
 | `high-contrast` | 3 | `#004488` `#DDAA33` `#BB5566` |
 | `high-vis` | 6 | `#0d49fb` `#e6091c` `#26eb47` `#8936df` `#fec32d` `#25d7fd` |
@@ -25,7 +26,7 @@
 
 ![八套色板的曲线效果](assets/palette-curves.png)
 
-实际颜色来自安装的 **SciencePlots 2.2.2**。`retro` 的六色与下面的“固定主色/对照色”不是同一套逻辑。
+`mdanal` 是平台默认主题，前两色就是固定主色/对照色；其余命名色板来自安装的 **SciencePlots 2.2.2**。
 
 ## 2. 怎么用
 
@@ -95,7 +96,7 @@ analyses:
 | `hbond_lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
 | `hbond_type` | 否 | 条形图显式使用主色 |
 | `density` | 否 | 使用白→蓝连续色标 |
-| `compare` | 是（`figure.palette`） | 按体系分色，多列按线型区分 |
+| `compare` | 是（`figure.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
 | 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
 
 固定主色/对照色：

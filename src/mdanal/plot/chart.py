@@ -15,6 +15,7 @@ matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt  # noqa: E402
 import numpy as np  # noqa: E402
+from cycler import cycler  # noqa: E402
 from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
@@ -39,6 +40,16 @@ COLORS: dict[str, str] = {
     "label": "0.35",
 }
 
+# mdanal 默认主题循环：前两色是主色/对照色，后续用于多系列扩展
+THEME_COLORS: tuple[str, ...] = (
+    "#4165c0",  # primary
+    "#c05040",  # secondary
+    "#4a90c2",
+    "#d08a3e",
+    "#5b9e7a",
+    "#8a6bb0",
+)
+
 # 密度用白→深蓝的顺序色标
 _DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d5c"]
 
@@ -62,6 +73,8 @@ def apply_style() -> None:
     # 中文字体必须直接作为 font.family；放进 font.serif 靠回退会渲染成方块
     matplotlib.rcParams["font.family"] = [CJK_FONT]
     matplotlib.rcParams["axes.unicode_minus"] = False
+    # 平台统一主题色；plot.palette 仍可通过 rc_context 覆盖它
+    matplotlib.rcParams["axes.prop_cycle"] = cycler(color=list(THEME_COLORS))
 
     missing = missing_fonts()
     if missing:
