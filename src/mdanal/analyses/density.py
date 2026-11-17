@@ -399,15 +399,23 @@ def figures(ctx, tables):
         if ctx.annotate:
             chart.note(ax, ctx.annotation())
 
-    # 手动留出右侧色标条位置，避免 colorbar 与最后一个面板重叠；
-    # 色标高度固定在面板区域的中下部，不再随整张画布拉长。
-    if len(panels) > 1:
-        fig.subplots_adjust(left=0.05, right=0.86, bottom=0.13, top=0.90, wspace=0.26)
-        cax = fig.add_axes([0.885, 0.18, 0.018, 0.64])
-    else:
-        fig.subplots_adjust(left=0.14, right=0.83, bottom=0.16, top=0.90)
-        cax = fig.add_axes([0.86, 0.20, 0.025, 0.60])
-    bar = fig.colorbar(meshes[0], cax=cax)
-    bar.set_label(ctx.label("cbar"))
+    # 每个面板各有一条色标，色标高度严格等于该面板纵轴的实际高度。
+    # 面板纵横比不同（非立方盒）时，不能共用一条整图高度的色标。
+    fig.subplots_adjust(
+        left=0.05,
+        right=0.94,
+        bottom=0.13,
+        top=0.90,
+        wspace=0.55 if len(panels) > 1 else 0.0,
+    )
+    fig.canvas.draw()
+    for index, (ax, mesh) in enumerate(zip(axes_list, meshes)):
+        position = ax.get_position()
+        cax = fig.add_axes(
+            [position.x1 + 0.014, position.y0, 0.012, position.height]
+        )
+        bar = fig.colorbar(mesh, cax=cax)
+        if index == len(panels) - 1:
+            bar.set_label(ctx.label("cbar"))
     name = "density" if len(panels) > 1 else items[0][0]
     return [(name, fig)]

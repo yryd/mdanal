@@ -82,7 +82,7 @@ def test_density_and_msd_end_to_end(real, tmp_path):
     assert figure.is_file()
     width, _ = Image.open(figure).size
     nominal = 4.2 * 300
-    assert 0.85 <= width / nominal <= 1.05
+    assert 0.85 <= width / nominal <= 1.35
 
 
 def test_density_projection_conserves_at_two_deltas(real, tmp_path):

@@ -25,7 +25,7 @@
 - 参数：`delta`（目标网格宽 Å；实际格宽为 `L/ceil(L/delta)`，写入 meta 的 `grid_widths`）、`sum_axis`（单投影时 x/y/z）、`directions`（多面板，如 `[xy, xz, yz]`）、`cmap`/`colors`（色标）、`vmin`/`vmax`（色标范围，`auto` 或数值）；
 - 输出：`{a}_angstrom`、`{b}_angstrom`、`number_density_A3`（Å⁻³）；
 - 含义：三维网格上的数密度沿 `sum_axis` 求和后，除以该方向格数，得到沿轴平均的数密度；网格精确铺满真实盒长，不再把扩展补零段算进平均；不是柱密度；
-- 多面板：`directions` 非空时一次输出多张表，并在一张图内并排显示；共享全局色标范围，右侧一条色标；`sum_axis` 被忽略；
+- 多面板：`directions` 非空时一次输出多张表，并在一张图内并排显示；共享全局色标范围；每个面板右侧各有一条色标，高度严格对齐该面板纵轴；`sum_axis` 被忽略；
 - 色标：`cmap` 可用 Matplotlib 名称（`viridis`/`cividis`/`Blues` 等）；`colors` 用颜色列表覆盖 `cmap`；`vmin/vmax` 为 `auto` 或数值；
 - 限制：只支持正交盒；x/y 必须周期，z 可非周期（`ppf/pps`），非周期 z 不 wrap。网格按首帧盒子建立；盒子变化时只使用首帧并警告。三斜盒或非周期 x/y 会打印非物理警告并继续，结果仅供定性参考。
 
