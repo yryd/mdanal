@@ -63,9 +63,14 @@ def test_density_and_msd_end_to_end(real, tmp_path):
 
     meta = provenance["analyses"][0]["meta"]
     extent = meta["grid_extent"]
-    delta = float(meta["delta"])
-    # Σρ · Δa · Δb · extent_k = 原子数（extent 为网格沿求和方向的覆盖长度）
-    total = float(table["number_density_A3"].sum()) * delta * delta * extent[meta["sum_axis"]]
+    widths = meta["grid_widths"]
+    # Σρ · 实际格宽 a · 实际格宽 b · extent_k = 原子数
+    total = (
+        float(table["number_density_A3"].sum())
+        * widths["x"]
+        * widths["z"]
+        * extent[meta["sum_axis"]]
+    )
     assert total == pytest.approx(selection_count(cfg, "all"), rel=1e-6)
 
     # 变盒子：只算首帧，并给出警告
@@ -97,10 +102,11 @@ def test_density_projection_conserves_at_two_deltas(real, tmp_path):
         meta = json.loads((out / "provenance.json").read_text(encoding="utf-8"))[
             "analyses"
         ][0]["meta"]
+        widths = meta["grid_widths"]
         total = (
             float(table["number_density_A3"].sum())
-            * delta
-            * delta
+            * widths["x"]
+            * widths["z"]
             * meta["grid_extent"]["y"]
         )
         assert total == pytest.approx(selection_count(cfg, "all"), rel=1e-6)
@@ -176,3 +182,16 @@ def test_density_plot_size_and_title_are_saved(real, tmp_path):
     assert plot["size"] == [5.0, 2.0]
     assert plot["title"] == {"zh": "密度", "en": "Density"}
     assert (out / "density-sized/figures/density_xz.png").is_file()
+
+
+def test_projection_with_exact_box_tiling_is_uniform():
+    """delta=3 的 10 Å 盒：实际格宽 2.5，内部投影密度必须为 1。"""
+    from mdanal.analyses.density import _project_grid
+
+    cells = 4
+    width = 10.0 / cells
+    counts = np.full((cells, cells, cells), 1000.0 / cells**3)
+    edges = [np.linspace(0.0, 10.0, cells + 1)] * 3
+    grid = counts / width**3
+    _, _, density, _ = _project_grid(grid, edges, "y")
+    assert np.allclose(density, 1.0)

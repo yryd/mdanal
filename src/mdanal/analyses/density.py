@@ -141,9 +141,12 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     lengths = np.asarray(universe.dimensions[:3], dtype=float)
     geometry = getattr(ctx, "geometry", None)
     pbc = geometry.pbc if geometry is not None else (True, True, True)
-    cells = np.ceil(lengths / delta).astype(int)
-    edges = [np.arange(n + 1, dtype=float) * delta for n in cells]
-    counts = np.zeros(tuple(cells), dtype=float)
+    # 用精确铺满盒子的等宽格；delta 是目标分辨率，实际格宽可能略不同。
+    # 这样投影平均的分母是真实盒长，而不是 ceil(L/delta)*delta 的扩展长度。
+    cells = np.maximum(1, np.ceil(lengths / delta).astype(int))
+    widths = lengths / cells
+    edges = [np.linspace(0.0, lengths[i], int(cells[i]) + 1) for i in range(3)]
+    counts = np.zeros(tuple(int(value) for value in cells), dtype=float)
 
     atoms = ctx.groups["group"].atoms
     for frame in range(ctx.start, stop):
@@ -154,10 +157,14 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         hist, _ = np.histogramdd(positions, bins=edges)
         counts += hist
 
-    # 单位 Å⁻³：每个格子的计数 / 帧数 / 格体积
-    grid = counts / (n_frames * delta**3)
+    # 单位 Å⁻³：每个格子的计数 / 帧数 / 实际格体积
+    cell_volume = float(np.prod(widths))
+    grid = counts / (n_frames * cell_volume)
     ctx.extras["density_extent"] = {
         axis: float(edges[i][-1]) for i, axis in enumerate(AXES)
+    }
+    ctx.extras["density_widths"] = {
+        axis: float(widths[i]) for i, axis in enumerate(AXES)
     }
 
     # 表里是盒坐标（0…L）；视图平移只在出图时施加
@@ -182,7 +189,8 @@ def meta(ctx, tables) -> dict:
     return {
         "sum_axis": sum_axis,
         "delta": float(ctx.params["delta"]),
-        # DensityAnalysis 的网格按 delta 取整，覆盖范围略大于盒长，核验时用这一组
+        "grid_widths": dict(ctx.extras.get("density_widths", {})),
+        # 精确铺满盒子的网格；extent 等于真实盒长
         "grid_extent": dict(ctx.extras.get("density_extent", {})),
     }
 

@@ -88,7 +88,15 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         )
 
     # 单位：range 与 edges 为 Å；g(r) 无量纲
-    analysis = InterRDF(group_a.atoms, group_b.atoms, nbins=nbins, range=(rmin, rmax))
+    # (1, 1) 排除“同一原子与自身”的配对；两组互不重叠时无影响，
+    # 同组自 RDF 或部分重叠组必须排除，否则 0 距离会污染第一个 bin。
+    analysis = InterRDF(
+        group_a.atoms,
+        group_b.atoms,
+        nbins=nbins,
+        range=(rmin, rmax),
+        exclusion_block=(1, 1),
+    )
     analysis.run(start=ctx.start, stop=ctx.stop)
 
     edges = np.asarray(analysis.results.edges, dtype=float)

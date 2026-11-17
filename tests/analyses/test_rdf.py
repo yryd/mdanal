@@ -65,3 +65,28 @@ def test_ideal_gas_rdf_is_unity():
     table = rdf_module.run(ctx)["rdf"]
     window = table[(table["r_angstrom"] > 2.0) & (table["r_angstrom"] < 9.0)]
     assert window["g_r"].mean() == pytest.approx(1.0, abs=0.15)
+
+
+def test_same_group_self_pairs_are_excluded():
+    """同组 RDF 不能把 i-i 自配对计入第一个 bin。"""
+    from types import SimpleNamespace
+
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import rdf as rdf_module
+
+    universe = mda.Universe.empty(2, trajectory=True)
+    coords = np.array([[[0.0, 5.0, 5.0], [2.0, 5.0, 5.0]]])
+    universe.load_new(coords, format=MemoryReader)
+    universe.dimensions = [10.0, 10.0, 10.0, 90, 90, 90]
+    ctx = SimpleNamespace(
+        groups={"a": SimpleNamespace(atoms=universe.atoms),
+                "b": SimpleNamespace(atoms=universe.atoms)},
+        universe=universe,
+        start=0,
+        stop=1,
+        params={"range": [0.0, 4.0], "nbins": 4},
+    )
+    table = rdf_module.run(ctx)["rdf"]
+    assert table["g_r"].iloc[0] == pytest.approx(0.0, abs=1e-12)
+    assert table["g_r"].iloc[1:].sum() > 0.0

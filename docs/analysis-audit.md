@@ -42,7 +42,7 @@
 | 输出 | 公式（当前） | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
 | `{a}_angstrom`, `{b}_angstrom` | 网格格心（盒坐标） | Å | MDAnalysis `Density.edges` | 正确 |
-| `number_density_A3` | `Σ_k ρ / N_k` | Å⁻³ | 三维直方图 + 投影平均 | **已修**：delta=1 与 2 均严格守恒（504） |
+| `number_density_A3` | `Σ_k ρ / N_k` | Å⁻³ | 精确铺满盒长的三维直方图 + 投影平均 | **已修**：delta 为目标分辨率，实际格宽 `L/ceil(L/delta)`；delta=1/2 均守恒 |
 | 网格范围 | `ceil(L/delta)` 格，坐标按盒折回 | Å | 自实现 | **已修**：未包裹坐标不再丢原子 |
 | 变盒子 | 检测后只用首帧 | — | `_fixed_box_stop` | **已改**：多帧 + 变盒 → 警告并只用首帧 |
 
@@ -65,7 +65,7 @@
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
 | `r_angstrom` | `InterRDF` 的 bin 中心 | Å | `results.edges` | **已核对** |
-| `g_r` | `InterRDF.results.rdf` | 无量纲 | MDAnalysis 文档 | **已核对**：理想气体 g(r)≈1（实测 1.05） |
+| `g_r` | `InterRDF.results.rdf` | 无量纲 | MDAnalysis 文档 | **已核对**：理想气体 g(r)≈1（实测 1.05）；`exclusion_block=(1,1)` 排除自配对 |
 
 半盒检查已有；新增理想气体解析测试。
 
@@ -161,7 +161,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 118 + 科学 37；
+其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 118 + 科学 39；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：
