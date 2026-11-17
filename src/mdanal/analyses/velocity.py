@@ -121,11 +121,14 @@ def _unit_vectors(
     first: np.ndarray,
     unit_mass: np.ndarray,
     lengths: np.ndarray,
+    pbc: tuple[bool, bool, bool],
 ) -> tuple[np.ndarray, np.ndarray]:
-    """单元的质心位置与质心速度；跨周期边界时以首原子为锚点做最小镜像。"""
+    """单元的质心位置与质心速度；只在周期方向做最小镜像。"""
     anchor_per_atom = positions[first][index]
     delta = positions - anchor_per_atom
-    delta -= np.round(delta / lengths) * lengths
+    for axis, periodic in enumerate(pbc):
+        if periodic:
+            delta[:, axis] -= np.round(delta[:, axis] / lengths[axis]) * lengths[axis]
     anchor = positions[first]
     com = np.column_stack(
         [
@@ -151,7 +154,7 @@ def _unit_vectors(
 
 COORDINATES = "in_box"
 
-GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "xy"}
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -162,6 +165,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         raise ValidationError(f"bin_width 必须为正数，收到 {bin_width}")
 
     universe = ctx.universe
+    geometry = getattr(ctx, "geometry", None)
+    pbc = geometry.pbc if geometry is not None else (True, True, True)
     atoms = ctx.groups["group"].atoms
     ref = ctx.groups["ref"].atoms
     if not universe.trajectory.ts.has_velocities:
@@ -214,15 +219,30 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         positions = np.asarray(atoms.positions, dtype=float)
         velocities = np.asarray(atoms.velocities, dtype=float)
         com, unit_velocity = _unit_vectors(
-            positions, velocities, masses, index, first, unit_mass, lengths
+            positions, velocities, masses, index, first, unit_mass, lengths, pbc
         )
 
         # 速度剖面是实验室系速度；参考组只用于记录位置，不参与速度相减
         relative = unit_velocity[:, vdim]
 
-        wrapped = com - np.floor(com / lengths) * lengths
-        # 统一到首帧参考盒，NPT 下也能在同一个坐标轴上平均
-        coordinate = wrapped[:, dim] / lengths[dim] * lengths_ref[dim]
+        wrapped = com.copy()
+        for axis_index, periodic in enumerate(pbc):
+            if periodic:
+                wrapped[:, axis_index] -= (
+                    np.floor(com[:, axis_index] / lengths[axis_index])
+                    * lengths[axis_index]
+                )
+        # 周期方向统一到首帧参考盒；非周期方向保留实际坐标，不缩放/不折回。
+        if pbc[dim]:
+            coordinate = wrapped[:, dim] / lengths[dim] * lengths_ref[dim]
+        else:
+            coordinate = wrapped[:, dim]
+            if np.any(coordinate < 0.0) or np.any(coordinate > lengths_ref[dim]):
+                raise ValidationError(
+                    f"非周期方向 {axis} 有统计单元落在参考盒 "
+                    f"[0, {lengths_ref[dim]:g}] 之外；请确认 BOX BOUNDS/坐标列，"
+                    "或缩小分析窗口。"
+                )
         bins = np.clip((coordinate / bin_width_ref).astype(int), 0, n_bins - 1)
         sums += np.bincount(bins, weights=relative, minlength=n_bins)
         sums_sq += np.bincount(bins, weights=relative * relative, minlength=n_bins)

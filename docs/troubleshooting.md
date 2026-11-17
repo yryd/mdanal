@@ -54,7 +54,7 @@
 - **`velocity` 警告盒子变化**：剖面在首帧参考盒坐标中平均。
 - **氢键寿命提示帧间隔太大**：寿命需要足够密的采样；5 ps/帧不能分辨亚皮秒寿命。不要改 `timestep_fs` 伪造采样密度。
 - **MSD 曲线噪声大**：短轨迹/少帧的结果；不是时间轴错误。连续视图要求相邻帧位移小于半盒。
-- **三斜盒 / 非周期边界**：首版 density/lineardensity/velocity/RDF 只支持正交全周期；hbond 家族只支持全周期。`ff/ss/mm` 或三斜会明确失败；不要靠改 YAML 伪装成 `pp`/正交。
+- **混合/非周期边界**：density/lineardensity/velocity 支持正交盒的 `ppf/pps`（x/y 周期、z 非周期，z 不 wrap）；RDF 和 hbond 家族当前插件仍声明全周期，遇到非周期方向会明确失败。三斜只在声明 `cell=any` 的氢键家族按 MDAnalysis 能力放行；不要靠改 YAML 伪装成 `pp`/正交。
 - **连续视图盒变化**：`x/xs` 包裹坐标的 continuous 只支持固定盒矩阵；NPT 变盒会拒绝。已给 `xu/xsu` 的轨迹按输入定义计算，但仍要自行判断是否适合自扩散。
 
 ## `palette` 不生效

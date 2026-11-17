@@ -17,7 +17,7 @@ from ..config.naming import NamingSummary, apply_naming, build_plan
 from ..errors import MdanalError, ValidationError
 from ..config.registry import PlanItem
 from ..config.geometry import GeometryTrack
-from ..config.system import is_wrapped_convention
+from ..config.system import AXES, is_wrapped_convention
 from ..config.system import (
     NOJUMP_WARNING,
     Group,
@@ -207,19 +207,28 @@ def _check_geometry(
             f"（首帧 cell={reference.cell}）。请换正交盒轨迹，或使用已声明 cell=any 的插件。",
             where=str(item.definition.name),
         )
-    if periodicity == "full":
-        if not window.pbc_known:
-            raise ValidationError(
-                f"{item.directory}：无法识别 BOX BOUNDS 的边界类型，"
-                f"当前插件要求三向周期。",
-                where=str(item.definition.name),
-            )
-        if not window.full_periodic:
-            raise ValidationError(
-                f"{item.directory}：分析窗口边界为 {window.reference.boundary_types}，"
-                f"当前插件要求三向周期（pp pp pp）；非周期方向不能通过盒镜像计算。",
-                where=str(item.definition.name),
-            )
+    required = {
+        "full": (0, 1, 2),
+        "xy": (0, 1),
+        "xz": (0, 2),
+        "yz": (1, 2),
+        "any": (),
+    }.get(periodicity, (0, 1, 2))
+    if not window.pbc_known:
+        raise ValidationError(
+            f"{item.directory}：无法识别 BOX BOUNDS 的边界类型，"
+            f"不能确认插件所需的周期方向。",
+            where=str(item.definition.name),
+        )
+    missing = [AXES[axis] for axis in required if not window.pbc_all[axis]]
+    if missing:
+        requirement = "三向周期（full）" if periodicity == "full" else periodicity
+        raise ValidationError(
+            f"{item.directory}：分析窗口边界为 {window.reference.boundary_types}；"
+            f"当前插件要求 {requirement}，缺少周期方向 {missing}。"
+            "非周期方向不能通过盒镜像计算。",
+            where=str(item.definition.name),
+        )
 
 
 def _labels_for_snapshot(item: PlanItem, common_labels: Mapping[str, Mapping[str, str]]):

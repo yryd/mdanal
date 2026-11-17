@@ -33,7 +33,7 @@ SUPPORTED_TYPES = (bool, int, float, str, list, tuple)
 COMPARE_KEYS = {"table", "x", "y", "box_axis"}
 GEOMETRY_KEYS = {"cell", "periodicity"}
 GEOMETRY_CELL = {"orthorhombic", "any"}
-GEOMETRY_PERIODICITY = {"full", "any"}
+GEOMETRY_PERIODICITY = {"full", "xy", "xz", "yz", "any"}
 
 
 @dataclass

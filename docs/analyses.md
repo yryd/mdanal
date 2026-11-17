@@ -25,7 +25,7 @@
 - 参数：`delta`（网格宽 Å）、`sum_axis`（x/y/z）；
 - 输出：`{a}_angstrom`、`{b}_angstrom`、`number_density_A3`（Å⁻³）；
 - 含义：三维网格上的数密度沿 `sum_axis` 求和后，除以该方向格数，得到沿轴平均的数密度；不是柱密度；
-- 限制：只支持正交全周期盒；网格按首帧盒子建立；检测到盒子变化时只使用首帧并警告。非周期/三斜输入会被拒绝。
+- 限制：只支持正交盒；x/y 必须周期，z 可非周期（`ppf/pps`），非周期 z 不 wrap。网格按首帧盒子建立；盒子变化时只使用首帧并警告。三斜盒或非周期 x/y 会被拒绝。
 
 <a id="lineardensity"></a>
 
@@ -35,7 +35,7 @@
 - 参数：`binsize`（Å）、`dim`（x/y/z）；
 - 输出：`lineardensity_x/y/z` 三张表，列为 `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_A3`；
 - 含义：沿各轴的质量密度和电荷密度；电荷单位是 e/Å³；
-- 限制：只支持正交全周期盒；固定盒；盒子变化时只使用首帧并警告；每个轴用自己的盒长和 `floor(L/binsize)` 个 bin。
+- 限制：只支持正交盒；x/y 必须周期，z 可非周期（`ppf/pps`），非周期 z 不 wrap。固定盒；盒子变化时只使用首帧并警告；每个轴用自己的盒长和 `floor(L/binsize)` 个 bin。
 
 <a id="rdf"></a>
 
@@ -45,7 +45,7 @@
 - 参数：`range`（Å）、`nbins`；
 - 输出：`r_angstrom`、`g_r`；
 - 含义：两组原子间的径向分布函数，`g_r` 无量纲；
-- 限制：只支持正交全周期盒；`range` 上限按**整个实际窗口**的最短盒长检查，不是当前读取器偶然帧；不计算配位数；tiny 的尖峰包含分子内相关。
+- 限制：当前 RDF 插件要求正交全周期盒（见插件声明）；`range` 上限按**整个实际窗口**的最短盒长检查，不是当前读取器偶然帧；不计算配位数；tiny 的尖峰包含分子内相关。
 
 <a id="hbond"></a>
 
@@ -99,7 +99,7 @@
 - 输入：计算组、参考组；
 - 参数：`dim`、`vdim`、`bin_width`、`grouping`（atoms/residues/segments/molecules）、`sym`；
 - 输出：`{axis}_angstrom`、`v{vdim}_A_per_ps`、`error_A_per_ps`；
-- 含义：按原盒坐标逐帧分箱的实验室系速度；当前要求正交全周期盒；参考组只记录质心到 meta，不改变速度或坐标参考系；
+- 含义：按原盒坐标逐帧分箱的实验室系速度；当前要求正交盒且 x/y 周期，z 可非周期（`ppf/pps`）；参考组只记录质心到 meta，不改变速度或坐标参考系；
 - 统计：每个统计单元每帧的观测作为一个样本；`profile = mean(v_i)`，`error = sqrt(sample_variance / N)`，N<2 时缺失；
 - `sym`：对相反 bin 的 profile/error 做现有算术平均，不是样本翻倍；
 - 限制：误差未校正时间相关性，不声称适合论文级置信区间；空 bin 为 NaN，图上断线。

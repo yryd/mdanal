@@ -77,7 +77,7 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 
 - 一次 `run` 处理一个体系；多体系在 `compare` 阶段叠图。
 - `density`/`lineardensity` 在盒子变化时只算首帧并警告；`msd` 的连续视图要求每帧位移小于半盒；氢键寿命需要足够密的采样。
-- 首版按每帧 `BOX BOUNDS` 处理原点、盒矩阵和 `pp/ff` 标记：density/lineardensity/velocity/RDF 要求正交全周期，氢键家族要求全周期（三斜由 MDAnalysis 距离实现）；非周期输入会明确拒绝，不会静默套周期镜像。`msd` 的连续视图只对已展开/固定盒路径放开；逐个插件的条件见 [配置](docs/configuration.md#坐标视图与每帧几何)。
+- 首版按每帧 `BOX BOUNDS` 处理原点、盒矩阵和 `pp/ff` 标记：density/lineardensity/velocity 支持 `ppf/pps`（x/y 周期、z 非周期，z 不 wrap）；RDF 和氢键家族当前插件仍声明全周期；三斜只在氢键家族按库能力放行。`msd` 的连续视图按输入路径受限。逐个插件的条件见 [配置](docs/configuration.md#坐标视图与每帧几何)。
 - 速度剖面在首帧参考盒坐标中平均；误差是未校正时间相关性的样本标准误。
 - `palette` 只改未显式设色的曲线；氢键部分图、密度连续色标、标注颜色仍单独设置。
 - 当前没有密度色标范围、逐条标注样式、论文级误差估计；见 [排错与限制](docs/troubleshooting.md#限制)。

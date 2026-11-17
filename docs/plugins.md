@@ -31,13 +31,13 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 可选
 | `LABELS` | `zh`/`en` 两套图内文字；公共标签和 `window` 占位符来自 `labels.yaml` |
 | `COLUMN_LABELS` | 机器列名 → 展示标签；compare 使用 |
 | `COORDINATES` | `in_box`/`continuous`/`any`；`any` 是“无特殊连续需求”，当前实际按 `in_box` 运行，不代表任意几何 |
-| `GEOMETRY` | `{cell: orthorhombic/any, periodicity: full/any}`；`any` 表示作者已自行验证，框架不替算法补能力 |
+| `GEOMETRY` | `{cell: orthorhombic/any, periodicity: full/xy/xz/yz/any}`；`xy` 表示只要求 x/y 周期，`any` 表示作者自行处理所有方向 |
 | `REQUIRES` | 当前已识别 `velocities`；不要写未识别的字符串假装检查了其他能力 |
 | `PACKAGE` | 外部包名和最低版本；不是安装器 |
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
 | `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图 |
 
-未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会明确失败，不会静默继续。
+未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会明确失败，不会静默继续。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
 
 ### 输出契约
 

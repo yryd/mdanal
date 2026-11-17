@@ -355,3 +355,50 @@ ITEM: ATOMS id type x y z
     assert frame.pbc_known is True
     assert frame.orthorhombic is False
     assert frame.origin == (0.0, 0.0, 0.0)
+
+
+def test_ppf_profile_analyses_do_not_wrap_z(tmp_path):
+    data = tmp_path / "data.lmp"
+    _write_data(data, [(1.0, 5.0, 2.0), (9.0, 5.0, 8.0)])
+    trajectory = tmp_path / "ppf.lammpstrj"
+    trajectory.write_text(
+        """ITEM: TIMESTEP
+0
+ITEM: NUMBER OF ATOMS
+2
+ITEM: BOX BOUNDS pp pp ff
+0 10
+0 10
+0 10
+ITEM: ATOMS id type x y z vx vy vz
+1 1 1 5 2 1 0 0
+2 2 9 5 8 2 0 0
+ITEM: TIMESTEP
+1
+ITEM: NUMBER OF ATOMS
+2
+ITEM: BOX BOUNDS pp pp ff
+0 10
+0 10
+0 10
+ITEM: ATOMS id type x y z vx vy vz
+1 1 2 5 2 1 0 0
+2 2 1 5 8 2 0 0
+""",
+        encoding="utf-8",
+    )
+    config = _system(
+        tmp_path,
+        data.name,
+        trajectory.name,
+        "  - {name: lineardensity, sel: [all_atoms], dim: z, binsize: 1}\n"
+        "  - {name: density, tag: xz, sel: [all_atoms], sum_axis: y, delta: 1}\n"
+        "  - {name: velocity, sel: [all_atoms, all_atoms], dim: z, vdim: z, "
+        "grouping: atoms, bin_width: 1}\n",
+        frames="[0, 2]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(config), "--out", str(out)]) == 0
+    velocity = pd.read_csv(out / "velocity" / "tables" / "velocity.csv", encoding="utf-8-sig")
+    assert list(velocity.columns) == ["z_angstrom", "vz_A_per_ps", "error_A_per_ps"]
+    assert np.isfinite(velocity["vz_A_per_ps"]).sum() >= 2

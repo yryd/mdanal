@@ -97,9 +97,9 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 
 | 分析 | 盒形状 | 边界 |
 |---|---|---|
-| density / lineardensity / velocity | 正交 | 三向周期 |
-| rdf | 正交 | 三向周期；`range` 上限按整个窗口最短盒长检查 |
-| hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期 |
+| density / lineardensity / velocity | 正交 | x/y 周期；z 可为 `ppf/pps` 非周期 |
+| rdf | 正交 | 三向周期（当前插件声明 full）；`range` 上限按整个窗口最短盒长检查 |
+| hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期（当前插件声明 full） |
 | msd | 连续视图按输入路径限制 | 包裹坐标只支持固定盒矩阵；已给 `xu/xsu` 按输入定义 |
 
 不满足条件时会在 `run`/`check` 阶段明确失败，并写出边界类型或盒形状；不支持时不要靠改 YAML 假装周期。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。

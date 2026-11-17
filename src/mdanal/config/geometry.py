@@ -85,6 +85,7 @@ class GeometryWindow:
     frames: int
     orthorhombic: bool
     pbc: tuple[bool, bool, bool]
+    pbc_all: tuple[bool, bool, bool]
     pbc_known: bool
     full_periodic: bool
     origin_changed: bool
@@ -100,6 +101,7 @@ class GeometryWindow:
             "reference": self.reference.to_dict(),
             "orthorhombic": self.orthorhombic,
             "pbc": list(self.pbc),
+            "pbc_all": list(self.pbc_all),
             "pbc_known": self.pbc_known,
             "full_periodic": self.full_periodic,
             "origin_changed": self.origin_changed,
@@ -134,9 +136,12 @@ class GeometryTrack:
         selected = self.frames[start:stop]
         reference = selected[0]
         pbc = reference.pbc
+        pbc_all = tuple(
+            all(frame.pbc[axis] for frame in selected) for axis in range(3)
+        )
         orthorhombic = all(frame.orthorhombic for frame in selected)
         pbc_known = all(frame.pbc_known for frame in selected)
-        full_periodic = all(all(frame.pbc) for frame in selected)
+        full_periodic = all(pbc_all)
         origin_changed = any(not np.allclose(frame.origin, reference.origin) for frame in selected[1:])
         cell_changed = any(
             not np.allclose(frame.cell, reference.cell) for frame in selected[1:]
@@ -150,6 +155,7 @@ class GeometryTrack:
             frames=len(selected),
             orthorhombic=orthorhombic,
             pbc=pbc,
+            pbc_all=pbc_all,
             pbc_known=pbc_known,
             full_periodic=full_periodic,
             origin_changed=origin_changed,

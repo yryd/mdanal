@@ -76,6 +76,21 @@ COMPARE = {
 }
 
 
+def _reject_outside(positions: np.ndarray, lengths: np.ndarray,
+                    pbc: tuple[bool, ...]) -> None:
+    """非周期方向落在盒外时不能悄悄被直方图丢掉。"""
+    for axis, periodic in enumerate(pbc):
+        if periodic:
+            continue
+        values = positions[:, axis]
+        if values.size and (values.min() < 0.0 or values.max() > lengths[axis]):
+            raise ValidationError(
+                f"非周期方向 {AXES[axis]} 有原子落在盒外 "
+                f"[{values.min():g}, {values.max():g}]，盒范围 [0, {lengths[axis]:g}]；"
+                "请确认 BOX BOUNDS 与坐标列，或缩小分析窗口。"
+            )
+
+
 def _fixed_box_stop(ctx) -> tuple[int, int | None]:
     """返回 (有效 stop, 首次变盒的帧)。盒子变了就只用首帧。"""
     universe = ctx.universe
@@ -93,7 +108,7 @@ def _fixed_box_stop(ctx) -> tuple[int, int | None]:
 
 COORDINATES = "in_box"
 
-GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
+GEOMETRY = {"cell": "orthorhombic", "periodicity": "xy"}
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -122,6 +137,8 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     universe.trajectory[ctx.start]
     lengths = np.asarray(universe.dimensions[:3], dtype=float)
+    geometry = getattr(ctx, "geometry", None)
+    pbc = geometry.pbc if geometry is not None else (True, True, True)
     bins = np.floor(lengths / binsize).astype(int)
     if int(bins.min()) < 1:
         raise ValidationError(
@@ -142,14 +159,14 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     for frame in range(ctx.start, stop):
         universe.trajectory[frame]
         positions = np.asarray(group.positions, dtype=float)
-        # 原始轨迹可能是未包裹坐标；按盒长折回后再计入直方图
-        wrapped = positions - np.floor(positions / lengths) * lengths
+        # in_box 视图已只对周期方向折回；非周期方向保持实际坐标。
+        _reject_outside(positions, lengths, pbc)
         for i, axis in enumerate(AXES):
             mass_hist, _ = np.histogram(
-                wrapped[:, i], weights=masses, bins=edges[axis]
+                positions[:, i], weights=masses, bins=edges[axis]
             )
             charge_hist, _ = np.histogram(
-                wrapped[:, i], weights=charges, bins=edges[axis]
+                positions[:, i], weights=charges, bins=edges[axis]
             )
             mass_sum[axis] += mass_hist
             charge_sum[axis] += charge_hist
