@@ -30,7 +30,7 @@ def compose_panels(
     *,
     ncols: int = 1,
     title: str | None = None,
-    wspace: float = 0.55,
+    wspace: float = 0.20,
     hspace: float = 0.38,
     top: float = 0.92,
 ) -> plt.Figure:
@@ -43,10 +43,13 @@ def compose_panels(
     nrows = (len(panels) + ncols - 1) // ncols
     base_w = max(panel.panel_size[0] for panel in panels)
     base_h = max(panel.panel_size[1] for panel in panels)
+    # 多列时按面板高度定宽，避免 subplot 单元比正方形面板宽太多，
+    # 在列间留下大块空白；单列仍按原 map 宽度。
+    figure_width = base_w if ncols == 1 else base_h * ncols + 0.4
     fig, axes_array = plt.subplots(
         nrows,
         ncols,
-        figsize=(base_w * ncols, base_h * nrows),
+        figsize=(figure_width, base_h * nrows + 0.4),
         squeeze=False,
     )
     axes = axes_array.ravel()
