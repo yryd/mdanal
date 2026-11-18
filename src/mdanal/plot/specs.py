@@ -22,7 +22,7 @@ class Curve:
     unit: str = ""
     color: str | None = None
     linestyle: str = "-"
-    linewidth: float = 1.2
+    linewidth: float | None = None
     source: str = ""
     metadata: Mapping[str, Any] = field(default_factory=dict)
 

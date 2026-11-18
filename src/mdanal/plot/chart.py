@@ -55,14 +55,33 @@ _DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d
 
 _styled = False
 
-
-# --------------------------------------------------------------------------- #
-# 底座：样式、画布、保存
-# --------------------------------------------------------------------------- #
+# 默认主题：面向拼图/缩图的粗线、大字号；单图也直接使用。
+STYLE_RC: dict[str, Any] = {
+    "font.size": 13.0,
+    "axes.titlesize": 15.0,
+    "axes.titleweight": "bold",
+    "axes.labelsize": 14.0,
+    "axes.labelweight": "bold",
+    "xtick.labelsize": 11.5,
+    "ytick.labelsize": 11.5,
+    "xtick.top": False,
+    "ytick.right": False,
+    "legend.fontsize": 10.0,
+    "axes.linewidth": 1.3,
+    "xtick.major.width": 0.9,
+    "ytick.major.width": 0.9,
+    "xtick.minor.width": 0.9,
+    "ytick.minor.width": 0.9,
+    "xtick.major.size": 3.5,
+    "ytick.major.size": 3.5,
+    "xtick.minor.size": 2.0,
+    "ytick.minor.size": 2.0,
+    "lines.linewidth": 2.0,
+}
 
 
 def apply_style() -> None:
-    """注册 SciencePlots 样式与中文字体；字体缺失直接报错。可重复调用。"""
+    """注册 SciencePlots、中文字体与项目默认主题；可重复调用。"""
     global _styled
     if _styled:
         return
@@ -75,12 +94,13 @@ def apply_style() -> None:
     matplotlib.rcParams["axes.unicode_minus"] = False
     # 平台统一主题色；plot.palette 仍可通过 rc_context 覆盖它
     matplotlib.rcParams["axes.prop_cycle"] = cycler(color=list(THEME_COLORS))
+    matplotlib.rcParams.update(STYLE_RC)
 
     missing = missing_fonts()
     if missing:
         raise MdanalError(
             f"缺少字体 {missing}；图中文字会渲染成方块。请安装该字体，"
-            f"或改 chart.CJK_FONT 指向本机已有的中文字体"
+            "或改 chart.CJK_FONT 指向本机已有的中文字体"
         )
     _styled = True
 
@@ -131,14 +151,17 @@ def line(
     *,
     label: str | None = None,
     color: str | None = None,
-    lw: float = 1.2,
+    lw: float | None = None,
     ls: str = "-",
     marker: str | None = None,
     ms: float | None = None,
     **kwargs: Any,
 ):
     """一条折线。颜色缺省时交给 matplotlib 的循环色，便于多曲线自动区分。"""
-    options: dict[str, Any] = {"lw": lw, "ls": ls}
+    options: dict[str, Any] = {
+        "lw": lw if lw is not None else matplotlib.rcParams.get("lines.linewidth", 1.2),
+        "ls": ls,
+    }
     if label is not None:
         options["label"] = label
     if color is not None:
@@ -310,7 +333,14 @@ def point_label(
 
 
 def legend(ax, **kwargs: Any):
-    options = {"loc": "upper right", "fontsize": 6, "frameon": False}
+    options = {
+        "loc": "upper right",
+        "fontsize": matplotlib.rcParams.get("legend.fontsize", 6),
+        "frameon": False,
+    }
     options.update(kwargs)
-    return ax.legend(**options)
+    legend = ax.legend(**options)
+    for text in legend.get_texts():
+        text.set_fontweight("bold")
+    return legend
 
