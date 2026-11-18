@@ -66,6 +66,8 @@ STYLE_RC: dict[str, Any] = {
     "ytick.labelsize": 11.5,
     "xtick.top": False,
     "ytick.right": False,
+    "xtick.minor.visible": False,
+    "ytick.minor.visible": False,
     "legend.fontsize": 10.0,
     "axes.linewidth": 1.3,
     "xtick.major.width": 0.9,
@@ -95,6 +97,20 @@ def apply_style() -> None:
     # 平台统一主题色；plot.palette 仍可通过 rc_context 覆盖它
     matplotlib.rcParams["axes.prop_cycle"] = cycler(color=list(THEME_COLORS))
     matplotlib.rcParams.update(STYLE_RC)
+    # 数字与公式也统一到中文字体；刻度不用 mathtext，避免回落到 Computer Modern。
+    matplotlib.rcParams.update(
+        {
+            "axes.formatter.use_mathtext": False,
+            "mathtext.fontset": "custom",
+            "mathtext.rm": CJK_FONT,
+            "mathtext.it": f"{CJK_FONT}:italic",
+            "mathtext.bf": f"{CJK_FONT}:bold",
+            "mathtext.sf": CJK_FONT,
+            "mathtext.tt": CJK_FONT,
+            "mathtext.cal": CJK_FONT,
+            "mathtext.default": "regular",
+        }
+    )
 
     missing = missing_fonts()
     if missing:

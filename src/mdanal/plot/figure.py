@@ -79,6 +79,11 @@ class Figure:
                 if panel.colorbar_label:
                     bar.set_label(panel.colorbar_label)
 
+        for ax in axes[: len(panels)]:
+            # 刻度数字用普通文本；主题要求数字也加粗。
+            for label in (*ax.get_xticklabels(), *ax.get_yticklabels()):
+                label.set_fontweight("bold")
+
         for ax in axes[len(panels):]:
             ax.set_visible(False)
 
