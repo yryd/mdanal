@@ -28,7 +28,7 @@ PARAMS = {
     "fft": {
         "type": bool,
         "default": True,
-        "help": "兼容旧参数；质心路径使用直接时间平均",
+        "help": "用 FFT 自相关计算 MSD；false 时用直接时间平均",
     },
 }
 
@@ -111,13 +111,38 @@ def _com_trajectory(atoms, grouping: str, start: int, stop: int) -> np.ndarray:
     return com
 
 
-def _msd_from_com(com: np.ndarray, msd_type: str) -> np.ndarray:
+def _msd_from_com(com: np.ndarray, msd_type: str, fft: bool = True) -> np.ndarray:
+    """对质心轨迹求时间平均 MSD；fft=True 用 FFT 自相关，否则直接求和。"""
     axes = AXIS_SETS[msd_type]
-    n_frames = len(com)
+    pos = com[..., axes]
+    n_frames = len(pos)
+    if not fft:
+        msd = np.empty(n_frames, dtype=float)
+        for lag in range(n_frames):
+            delta = pos[lag:] - pos[: n_frames - lag]
+            msd[lag] = float(np.mean(np.sum(delta**2, axis=-1)))
+        return msd
+
+    # 与直接求和的公式一致：按时间平均的 MSD，对统计单元平均、对维度求和。
+    n_fft = 1 << (2 * n_frames - 1).bit_length()
+    rsq = np.sum(pos**2, axis=(1, 2)) / pos.shape[1]
+    acf_sum = np.zeros(n_frames, dtype=float)
+    for axis in range(pos.shape[2]):
+        spectrum = np.fft.rfft(pos[..., axis], n=n_fft, axis=0)
+        acf = np.fft.irfft(spectrum * spectrum.conj(), n=n_fft, axis=0)[:n_frames]
+        acf_sum += acf.mean(axis=1)
+    counts = n_frames - np.arange(n_frames, dtype=float)
+    correlation = acf_sum / counts
+
     msd = np.empty(n_frames, dtype=float)
-    for lag in range(n_frames):
-        delta = com[lag:] - com[: n_frames - lag]
-        msd[lag] = float(np.mean(np.sum(delta[..., axes] ** 2, axis=-1)))
+    total_sq = 2.0 * rsq.sum()
+    msd[0] = total_sq - 2.0 * correlation[0] * n_frames
+    if n_frames > 1:
+        msd[1:] = (
+            total_sq
+            - np.cumsum(rsq)[:-1]
+            - np.cumsum(rsq[1:][::-1])
+        ) / counts[1:] - 2.0 * correlation[1:]
     return msd
 
 
@@ -128,7 +153,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         raise ValueError("MSD 分组为空")
     com = _com_trajectory(atoms, grouping, ctx.start, ctx.stop)
     msd_type = str(ctx.params["msd_type"])
-    msd = _msd_from_com(com, msd_type)
+    msd = _msd_from_com(com, msd_type, bool(ctx.params.get("fft", True)))
 
     universe = atoms.universe
     dt = float(getattr(ctx, "frame_dt_ps", universe.trajectory.ts.dt))

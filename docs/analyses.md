@@ -91,7 +91,7 @@
 ## msd
 
 - 输入：一个原子组；
-- 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（旧兼容参数，质心路径使用直接时间平均）；
+- 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（是否用 FFT 自相关加速，默认 true）；
 - 输出：`dt_ps`、`msd_A2`；
 - 含义：均方位移；默认质心路径按残基质量和质心计算；时间轴按全局帧号 × 帧间隔，不跟随 TIMESTEP 重置；
 - 限制：当前只画原始 MSD，不做线性拟合，不计算扩散系数；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。

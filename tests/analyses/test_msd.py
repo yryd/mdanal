@@ -473,3 +473,15 @@ def test_msd_default_uses_residue_com():
     )
     table = msd_module.run(ctx)["msd"]
     assert np.allclose(table["msd_A2"], 0.0, atol=1e-12)
+
+
+def test_msd_fft_matches_direct_on_random_com():
+    """FFT 路径与直接时间平均在随机质心轨迹上应一致。"""
+    from mdanal.analyses import msd as msd_module
+
+    rng = np.random.default_rng(7)
+    com = rng.normal(size=(30, 4, 3))
+    for msd_type in ("xyz", "xy", "z"):
+        direct = msd_module._msd_from_com(com, msd_type, fft=False)
+        fast = msd_module._msd_from_com(com, msd_type, fft=True)
+        assert np.allclose(fast, direct, rtol=1e-10, atol=1e-10)
