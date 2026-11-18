@@ -91,11 +91,10 @@
 ## msd
 
 - 输入：一个原子组；
-- 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fit_range`（线性拟合的 [起, 止] ps；为空用全部滞后点）、`fft`（旧兼容参数，质心路径使用直接时间平均）；
-- 输出：`dt_ps`、`msd_A2`、`fit_msd_A2`（拟合区间内，其余为 NaN）；
+- 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（旧兼容参数，质心路径使用直接时间平均）；
+- 输出：`dt_ps`、`msd_A2`；
 - 含义：均方位移；默认质心路径按残基质量和质心计算；时间轴按全局帧号 × 帧间隔，不跟随 TIMESTEP 重置；
-- 扩散系数：在 `fit_range` 上做 `MSD = slope·Δt + intercept` 线性拟合，`D = slope/(2×维度数)`；`meta` 和图上标注 `D`，不输出 R²；
-- 限制：`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
+- 限制：当前只画原始 MSD，不做线性拟合，不计算扩散系数；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
 
 <a id="velocity"></a>
 

@@ -468,10 +468,8 @@ def test_msd_default_uses_residue_com():
         params={
             "msd_type": "xyz",
             "grouping": "residues",
-            "fit_range": [],
             "fft": False,
         },
     )
     table = msd_module.run(ctx)["msd"]
     assert np.allclose(table["msd_A2"], 0.0, atol=1e-12)
-    assert np.isfinite(table["fit_msd_A2"]).all()

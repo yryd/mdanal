@@ -1,4 +1,4 @@
-"""均方位移：默认按分子/残基质心计算，并给出线性拟合扩散系数。"""
+"""均方位移：默认按分子/残基质心计算。"""
 
 from __future__ import annotations
 
@@ -25,11 +25,6 @@ PARAMS = {
         "choices": ("residues", "atoms"),
         "help": "residues 按残基/分子质心；atoms 为原子 MSD",
     },
-    "fit_range": {
-        "type": list,
-        "default": [],
-        "help": "线性拟合的 [起, 止] ps；为空表示使用全部滞后点",
-    },
     "fft": {
         "type": bool,
         "default": True,
@@ -42,15 +37,11 @@ LABELS = {
         "title": "均方位移",
         "x": r"$\Delta t$ (ps)",
         "y": "MSD (Å$^{2}$)",
-        "fit": "线性拟合",
-        "d": "D",
     },
     "en": {
         "title": "Mean squared displacement",
         "x": r"$\Delta t$ (ps)",
         "y": "MSD (Å$^{2}$)",
-        "fit": "linear fit",
-        "d": "D",
     },
 }
 
@@ -130,23 +121,6 @@ def _msd_from_com(com: np.ndarray, msd_type: str) -> np.ndarray:
     return msd
 
 
-def _parse_fit_range(value, lag: np.ndarray) -> tuple[float, float]:
-    if value in (None, [], ()):
-        return float(lag[0]), float(lag[-1])
-    if (
-        not isinstance(value, (list, tuple))
-        or len(value) != 2
-        or any(isinstance(item, bool) or not isinstance(item, (int, float)) for item in value)
-    ):
-        raise ValueError("fit_range 必须是 [起, 止] 两个数值")
-    low, high = float(value[0]), float(value[1])
-    if high <= low:
-        raise ValueError("fit_range 必须递增")
-    if low < float(lag[0]) or high > float(lag[-1]):
-        raise ValueError(f"fit_range 超出可用滞后范围 [{lag[0]}, {lag[-1]}]")
-    return low, high
-
-
 def run(ctx) -> dict[str, pd.DataFrame]:
     grouping = str(ctx.params.get("grouping", "residues"))
     atoms = ctx.groups["group"].atoms
@@ -159,61 +133,18 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     universe = atoms.universe
     dt = float(getattr(ctx, "frame_dt_ps", universe.trajectory.ts.dt))
     lag = np.arange(len(msd), dtype=float) * dt
-    low, high = _parse_fit_range(ctx.params.get("fit_range"), lag)
-    mask = (lag >= low) & (lag <= high)
-    if int(mask.sum()) < 2:
-        raise ValueError("fit_range 内不足两个点，无法拟合")
-
-    slope, intercept = np.polyfit(lag[mask], msd[mask], 1)
-    dimension = len(AXIS_SETS[msd_type])
-    d_a2_ps = float(slope / (2.0 * dimension))
-    d_m2_s = d_a2_ps * 1e-8
-    fitted = np.full_like(msd, np.nan)
-    fitted[mask] = slope * lag[mask] + intercept
-    table = pd.DataFrame(
-        {
-            "dt_ps": lag,
-            "msd_A2": msd,
-            "fit_msd_A2": fitted,
-        }
-    )
-    fit = {
-        "grouping": grouping,
-        "fit_range": [low, high],
-        "dimension": dimension,
-        "slope_A2_per_ps": float(slope),
-        "intercept_A2": float(intercept),
-        "D_A2_per_ps": d_a2_ps,
-        "D_m2_per_s": d_m2_s,
-    }
-    if hasattr(ctx, "extras"):
-        ctx.extras["msd_fit"] = fit
+    table = pd.DataFrame({"dt_ps": lag, "msd_A2": msd})
     return {"msd": table}
-
-
-def meta(ctx, tables) -> dict:
-    return dict(ctx.extras.get("msd_fit", {}))
 
 
 def build_series(ctx, tables) -> list[Series]:
     table = tables["msd"]
-    raw = Curve(
+    curve = Curve(
         x=table["dt_ps"].to_numpy(dtype=float),
         y=table["msd_A2"].to_numpy(dtype=float),
         label=ctx.label("y"),
-        metadata={"marker": "o"},
     )
-    series = [Series(name="msd_A2", curves=[raw], label=ctx.label("y"))]
-    if table["fit_msd_A2"].notna().any():
-        fit = Curve(
-            x=table["dt_ps"].to_numpy(dtype=float),
-            y=table["fit_msd_A2"].to_numpy(dtype=float),
-            label=ctx.label("fit"),
-            color=chart.COLORS["secondary"],
-            linestyle="--",
-        )
-        series.append(Series(name="fit_msd_A2", curves=[fit], label=ctx.label("fit")))
-    return series
+    return [Series(name="msd_A2", curves=[curve], label=ctx.label("y"))]
 
 
 def panel_request(ctx, tables) -> PanelRequest:
@@ -223,14 +154,12 @@ def panel_request(ctx, tables) -> PanelRequest:
         title=ctx.label("title"),
         xlabel=ctx.label("x"),
         ylabel=ctx.label("y"),
-        options={"legend": True},
+        options={"legend": False},
     )
 
 
 def render_panel(ctx, request: PanelRequest) -> Panel:
     def draw(ax):
-        curves = [curve for series in request.series for curve in series.curves]
-        show_legend = bool(request.options.get("legend")) or len(curves) > 1
         for series in request.series:
             for curve in series.curves:
                 chart.line(
@@ -240,19 +169,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     lw=curve.linewidth,
                     color=curve.color,
                     ls=curve.linestyle,
-                    marker=curve.metadata.get("marker"),
-                    label=curve.label if show_legend else None,
                 )
-        fit = ctx.meta.get("msd_fit", ctx.meta) if ctx.meta else {}
-        d_value = fit.get("D_m2_per_s")
-        if d_value is not None:
-            d_text = (
-                f"{ctx.label('d')} = {d_value / 1e-9:.3f} "
-                r"$\times 10^{-9}$ m$^2$ s$^{-1}$"
-            )
-            chart.note(ax, d_text, at=(0.015, 0.88), fontsize=7)
-        if show_legend:
-            chart.legend(ax)
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())
