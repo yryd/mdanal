@@ -114,6 +114,7 @@ def test_compare_rejects_analysis_without_declaration(tmp_path):
 def test_time_axis_detection():
     assert _is_time_axis(False, "lag_ps")
     assert _is_time_axis(False, "dt_ps")
+    assert _is_time_axis(False, "dt_ns")
     assert not _is_time_axis(False, "r_angstrom")
     assert not _is_time_axis(True, "z_angstrom")
 

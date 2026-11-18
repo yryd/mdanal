@@ -92,7 +92,7 @@
 
 - 输入：一个原子组；
 - 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（是否用 FFT 自相关加速，默认 true）；
-- 输出：`dt_ps`、`msd_A2`；
+- 输出：`dt_ns`、`msd_A2`；
 - 含义：均方位移；默认质心路径按残基质量和质心计算；时间轴按全局帧号 × 帧间隔，不跟随 TIMESTEP 重置；
 - 限制：当前只画原始 MSD，不做线性拟合，不计算扩散系数；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
 
@@ -118,9 +118,9 @@
 | hbond | `time_ps` / `hbond_count` / `occupancy` | ps / 个 / — |
 | hbond_type | `count` / `per_frame` / `share` | 个 / 个·帧⁻¹ / — |
 | hbond_lifetime | `lag_ps` / `tau_1e_ps` | ps |
-| msd | `dt_ps` / `msd_A2` | ps / Å² |
+| msd | `dt_ns` / `msd_A2` | ns / Å² |
 | velocity | `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ |
 
-`x_angstrom/y_angstrom/z_angstrom` 是盒局部位置列；`r_angstrom` 是距离，不是盒坐标，不能加盒原点平移；`dt_ps`/`lag_ps` 是时间。`--aligned` 只对位置列施加视图平移，`replot` 使用原表，不用 aligned 副本。
+`x_angstrom/y_angstrom/z_angstrom` 是盒局部位置列；`r_angstrom` 是距离，不是盒坐标，不能加盒原点平移；`dt_ns`/`lag_ps` 是时间。`--aligned` 只对位置列施加视图平移，`replot` 使用原表，不用 aligned 副本。
 
 下一步：[多体系对比](compare.md) 或 [排错](troubleshooting.md)。

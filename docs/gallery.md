@@ -44,7 +44,7 @@
 
 ![MSD](assets/gallery/msd.png)
 
-`dt_ps` 对 `msd_A2`；当前不拟合扩散系数。
+`dt_ns` 对 `msd_A2`；当前不拟合扩散系数。
 
 ### 流速剖面
 

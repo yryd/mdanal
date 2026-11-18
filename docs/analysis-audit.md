@@ -29,7 +29,7 @@
 | hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | 已改归一化列名 |
 | hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 待交叉核对 |
 | hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`tau_1e_ps`、`tolerance_frames`、`note` | 一致 | 有 | 已改 `tau_1e_ps` |
-| msd | `dt_ps`、`msd_A2` | 一致 | 有 | 待解析核对 |
+| msd | `dt_ns`、`msd_A2` | 一致 | 有 | 待解析核对 |
 | velocity | `{axis}_angstrom`、`v{vdim}_A_per_ps`、`error_A_per_ps` | 一致 | 有 | 误差列确认是标准误 |
 
 结论：8 个分析的 `LABELS` 中英键集合一致；表头与 `COMPARE`/`COLUMN_LABELS` 对齐；
@@ -103,7 +103,7 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `dt_ps` | 全局帧号 × 帧间隔 | ps | 加载层统一 | **已修**：不再跟随 TIMESTEP 重置 |
+| `dt_ns` | 全局帧号 × 帧间隔 / 1000 | ns | 加载层统一 | **已改**：MSD 时间轴改用 ns |
 | `msd_A2` | 残基质心位移平方平均（默认） | Å² | 自实现 | **已改**：默认质心，`grouping: atoms` 可回退原子路径 |
 
 ### velocity

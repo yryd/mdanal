@@ -117,7 +117,7 @@ def run_compare(
         offenders = [item.label for item in items if item.t_offset]
         if offenders:
             raise ValidationError(
-                "t_offset 只能用于时间轴（列名以 _ps 结尾且非盒坐标轴）；"
+                "t_offset 只能用于时间轴（列名以 _ps/_ns 结尾且非盒坐标轴）；"
                 f"{offenders} 设了非零偏移，而当前横轴是 {x_column!r}",
                 where=str(config_path),
             )
@@ -374,7 +374,7 @@ def _run_panel_compare(
             offenders = [item.label for item in items if item.t_offset]
             if offenders:
                 raise ValidationError(
-                    "t_offset 只能用于时间轴（列名以 _ps 结尾且非盒坐标轴）；"
+                    "t_offset 只能用于时间轴（列名以 _ps/_ns 结尾且非盒坐标轴）；"
                     f"{offenders} 设了非零偏移，而当前横轴是 {x_column!r}",
                     where=str(config_path),
                 )
@@ -742,8 +742,8 @@ def _require_columns(
 
 
 def _is_time_axis(box_axis: bool, x_column: str) -> bool:
-    """只有非盒坐标轴且列名以 _ps 结尾时，才允许 t_offset。"""
-    return (not box_axis) and str(x_column).endswith("_ps")
+    """只有非盒坐标轴且列名以 _ps/_ns 结尾时，才允许 t_offset。"""
+    return (not box_axis) and str(x_column).endswith(("_ps", "_ns"))
 
 
 def _axis_shift(item: CompareItem, axis: str, align: Mapping[str, Any]) -> float:

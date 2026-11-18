@@ -96,9 +96,10 @@ def test_msd_matches_ballistic_motion():
         params={"msd_type": "xyz", "fft": False},
     )
     table = msd_module.run(ctx)["msd"]
-    lag = np.arange(n_frames) * dt
-    assert np.allclose(table["dt_ps"], lag)
-    assert np.allclose(table["msd_A2"], (vx * lag) ** 2)
+    lag_ns = np.arange(n_frames) * dt / 1000.0
+    lag_ps = np.arange(n_frames) * dt
+    assert np.allclose(table["dt_ns"], lag_ns)
+    assert np.allclose(table["msd_A2"], (vx * lag_ps) ** 2)
 
 
 def _write_coordinate_dump(path, columns: str, rows: list[tuple], n_atoms: int) -> None:
@@ -186,8 +187,8 @@ def test_segmented_reset_steps_keep_frame_time(tmp_path):
             out_disk / f"msd-{tag}/tables/msd.csv", encoding="utf-8-sig"
         )
         pd.testing.assert_frame_equal(memory, disk)
-        assert memory["dt_ps"].min() >= 0
-        assert np.allclose(memory["dt_ps"], np.arange(total) * 5.0)
+        assert memory["dt_ns"].min() >= 0
+        assert np.allclose(memory["dt_ns"], np.arange(total) * 5.0 / 1000.0)
 
 
 def test_merged_reset_segments_match_single_file(tmp_path):
@@ -368,7 +369,7 @@ Atoms # full
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
     table = pd.read_csv(out / "msd/tables/msd.csv", encoding="utf-8-sig")
     assert table["msd_A2"].round(6).tolist() == [0.0, 4.0, 16.0]
-    assert np.allclose(table["dt_ps"], [0.0, 5.0, 10.0])
+    assert np.allclose(table["dt_ns"], [0.0, 0.005, 0.01])
 
 
 def test_wrapped_no_bond_memory_and_disk_agree(tmp_path):

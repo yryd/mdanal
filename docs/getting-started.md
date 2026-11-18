@@ -52,14 +52,14 @@ python main.py run   --system example/quickstart --out /tmp/mdanal-demo --force
 表的前几行：
 
 ```text
-dt_ps,msd_A2
+dt_ns,msd_A2
 0,-8.73e-12
-5,5.80
-10,4.93
-15,4.34
+0.005,5.80
+0.01,4.93
+0.015,4.34
 ```
 
-`dt_ps` 是滞后时间（ps），`msd_A2` 是均方位移（Å²）。第一行接近 0 的负数来自浮点舍入。
+`dt_ns` 是滞后时间（ns），`msd_A2` 是均方位移（Å²）。第一行接近 0 的负数来自浮点舍入。
 
 ### `check` 和 `run` 的区别
 

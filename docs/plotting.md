@@ -152,8 +152,8 @@ import matplotlib.pyplot as plt
 
 table = pd.read_csv("OUT/msd/tables/msd.csv")
 fig, ax = plt.subplots(figsize=(3.5, 2.6))
-ax.plot(table["dt_ps"], table["msd_A2"], color="#4165c0")
-ax.set_xlabel("lag (ps)")
+ax.plot(table["dt_ns"], table["msd_A2"], color="#4165c0")
+ax.set_xlabel("lag (ns)")
 ax.set_ylabel("MSD (Å²)")
 fig.savefig("my-msd.png", dpi=300, bbox_inches="tight")
 ```

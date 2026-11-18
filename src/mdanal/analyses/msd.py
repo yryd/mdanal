@@ -35,12 +35,12 @@ PARAMS = {
 LABELS = {
     "zh": {
         "title": "均方位移",
-        "x": r"$\Delta t$ (ps)",
+        "x": r"$\Delta t$ (ns)",
         "y": "MSD (Å$^{2}$)",
     },
     "en": {
         "title": "Mean squared displacement",
-        "x": r"$\Delta t$ (ps)",
+        "x": r"$\Delta t$ (ns)",
         "y": "MSD (Å$^{2}$)",
     },
 }
@@ -49,13 +49,13 @@ COORDINATES = "continuous"
 
 
 COLUMN_LABELS = {
-    "zh": {"dt_ps": r"$\Delta t$ (ps)", "msd_A2": "MSD (Å$^{2}$)"},
-    "en": {"dt_ps": r"$\Delta t$ (ps)", "msd_A2": "MSD (Å$^{2}$)"},
+    "zh": {"dt_ns": r"$\Delta t$ (ns)", "msd_A2": "MSD (Å$^{2}$)"},
+    "en": {"dt_ns": r"$\Delta t$ (ns)", "msd_A2": "MSD (Å$^{2}$)"},
 }
 
 COMPARE = {
     "table": "msd",
-    "x": "dt_ps",
+    "x": "dt_ns",
     "y": ["msd_A2"],
     "box_axis": False,
 }
@@ -157,15 +157,15 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     universe = atoms.universe
     dt = float(getattr(ctx, "frame_dt_ps", universe.trajectory.ts.dt))
-    lag = np.arange(len(msd), dtype=float) * dt
-    table = pd.DataFrame({"dt_ps": lag, "msd_A2": msd})
+    lag_ns = np.arange(len(msd), dtype=float) * dt / 1000.0
+    table = pd.DataFrame({"dt_ns": lag_ns, "msd_A2": msd})
     return {"msd": table}
 
 
 def build_series(ctx, tables) -> list[Series]:
     table = tables["msd"]
     curve = Curve(
-        x=table["dt_ps"].to_numpy(dtype=float),
+        x=table["dt_ns"].to_numpy(dtype=float),
         y=table["msd_A2"].to_numpy(dtype=float),
         label=ctx.label("y"),
     )
