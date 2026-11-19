@@ -14,7 +14,7 @@
 | `plot.json` | 程序 | 重绘所需上下文 | 不手改 |
 | `manifest.csv` / `provenance.json` | 程序 | 分析目录、参数、警告、输入校验和 | 阅读/排错 |
 | `replot.json` | 程序 | 本次重绘设置与产物记录 | 阅读，不当配置 |
-| `analyses/*.py` | 分析作者 | 新算法或自定义绘图 | 写插件时编辑 |
+| `analyses/<name>/` | 分析作者 | 插件包（实现 + note） | 写插件时编辑 |
 
 数据流：
 
@@ -61,6 +61,7 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 | `naming` | 否 | 给残基/原子补名字 | `hbond_type` 需要；见 [分析说明](analyses.md#hbond_type) |
 | `groups` | 否 | 名字 → MDAnalysis 选择串 | `sel` 可以用组名或直接写选择串 |
 | `analyses` | 是 | 分析列表 | 见下 |
+| `figures` | 否 | 跨分析组合图列表 | 引用 `analyses` 的输出目录和 recipe |
 
 ### `analyses` 每一条
 
@@ -77,6 +78,28 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 | 分析参数 | 否 | 如 `nbins`、`dim`、`delta`、`tau_max_ps`，直接写在本层；用 `mdanal list <name>` 查契约 |
 
 **`sel` 是必填的**。参数有默认值不等于不需要选择组；`sel` 数量不对会在 `build_plan` 阶段报错。
+
+### 顶层 `figures`
+
+跨分析组合图放在 `system.yaml` 顶层，和 `analyses` 并列：
+
+```yaml
+figures:
+  - name: msd-3comp-fit
+    layout: {ncols: 3}
+    plot: {title: {zh: TMA-5 三组分 MSD, en: TMA-5 three-component MSD}}
+    panels:
+      - {analysis: msd-water, recipe: fit, plot: {title: 水}}
+      - {analysis: msd-pip, recipe: fit, plot: {title: PIP}}
+      - {analysis: msd-tma, recipe: fit, plot: {title: TMA}}
+```
+
+- `analysis` 是输出目录名（`msd-water`），不是插件名（`msd`）；
+- `recipe` 必须是该 analysis 模块 `FIGURES` 中已有的名字；
+- `layout.ncols` 控制一行几张 Panel；
+- 图级 `plot` 只接受 `title`、`palette`、`rc`；Panel 级 `plot` 只接受 `title`、`xlabel`、`ylabel`、`window`、`xlim`、`ylim`；
+- 需要 `fit` 时，每个被引用的 analysis 必须自己配置 `derive.fit`；跨分析图不会偷偷派生；
+- 不写顶层 `figures` 时，单分析行为完全不变。
 
 <a id="坐标视图与每帧几何"></a>
 

@@ -15,6 +15,7 @@ from ..errors import ValidationError
 from .continuous import ContinuousView
 from .geometry import GeometryTrack, read_geometry
 from .naming import NamingConfig, parse_naming
+from .cross_figures import CrossFigureSpec, parse_figures
 from .views import InBoxView, LabView
 
 SYSTEM_FILENAME = "system.yaml"
@@ -49,6 +50,7 @@ ALLOWED_KEYS = {
     "analyses",
     "view",
     "naming",
+    "figures",
 }
 
 
@@ -79,6 +81,7 @@ class SystemConfig:
     frames: tuple[int, int] | None
     groups: dict[str, str]
     analyses: tuple[dict[str, Any], ...]
+    figures: tuple[CrossFigureSpec, ...] = ()
     naming: NamingConfig = field(default_factory=NamingConfig)
     box_low: tuple[float, float, float] = (0.0, 0.0, 0.0)
     view: ViewConfig = field(
@@ -196,6 +199,7 @@ def read_system(path: str | Path) -> SystemConfig:
     seam_notes = _seam_notes(trajectory, scans)
     view = _parse_view(data.get("view"), box_low, where)
     naming = parse_naming(data.get("naming"), directory, where)
+    figures = parse_figures(data.get("figures"), f"{where}:figures")
 
     return SystemConfig(
         name=name,
@@ -209,6 +213,7 @@ def read_system(path: str | Path) -> SystemConfig:
         frames=frames,
         groups=groups,
         analyses=analyses,
+        figures=figures,
         naming=naming,
         box_low=box_low,
         view=view,

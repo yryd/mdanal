@@ -30,6 +30,7 @@ from ..config.system import (
 )
 from ..plot import plotutil
 from ..plot.render import render as render_figures
+from ..plot.composite import render_composites
 from ..plot.snapshot import (
     build_snapshot,
     make_plot_context,
@@ -413,6 +414,24 @@ def execute(
         if error:
             print(f"     绘图失败：{error}")
 
+    composite_records: list[dict[str, Any]] = []
+    composite_errors: list[dict[str, str]] = []
+    if cfg.figures:
+        by_directory = {record["item"].directory: record for record in records}
+        composite_records, composite_errors = render_composites(
+            cfg.figures,
+            by_directory,
+            outdir,
+            lang=options.lang,
+            dpi=options.dpi,
+            annotate=options.annotate,
+        )
+        for entry in composite_errors:
+            render_errors.append(entry)
+            print(f"[--] {entry['directory']:<18} 绘图失败：{entry['error']}")
+        for entry in composite_records:
+            print(f"[--] figures/{entry['name']:<12} 跨分析图 1 张")
+
     write_manifest(outdir, manifest_rows)
     write_provenance(
         outdir,
@@ -481,6 +500,8 @@ def execute(
                 "errors": render_errors,
             },
             "analyses": details,
+            "composite_figures": composite_records,
+            "composite_figure_errors": composite_errors,
             "libraries": _library_versions(),
         },
     )

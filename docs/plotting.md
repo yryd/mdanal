@@ -18,6 +18,7 @@
 | 一次分析出多张图 | `figures: {raw, fit, rdc}` | 不重算基础表 | 需插件声明 `FIGURES`；MSD 已支持 |
 | 改拟合窗口/D/RDC | `derive:` | **要派生，不重算轨迹** | 只对声明 derive 的插件；首版 MSD |
 | 只重绘某张图 | `replot --figure NAME` | 不重算 | 需快照包含 figures |
+| 重绘跨分析组合图 | `replot --composite NAME` | 不重算 | 需 run 已生成 `figures/NAME.json` |
 | PNG/SVG/PDF | `replot --format` | 不用 | `run` 和 `compare` 没有同样的格式选项 |
 | 选择组、帧窗口、分箱、截断、参数 | `system.yaml` | **要** | 不能塞进 `plot.yaml` |
 | 单位换算（Å→nm 等） | 当前没有通用 YAML 换算 | 可读表用 Python 换算 | 必须同时换算数据、范围和标注 |
@@ -107,6 +108,58 @@ analyses:
 ```
 
 `figures` 的键是稳定的 recipe ID，不是文件名；每个 recipe 的 `plot` 覆盖只影响该图。不写 `figures` 时保持当前默认输出（MSD 只出 raw）。`derive` 改变的是数值结果，`plot.xlim` 只改显示范围，不能改拟合窗口。
+
+<a id="跨分析组合图"></a>
+
+### 跨分析组合图
+
+需要把多个 analysis 的 Panel 放进同一张图时，在 `system.yaml` 顶层加 `figures`：
+
+```yaml
+analyses:
+  - name: msd
+    tag: water
+    sel: [water]
+    derive: {fit: {window_ns: [1.0, 4.0]}}
+
+  - name: msd
+    tag: pip
+    sel: [pip]
+    derive: {fit: {window_ns: [1.0, 4.0]}}
+
+  - name: msd
+    tag: tma
+    sel: [tma]
+    derive: {fit: {window_ns: [1.0, 4.0]}}
+
+figures:
+  - name: msd-3comp-fit
+    layout: {ncols: 3}
+    plot: {title: TMA-5 三组分 MSD}
+    panels:
+      - {analysis: msd-water, recipe: fit, plot: {title: 水}}
+      - {analysis: msd-pip, recipe: fit, plot: {title: PIP}}
+      - {analysis: msd-tma, recipe: fit, plot: {title: TMA}}
+```
+
+输出：
+
+```text
+out/
+├── msd-water/
+├── msd-pip/
+├── msd-tma/
+└── figures/
+    ├── msd-3comp-fit.png
+    └── msd-3comp-fit.json
+```
+
+- 每个 Panel 使用对应 analysis 自己的 `FIGURES[recipe]`，所以拟合线、D、RDC 都已经在插件内完成；
+- 组合阶段只读表和 `plot.json`，不读轨迹、不重算；
+- `fit` recipe 依赖 `msd_fit`/`msd_fit_summary`，对应 analysis 必须配置 `derive.fit`；
+- 每个 Panel 项必须恰好产生一个 Panel；
+- 跨分析图失败不会删除已经算好的分析表；
+- `mdanal replot --from OUT --out FIG --composite msd-3comp-fit` 可重绘，不需要轨迹。
 
 
 

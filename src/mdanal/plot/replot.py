@@ -17,6 +17,7 @@ from ..run.writers import sha256
 from . import plotutil
 from .annotations import parse as parse_annotations
 from .render import render
+from .composite import render_composite_figure, spec_from_snapshot
 from .settings import merge_plot, parse_plot
 from .snapshot import (
     json_safe,
@@ -185,6 +186,7 @@ def run_replot(
     *,
     analyses: Sequence[str] = (),
     figures: Sequence[str] = (),
+    composite: Sequence[str] = (),
     config: str | Path | None = None,
     lang: str | None = None,
     dpi: int | None = None,
@@ -218,6 +220,20 @@ def run_replot(
     for name in config_analyses:
         if name not in available:
             raise ValidationError(f"重绘配置里的分析目录不存在：{name}")
+
+    requested_composites: list[Any] = []
+    for name in composite:
+        path = source / "figures" / f"{name}.json"
+        if not path.is_file():
+            raise ValidationError(
+                f"结果中没有跨分析图 {name!r}：{path} 不存在"
+            )
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            specs = spec_from_snapshot(payload)
+        except (OSError, json.JSONDecodeError, ValidationError) as exc:
+            raise ValidationError(f"跨分析图快照无法读取：{path}（{exc}）") from exc
+        requested_composites.extend(specs)
 
     if out.exists():
         if not out.is_dir():
@@ -321,6 +337,60 @@ def run_replot(
                 }
             )
 
+        composite_records: list[dict[str, Any]] = []
+        if requested_composites:
+            global_lang = (
+                lang
+                or config_defaults.get("lang")
+                or (records[0]["lang"] if records else "zh")
+            )
+            global_dpi = (
+                dpi
+                or config_defaults.get("dpi")
+                or (records[0]["dpi"] if records else 300)
+            )
+            global_fmt = (
+                fmt
+                or config_defaults.get("format")
+                or (records[0]["format"] if records else "png")
+            )
+            global_annotate = (
+                annotate
+                if annotate is not None
+                else (records[0]["show_run_info"] if records else False)
+            )
+            for spec in requested_composites:
+                source_records: dict[str, Any] = {}
+                for panel in spec.panels:
+                    if panel.analysis in source_records:
+                        continue
+                    analysis_dir = source / panel.analysis
+                    snapshot = load_snapshot(analysis_dir)
+                    module_name = snapshot["analysis"]["module"]
+                    try:
+                        module = importlib.import_module(module_name)
+                    except ImportError as exc:
+                        raise ValidationError(
+                            f"{panel.analysis} 的绘图模块 {module_name} 不可用：{exc}"
+                        ) from exc
+                    source_records[panel.analysis] = {
+                        "module": module,
+                        "target": analysis_dir,
+                        "payload": snapshot,
+                        "plot_json_path": str(analysis_dir / "plot.json"),
+                    }
+                composite_records.append(
+                    render_composite_figure(
+                        spec,
+                        source_records,
+                        temp,
+                        lang=global_lang,
+                        dpi=global_dpi,
+                        annotate=bool(global_annotate),
+                        fmt=global_fmt,
+                    )
+                )
+
         files = [
             path.relative_to(temp).as_posix()
             for path in temp.rglob("*")
@@ -333,6 +403,7 @@ def run_replot(
             "source": str(source),
             "config": str(Path(config).expanduser().resolve()) if config else None,
             "analyses": records,
+            "composite_figures": composite_records,
             "settings": {
                 "lang": records[0]["lang"] if records else None,
                 "dpi": records[0]["dpi"] if records else None,

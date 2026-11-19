@@ -19,6 +19,7 @@ from typing import Any, Mapping, Sequence
 from ..errors import ValidationError
 from ..plot.annotations import parse as parse_annotations
 from ..plot.settings import parse_plot
+from .cross_figures import validate_figures
 from .system import SystemConfig
 
 ANALYSES_PACKAGE = "mdanal.analyses"
@@ -670,6 +671,7 @@ def build_plan(
     if problems:
         raise ValidationError("\n".join(problems), where=str(cfg.yaml_path))
 
+    validate_figures(cfg, items)
     return items
 
 

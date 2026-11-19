@@ -87,13 +87,16 @@ class Figure:
         for ax in axes[len(panels):]:
             ax.set_visible(False)
 
+        top = self.top
         if self.title:
-            fig.suptitle(self.title)
+            # 给 suptitle 留出独立高度，避免和第一行 Panel 标题相撞。
+            top = min(top, 0.82)
+            fig.suptitle(self.title, y=0.98)
         fig.subplots_adjust(
             left=0.06,
             right=0.97,
             bottom=0.10,
-            top=self.top,
+            top=top,
             wspace=figure_wspace,
             hspace=self.hspace,
         )
