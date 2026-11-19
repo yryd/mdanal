@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "pack": "velocity",
+  "title": {
+    "zh": "速度剖面",
+    "en": "Velocity profile"
+  },
+  "products": [
+    {
+      "id": "velocity",
+      "kind": "curve",
+      "requires": [
+        "velocity"
+      ],
+      "default": true,
+      "compare": true
+    }
+  ]
+}

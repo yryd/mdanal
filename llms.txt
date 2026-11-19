@@ -1,0 +1,56 @@
+# mdanal AI 快速入口
+
+mdanal 是 figure-first 的 LAMMPS 轨迹分析工具。不要按旧 `system.yaml` / `run` / `compare` / `derive` / `FIGURES` / `panels()` / `COMPARE` 操作。
+
+## 命令
+
+```bash
+mdanal check  --config figures.yaml
+mdanal render --config figures.yaml --out OUT --force
+mdanal replot --from OUT --out FIG
+mdanal packs --json
+mdanal check-pack NAME
+```
+
+## 输入骨架
+
+```yaml
+schema_version: 1
+name: project
+render: {lang: zh, dpi: 300, annotate: false}
+sources:
+  A:
+    topology: data.lmp
+    trajectory: traj.lammpstrj
+    timestep_fs: 1.0
+    dump_every: 5000
+    frames: [0, 1000]
+    groups: {water: "type 11 12"}
+figures:
+  - name: msd
+    layout: {ncols: 1}
+    panels:
+      - source: A
+        pack: msd
+        product: msd-raw
+        select: {group: water}
+        compute: {msd_type: xyz}
+        plot: {title: water}
+```
+
+## 规则
+
+- `figures[]` 每一项是一张最终 PNG，有自己的 `layout.ncols`。
+- 一个产品恰好一个 Panel；不要把多 Panel 产品塞进一项。
+- `density-2d` 是产品，`plot.plane: xy/xz/yz` 是参数；3D 网格只算一次。
+- `density-line` 与 `density-2d` 同属 `density`。
+- `compare` 只用于 `kind: curve`，产出一个 Panel；2D 密度用多个 panel 并排。
+- `hbond-type` 需要 source `naming`。
+- `check` 在计算前校验 pack/product/slots/compute/derive/compare。
+- `replot` 只读 `OUT/figures/*.json` + 表，不读轨迹。
+
+## 内置能力
+
+运行 `mdanal packs --json`。当前：`density`、`hbond`、`msd`、`rdf`、`velocity`。
+
+详细说明见 `README.md`、`docs/configuration.md`、`docs/plugins.md`。

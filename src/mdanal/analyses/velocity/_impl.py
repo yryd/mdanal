@@ -88,13 +88,6 @@ COLUMN_LABELS = {
     },
 }
 
-COMPARE = {
-    "table": "velocity",
-    "x": "{axis}_angstrom",
-    "y": ["v{vdim}_A_per_ps"],
-    "box_axis": True,
-}
-
 
 def _unit_layout(atoms, grouping: str) -> tuple[np.ndarray, np.ndarray]:
     """把原子映射到统计单元（原子/残基/分子/段），返回单元编号与首原子。"""

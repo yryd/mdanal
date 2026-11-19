@@ -1,4 +1,4 @@
-"""呈现设置校验：system.yaml 的 analyses[].plot 与 replot 配置共用。"""
+"""Panel 呈现设置校验。"""
 
 from __future__ import annotations
 

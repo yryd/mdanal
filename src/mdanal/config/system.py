@@ -1,4 +1,4 @@
-"""体系加载：定位并解析 system.yaml，构建各视图的 Universe，解析原子选择。
+"""来源加载：构建各视图的 Universe，解析原子选择。
 """
 
 from __future__ import annotations
@@ -15,10 +15,8 @@ from ..errors import ValidationError
 from .continuous import ContinuousView
 from .geometry import GeometryTrack, read_geometry
 from .naming import NamingConfig, parse_naming
-from .cross_figures import CrossFigureSpec, parse_figures
 from .views import InBoxView, LabView
 
-SYSTEM_FILENAME = "system.yaml"
 TOPOLOGY_SUFFIXES = (".lmp", ".data")
 TRAJECTORY_SUFFIXES = (".lammpstrj",)
 AXES = ("x", "y", "z")
@@ -39,19 +37,6 @@ NOJUMP_WARNING = (
     "相邻帧位移超过半个盒长时结果可能失真。"
 )
 
-ALLOWED_KEYS = {
-    "name",
-    "topology",
-    "trajectory",
-    "timestep_fs",
-    "dump_every",
-    "frames",
-    "groups",
-    "analyses",
-    "view",
-    "naming",
-    "figures",
-}
 
 
 @dataclass(frozen=True)
@@ -68,7 +53,7 @@ class ViewConfig:
 
 @dataclass(frozen=True)
 class SystemConfig:
-    """system.yaml 的解析结果。不持有轨迹句柄，因此读配置不读轨迹。"""
+    """一个 source 的解析结果。不持有轨迹句柄，因此读配置不读轨迹。"""
 
     name: str
     directory: Path
@@ -80,8 +65,6 @@ class SystemConfig:
     dt_ps: float
     frames: tuple[int, int] | None
     groups: dict[str, str]
-    analyses: tuple[dict[str, Any], ...]
-    figures: tuple[CrossFigureSpec, ...] = ()
     naming: NamingConfig = field(default_factory=NamingConfig)
     box_low: tuple[float, float, float] = (0.0, 0.0, 0.0)
     view: ViewConfig = field(
@@ -130,104 +113,6 @@ class Group:
 # --------------------------------------------------------------------------- #
 # 定位与读取
 # --------------------------------------------------------------------------- #
-
-
-def locate_system_yaml(path: str | Path) -> Path:
-    """把 --system 的三种形态统一成 system.yaml 的路径。"""
-    raw = Path(path).expanduser()
-    if raw.is_dir():
-        candidate = raw / SYSTEM_FILENAME
-    elif raw.suffix in (".yaml", ".yml"):
-        candidate = raw
-    else:
-        candidate = raw.parent / SYSTEM_FILENAME
-
-    if not candidate.is_file():
-        raise ValidationError(
-            "找不到 system.yaml；该文件是必需的（可在其中省略 topology/trajectory，"
-            "此时在其所在目录内查找）",
-            where=str(candidate),
-        )
-    return candidate.resolve()
-
-
-def read_system(path: str | Path) -> SystemConfig:
-    """解析 system.yaml。不创建 Universe，不读取轨迹。"""
-    yaml_path = locate_system_yaml(path)
-    data = _load_yaml(yaml_path)
-    where = str(yaml_path)
-
-    unknown = set(data) - ALLOWED_KEYS
-    if unknown:
-        raise ValidationError(
-            f"未知的顶层字段 {sorted(unknown)}；允许的字段为 {sorted(ALLOWED_KEYS)}",
-            where=where,
-        )
-
-    directory = yaml_path.parent
-    name = data.get("name") or directory.name
-    if not isinstance(name, str):
-        raise ValidationError("name 必须是字符串", where=f"{where}:name")
-
-    timestep_fs = _positive_float(data.get("timestep_fs", 1.0), "timestep_fs", where)
-    dump_every = data.get("dump_every", 1)
-    if not isinstance(dump_every, int) or dump_every <= 0:
-        raise ValidationError("dump_every 必须是正整数", where=f"{where}:dump_every")
-
-    frames = _parse_frames(data.get("frames"), where)
-    groups = _parse_groups(data.get("groups"), where)
-    analyses = _parse_analyses(data.get("analyses"), where)
-
-    topology = _resolve_file(
-        data.get("topology"), directory, TOPOLOGY_SUFFIXES, "拓扑文件", where
-    )
-    trajectory = _resolve_trajectories(data.get("trajectory"), directory, where)
-    scans = [_scan_dump(path) for path in trajectory]
-    conventions = {scan.conventions for scan in scans}
-    if len(conventions) > 1:
-        detail = "、".join(
-            f"{p.name}: {','.join(s.conventions) or '未知'}"
-            for p, s in zip(trajectory, scans)
-        )
-        raise ValidationError(
-            f"各段轨迹的坐标列不一致（{detail}）；同一体系的各段必须用同样的坐标列",
-            where=f"{where}:trajectory",
-        )
-    geometry = read_geometry(trajectory)
-    box_low = geometry.frames[0].origin
-    input_state = scans[0].state
-    input_evidence = scans[0].evidence
-    seam_notes = _seam_notes(trajectory, scans)
-    time_notes = _time_axis_notes(geometry, dump_every, frames)
-    view = _parse_view(data.get("view"), box_low, where)
-    naming = parse_naming(data.get("naming"), directory, where)
-    figures = parse_figures(data.get("figures"), f"{where}:figures")
-
-    return SystemConfig(
-        name=name,
-        directory=directory,
-        yaml_path=yaml_path,
-        topology=topology,
-        trajectory=trajectory[0],
-        timestep_fs=timestep_fs,
-        dump_every=dump_every,
-        dt_ps=timestep_fs * 1e-3,
-        frames=frames,
-        groups=groups,
-        analyses=analyses,
-        figures=figures,
-        naming=naming,
-        box_low=box_low,
-        view=view,
-        input_state=input_state,
-        input_evidence=input_evidence,
-        coordinate_conventions=scans[0].conventions,
-        trajectories=trajectory,
-        seam_notes=seam_notes,
-        time_notes=time_notes,
-        segment_steps=tuple((scan.first_step, scan.last_step) for scan in scans),
-        geometry=geometry,
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -407,25 +292,6 @@ def rebuild_group(group: Group, universe: mda.Universe) -> Group:
 # --------------------------------------------------------------------------- #
 
 
-def _load_yaml(path: Path) -> dict[str, Any]:
-    try:
-        text = path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ValidationError(f"无法读取文件：{exc}", where=str(path)) from exc
-
-    try:
-        data = yaml.safe_load(text)
-    except yaml.YAMLError as exc:
-        mark = getattr(exc, "problem_mark", None)
-        line = f"（第 {mark.line + 1} 行）" if mark is not None else ""
-        raise ValidationError(f"YAML 语法错误{line}：{exc}", where=str(path)) from exc
-
-    if data is None:
-        raise ValidationError("文件为空", where=str(path))
-    if not isinstance(data, dict):
-        raise ValidationError("顶层必须是映射", where=str(path))
-    return data
-
 
 def _positive_float(value: Any, key: str, where: str) -> float:
     if isinstance(value, bool) or not isinstance(value, (int, float)) or value <= 0:
@@ -471,20 +337,6 @@ def _parse_groups(value: Any, where: str) -> dict[str, str]:
         groups[key] = sel
     return groups
 
-
-def _parse_analyses(value: Any, where: str) -> tuple[dict[str, Any], ...]:
-    if value is None:
-        return ()
-    if not isinstance(value, list):
-        raise ValidationError("analyses 必须是列表", where=f"{where}:analyses")
-    entries: list[dict[str, Any]] = []
-    for index, entry in enumerate(value, start=1):
-        if not isinstance(entry, dict):
-            raise ValidationError(
-                f"第 {index} 条分析必须是映射", where=f"{where}:analyses[{index}]"
-            )
-        entries.append(entry)
-    return tuple(entries)
 
 
 def _parse_view(value: Any, box_low: tuple[float, ...], where: str) -> ViewConfig:
@@ -551,7 +403,7 @@ def _resolve_file(
         )
     if len(candidates) > 1:
         raise ValidationError(
-            f"{label}不唯一，找到 {[p.name for p in candidates]}；请在 system.yaml 中显式指定",
+            f"{label}不唯一，找到 {[p.name for p in candidates]}；请在 sources 中显式指定",
             where=where,
         )
     return candidates[0].resolve()
@@ -644,7 +496,7 @@ def _resolve_trajectories(
         if len(candidates) > 1:
             raise ValidationError(
                 f"轨迹文件不唯一，找到 {[p.name for p in candidates]}；"
-                "请在 system.yaml 中显式指定",
+                "请在 sources 中显式指定",
                 where=where,
             )
         return (candidates[0].resolve(),)

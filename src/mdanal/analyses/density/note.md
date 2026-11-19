@@ -1,17 +1,30 @@
 # density
 
-## 分析目的
+## 图包目的
 
-计算三维数密度并投影到指定平面，支持多个方向、多个 section 和面板。
+一个 `density` 图包，两个产品：
+
+- `density-2d`：三维数密度 → 二维投影，`plot.plane` 选择 `xy/xz/yz`；
+- `density-line`：沿一个轴的质量/电荷线密度，`plot.axis` 选择 `x/y/z`。
 
 ## 输入与前提
 
-一个 group；`delta` 为目标网格分辨率；`sum_axis` 为默认投影方向，可用 `directions`/`panels` 指定多个方向或窗口。`cmap`/`colors`/`vmin`/`vmax` 控制连续色标。固定正交盒；变盒时只用首帧并警告。
+槽位 `group`；`delta` 为 3D 网格目标边长，`binsize` 为线密度直方图宽度。固定正交盒；变盒时只用首帧并警告。
+
+## 一次计算
+
+`density` 的 compute 一次产出：
+
+- `density_xy`、`density_xz`、`density_yz`（三个投影）；
+- `lineardensity_x/y/z`（三条线密度）。
+
+切换 `plot.plane`/`plot.axis` 不重算 3D 网格。
 
 ## 输出
 
-每个方向/窗口一张表：两个盒坐标轴、`number_density_A3`；图为对应投影。
+- 投影表：两个盒坐标轴 + `number_density_A3`；
+- 线密度表：轴坐标 + `mass_density_g_cm3` + `charge_density_e_A3`。
 
 ## 注意
 
-一个投影不能反推其他方向；需要多方向时在计算参数中显式请求。`cmap/colors/vmin/vmax` 是分析参数（需要重新 run），不是 `plot.palette`；布局属于视图设置，不改变密度数值。
+`density-2d` 是 field，不可 compare；多体系对比用多个 Panel 并排。`cmap/colors/vmin/vmax` 是分析参数，不是 `plot.palette`。

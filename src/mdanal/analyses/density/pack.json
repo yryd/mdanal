@@ -1,0 +1,31 @@
+{
+  "schema_version": 1,
+  "pack": "density",
+  "title": {
+    "zh": "密度",
+    "en": "Density"
+  },
+  "products": [
+    {
+      "id": "density-2d",
+      "kind": "field",
+      "requires": [
+        "density_xy",
+        "density_xz",
+        "density_yz"
+      ],
+      "default": true,
+      "compare": false
+    },
+    {
+      "id": "density-line",
+      "kind": "curve",
+      "requires": [
+        "lineardensity_x",
+        "lineardensity_y",
+        "lineardensity_z"
+      ],
+      "compare": true
+    }
+  ]
+}

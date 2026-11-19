@@ -44,17 +44,13 @@ RDC 与 D_fit 在有限窗口、存在截距时不必相等；不强制过原点
 ## 配置
 
 ```yaml
-- name: msd
-  sel: [water]
-  derive:
-    fit:
-      window_ns: [1.0, 3.0]
-      intercept: free
-    rdc: {}
-  figures:
-    raw: {}
-    fit: {}
-    rdc: {}
+panels:
+  - source: A
+    pack: msd
+    product: msd-fit
+    select: {group: water}
+    compute: {msd_type: xyz, grouping: residues}
+    derive: {fit: {window_ns: [1.0, 3.0], intercept: free}}
 ```
 
 ## 注意
@@ -65,4 +61,4 @@ RDC 与 D_fit 在有限窗口、存在截距时不必相等；不强制过原点
 - 没有自动平台检测，也没有“自动采用后段窗口”；由用户显式给 `window_ns`。
 - 大批量、少分子或短轨迹的 MSD 可能非单调；应检查拟合窗口与统计量。
 - 旧快照的 `dt_ps` 表按 ps 原样重绘，不能只换数值不换标签；新表用 ns。
-- 已有表改窗口时用 `mdanal derive`，不重扫轨迹；`derive` 的键必须是 `fit`/`rdc`。
+- 已有表改窗口时重新 `render`：基础表复用，只重派生；`derive` 的键必须是 `fit`/`rdc`。

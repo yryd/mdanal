@@ -48,23 +48,4 @@ COLUMN_LABELS = {
     "en": {"dt_ns": r"$\Delta t$ (ns)", "msd_A2": "MSD (Å$^{2}$)"},
 }
 
-COMPARE = {
-    "table": "msd",
-    "x": "dt_ns",
-    "y": ["msd_A2"],
-    "box_axis": False,
-}
-
 COORDINATES = "continuous"
-GEOMETRY = {"cell": "any", "periodicity": "any"}
-
-DERIVE = {
-    "fit": {
-        "keys": ("window_ns", "intercept"),
-        "help": "线性拟合；window_ns=[起,止]，intercept=free/zero",
-    },
-    "rdc": {
-        "keys": (),
-        "help": "运行扩散系数 MSD/(2dt)",
-    },
-}

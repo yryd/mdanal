@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "pack": "hbond",
+  "title": {
+    "zh": "氢键",
+    "en": "Hydrogen bonds"
+  },
+  "products": [
+    {
+      "id": "hbond-count",
+      "kind": "curve",
+      "requires": [
+        "hbond_count"
+      ],
+      "default": true,
+      "compare": true
+    },
+    {
+      "id": "hbond-type",
+      "kind": "bars",
+      "requires": [
+        "hbond_type"
+      ],
+      "compare": false
+    },
+    {
+      "id": "hbond-lifetime",
+      "kind": "curve",
+      "requires": [
+        "hbond_lifetime",
+        "hbond_lifetime_summary"
+      ],
+      "compare": true
+    }
+  ]
+}

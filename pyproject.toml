@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "mdanal"
 version = "0.1.0"
-description = "通用 MD 分析层：按体系目录的 system.yaml 驱动 MDAnalysis 分析"
+description = "Figure-first LAMMPS trajectory analysis: sources + figures -> Panel/Figure"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
@@ -28,10 +28,10 @@ mdanal = "mdanal.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mdanal = ["config/*.yaml", "analyses/*.md", "analyses/**/*.md"]
+mdanal = ["config/*.yaml", "analyses/*.md", "analyses/**/*.md", "analyses/**/*.json"]
 
 
 [tool.pytest.ini_options]
-# 裸 pytest 只跑框架与内置插件烟测；科学断言用 pytest tests/analyses 显式跑
-testpaths = ["tests/framework", "tests/smoke"]
+# 默认跑 figure-first 单元/e2e；需要真实大算例的断言可另加 marker。
+testpaths = ["tests/figure"]
 markers = ["analysis: 需要真实分析的科学断言（默认不跑）"]

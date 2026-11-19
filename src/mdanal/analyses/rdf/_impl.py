@@ -49,13 +49,6 @@ COLUMN_LABELS = {
     "en": {"r_angstrom": "$r$ (Å)", "g_r": "$g(r)$"},
 }
 
-COMPARE = {
-    "table": "rdf",
-    "x": "r_angstrom",
-    "y": ["g_r"],
-    "box_axis": False,
-}
-
 
 COORDINATES = "in_box"
 

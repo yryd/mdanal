@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "pack": "rdf",
+  "title": {
+    "zh": "径向分布函数",
+    "en": "Radial distribution function"
+  },
+  "products": [
+    {
+      "id": "rdf",
+      "kind": "curve",
+      "requires": [
+        "rdf"
+      ],
+      "default": true,
+      "compare": true
+    }
+  ]
+}

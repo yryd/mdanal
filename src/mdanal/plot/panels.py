@@ -23,10 +23,3 @@ class Panel:
     ylim: tuple[float, float] | None = None
     colorbar_label: str | None = None
     panel_size: tuple[float, float] = (4.2, 3.0)
-
-
-def compose_panels(panels, **kwargs):
-    """兼容旧 import；平台实现见 plot.figure.Figure。"""
-    from .figure import compose_panels as _compose
-
-    return _compose(panels, **kwargs)

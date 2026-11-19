@@ -1,7 +1,7 @@
 """命名：给残基（分子）与原子补上名字与元素，供选择串与标签使用。
 
 名字有两个来源：带注释的 LAMMPS data 文件（Atoms 段每行 `# 原子名 分子名`），
-以及 system.yaml 里按原子类型给出的规则；规则覆盖文件里的名字时会记一条警告。
+以及 figures.yaml 的 sources 里按原子类型给出的规则；规则覆盖文件里的名字时会记一条警告。
 写进拓扑的只有 names / resnames / elements，types 与 resids 不动。
 """
 
@@ -60,7 +60,7 @@ MASS_TOLERANCE = 0.35
 
 @dataclass(frozen=True)
 class NamingConfig:
-    """system.yaml 中 naming 块的解析结果。"""
+    """sources.naming 的解析结果。"""
 
     from_data: Path | None = None
     residues: tuple[tuple[str, frozenset[str]], ...] = ()
@@ -96,7 +96,7 @@ class NamingSummary:
 
 
 def parse_naming(value: Any, directory: Path, where: str) -> NamingConfig:
-    """解析 system.yaml 的 naming 块。"""
+    """解析 source 的 naming 块。"""
     if value is None:
         return NamingConfig()
     if not isinstance(value, dict):

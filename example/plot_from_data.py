@@ -1,4 +1,4 @@
-"""公共绘图层示例：不读轨迹、不需要 system.yaml，直接用自己的数据出图。
+"""公共绘图层示例：不读轨迹、不需要 figures.yaml，直接用自己的数据出图。
 
     python example/plot_from_data.py [输出.png]
 """

@@ -1,106 +1,137 @@
 # mdanal
 
-从 LAMMPS 轨迹得到可调整的科研图：先算一次数据，之后改语言、颜色、范围、标注和格式时只重绘，不重新扫轨迹；需要新算法时，把分析写成一个插件。
+从 LAMMPS 轨迹直接得到科研图：用户声明“我要哪些图”，平台反推需要哪些计算；一个图包提供若干**图产品**，每个产品恰好产出一个 Panel。
 
-![快速开始的 MSD 图](docs/assets/quickstart-msd-en.png)
+![示例 MSD 图](docs/assets/quickstart-msd-en.png)
 
 ## 30 秒开始
 
 ```bash
 pip install -r requirements.txt
 pip install -e .                 # 可选；不装就运行 python main.py
-python main.py check --system example/quickstart
-python main.py run   --system example/quickstart --out /tmp/mdanal-demo --force
-# 打开 /tmp/mdanal-demo/msd/figures/msd.png
-python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-en \
-  --lang en --format svg --config example/recipes/plot-en.yaml
-# 已有表、只改拟合窗口/重新出 fit 图时：
-# python main.py derive --from /tmp/mdanal-demo --out /tmp/mdanal-demo-fit \
-#   --config example/recipes/derive.yaml
+
+python main.py check  --config example/figures.yaml
+python main.py render --config example/figures.yaml --out /tmp/mdanal-demo --force
+# 打开 /tmp/mdanal-demo/figures/ 下的 PNG
+
+python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-replot
 ```
 
-`example/quickstart` 用仓库自带的 tiny 数据，只跑一个 MSD；它不是研究结论，只用于把流程跑通。完整步骤见 [首次使用](docs/getting-started.md)。
+`example/figures.yaml` 用仓库自带的 tiny 数据，只用于跑通流程。
 
-中文图需要系统安装 `Noto Serif CJK SC`；缺字体时 `run` 会直接报错，见 [排错](docs/troubleshooting.md#字体)。检查：
+中文图需要系统安装 `Noto Serif CJK SC`；缺字体时 `render` 会直接报错，见 [排错](docs/troubleshooting.md#字体)。
 
-```bash
-python -c "from mdanal.plot.chart import missing_fonts; print(missing_fonts())"
-```
-
-## 我想做什么
-
-| 想做的事 | 去哪里 |
-|---|---|
-| 先看看能画什么 | [图库](docs/gallery.md) |
-| 从仓库小算例画第一张图 | [首次使用](docs/getting-started.md) |
-| 换成自己的轨迹、原子类型和选择组 | [输入与配置](docs/configuration.md) |
-| 改中英文、颜色、尺寸、范围、格式 | [绘图与重绘](docs/plotting.md) |
-| 选色板或自定义颜色 | [颜色](docs/colors.md) |
-| 加界面线、区间、说明文字 | [绘图与重绘：标注](docs/plotting.md#标注) |
-| 把多个体系画在一起 | [多体系对比](docs/compare.md) |
-| 做 YAML 表达不了的特殊图 | [Python 自由绘图](docs/plotting.md#python) |
-| 新增分析或接入第三方库 | [插件手册](docs/plugins.md) |
-| 遇到报错 | [排错](docs/troubleshooting.md) |
-
-手册入口在 [docs/index.md](docs/index.md)；每一页只讲一个主题，README 只保留入口。
-
-## 数据流
+## 核心模型
 
 ```text
-data.lmp + dump + system.yaml
-          │ run
-          ▼
-  CSV + plot.json + 初次 PNG
-          │
-          ├── plot.yaml + replot ──> 新图目录（不读轨迹）
-          ├── derive.yaml + derive ──> 新派生表/图（不读轨迹）
-          │
-多个 run 结果 + compare.yaml ──> 对比图 + 对齐后的表
-          │
-CSV / 自己的数组 + Python/chart ──> 自由绘图
+sources（轨迹输入）
+    ↓
+figures[]（每项一张最终图，有自己的 ncols）
+    ↓  每项若干 Panel
+PanelRef（source + pack + product + select/compute/derive + plot）
+    ↓
+FigurePack（图包：compute + PRODUCTS）
+    ↓
+Panel（单个图，数据 + 画法）
 ```
 
-- `run` 执行分析并读轨迹；`check` 也会加载体系做校验，但不计算；每条分析保存 `plot.json` 和标准 CSV；
-- `replot` 只读 `plot.json` + CSV，切换语言/颜色/范围/标注/格式时不用重算；
-- `derive` 只读已有表，按配置重算 MSD 的 fit/RDC 并重绘；不读轨迹；
-- `compare` 只读多个 `run` 的输出；
-- 表是稳定机器列名，图内文字才随 `--lang` 改变。
+- **Panel 是单个图**；一张 Figure 可以有多个 Panel，由 `layout.ncols` 排版。
+- **产品**是命名图种；`density-2d` 是一个产品，`xy/xz/yz` 是它的 `plot.plane` 参数，不是三个产品。
+- **compare** 只把同一曲线产品的多个来源合成一个 Panel；2D 密度用多个 Panel 并排。
+- 表仍是缓存/重绘/compare 的边界，但不是用户入口。
 
-## 能画什么
+## 输入示例
 
-八种内置分析：密度投影、线密度、径向分布、氢键数量、氢键类型分布、氢键寿命、均方位移、流速剖面。缩略图和科学含义见 [图库](docs/gallery.md) 与 [分析说明](docs/analyses.md)。
+```yaml
+schema_version: 1
+name: tma-figures
+render: {lang: zh, dpi: 300}
 
-| 密度投影 | 线密度 |
-|---|---|
-| ![](docs/assets/gallery/density-xy.png) | ![](docs/assets/gallery/lineardensity.png) |
+sources:
+  A:
+    topology: runs/A/data.lmp
+    trajectory: runs/A/traj.lammpstrj
+    timestep_fs: 1.0
+    dump_every: 5000
+    frames: [0, 1040]
+    groups:
+      water: "type 11 12"
 
-| 带标注的线密度 | 多体系对比 |
-|---|---|
-| ![](docs/assets/recipes/annotate/lineardensity_z.png) | ![](docs/assets/recipes/compare/lineardensity-bright.png) |
+figures:
+  - name: msd-A
+    layout: {ncols: 2}
+    panels:
+      - source: A
+        pack: msd
+        product: msd-fit
+        select: {group: water}
+        compute: {msd_type: xyz}
+        derive: {fit: {window_ns: [1.0, 4.0]}}
+
+      - source: A
+        pack: density
+        product: density-2d
+        select: {group: water}
+        compute: {delta: 1.0}
+        plot: {plane: xy}
+```
+
+完整字段见 [输入与配置](docs/configuration.md)。
+
+## 命令
+
+```text
+mdanal render    --config figures.yaml --out OUT [--force]
+mdanal check     --config figures.yaml
+mdanal replot    --from OUT --out FIG [--figure NAME]
+mdanal packs     [--json]
+mdanal check-pack NAME
+```
+
+- `render` 读轨迹、计算、写 `OUT/data/` 与 `OUT/figures/`；
+- `check` 只做静态校验：图包/产品/槽位/参数/derive 是否齐全；
+- `replot` 只读 `OUT/figures/*.json` + 表，不读轨迹；
+- `packs --json` 是给 AI/脚本看的图包能力清单。
+
+## 内置图包
+
+| 包 | 产品 | 说明 |
+|---|---|---|
+| `density` | `density-2d`, `density-line` | 3D 数密度投影 + 质量/电荷线密度 |
+| `hbond` | `hbond-count`, `hbond-type`, `hbond-lifetime` | 一次 HBA，三个产品 |
+| `msd` | `msd-raw`, `msd-fit`, `msd-rdc` | 原始 MSD、拟合、RDC |
+| `rdf` | `rdf` | 径向分布 |
+| `velocity` | `velocity` | 速度剖面 |
+
+每个包有 `note.md`（科学说明）和 `pack.json`（机器能力）。加图包见 [插件手册](docs/plugins.md)。
+
+## 目录
+
+```text
+src/mdanal/analyses/<pack>/   # 图包
+src/mdanal/figure/            # 配置、planner、组合、重绘
+src/mdanal/plot/              # Panel/Figure/chart 基础设施
+example/figures.yaml          # 可运行示例
+docs/                         # 手册
+```
 
 ## 重要边界
 
-- 一次 `run` 处理一个体系；多体系在 `compare` 阶段叠图。
-- `density`/`lineardensity` 在盒子变化时只算首帧并警告；`msd` 的连续视图要求每帧位移小于半盒；氢键寿命需要足够密的采样。
-- 按每帧 `BOX BOUNDS` 处理原点、盒矩阵和 `pp/ff` 标记：density/lineardensity/velocity 支持 `ppf/pps`（x/y 周期、z 非周期，z 不 wrap）；RDF 逐帧用当前盒，非周期正交方向用直接距离但 g(r) 归一化没有唯一物理定义，结果标为定性；氢键家族内部仍按全周期盒，非周期输入会明确标注不支持。`msd` 的连续视图按输入路径受限。逐个插件的条件见 [配置](docs/configuration.md#坐标视图与每帧几何)。
-- 速度剖面在首帧参考盒坐标中平均；误差是未校正时间相关性的样本标准误。
-- `palette` 只改未显式设色的曲线；氢键部分图、密度连续色标、标注颜色仍单独设置。
-- 密度色标在分析参数里控制：`cmap`、`colors`、`vmin`、`vmax`（见 [分析说明](docs/analyses.md#density)）；`plot` 层没有“色标范围”字段，replot 不能改密度色标。
-- 逐条标注样式、论文级误差估计仍未实现；见 [排错与限制](docs/troubleshooting.md#限制)。
-- 旧结果没有 `plot.json` 时不能重绘，需要重新 `run`。
+- 一次 `render` 可以包含多个 source；同一 `(source, pack, select, compute, derive, section)` 只计算一次。
+- `density` 3D 网格一次计算，三个投影都保存；切换 `plot.plane` 不重算。
+- 变盒时 density/line 只使用首帧并警告；MSD 连续视图要求相邻帧位移小于半盒。
+- `hbond` 的 type 产品需要 source 配置 `naming`。
+- 旧 `system.yaml` / `run` / `compare` / `derive` / `FIGURES` / `panels()` / `COMPARE` 接口已移除；不要按旧文档操作。
 
-## 插件与开发
+## AI 入口
 
-内置分析是 `src/mdanal/analyses/<name>/` 包：`run` 算数、`figures`/`FIGURES` 只画图，`note.md` 写科学说明；外部简单插件仍可写成单个 `.py`。不从主执行器里特判某个库。模板、声明表、上下文和第三方适配步骤见 [插件手册](docs/plugins.md)。
+`llms.txt` 是给 AI 的最小上下文；机器可读能力用 `mdanal packs --json`。
+
+## 开发
 
 ```bash
-python main.py list
-python main.py check-analysis
-python main.py check-analysis --system example/quickstart
 python -m pytest
-python -m pytest tests/analyses
+python -m pytest tests/figure
 ```
 
-`docs/analysis-audit.md` 是开发审计资料，不是用户手册。
-
-示例配置在 `example/`：`quickstart/system.yaml`、`system.yaml`、`plot.yaml`、`recipes/`、`analysis_template.py`、`plot_from_data.py`；文档中的图由 `scripts/build_docs_assets.py` 从真实结果生成。
+`docs/analysis-audit.md` 是历史审计资料，不是用户手册。

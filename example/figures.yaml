@@ -1,0 +1,50 @@
+# figure-first 示例：输入几个轨迹，直接声明要哪些图。
+# 路径相对本文件；这里用仓库自带的 tiny 数据。
+schema_version: 1
+name: figure-first-example
+render:
+  lang: zh
+  dpi: 300
+  annotate: false
+
+sources:
+  tiny:
+    topology: ../tests/fixtures/tiny/data.lmp
+    trajectory: ../tests/fixtures/tiny/run.lammpstrj
+    timestep_fs: 1.0
+    dump_every: 5000
+    frames: [0, 20]
+    naming: {from_data: ../tests/fixtures/tiny/data.lmp}
+    groups:
+      tma: "all"
+      tma_o: "type 1 3"
+      tma_h: "type 5 6"
+
+figures:
+  - name: msd-tiny
+    layout: {ncols: 1}
+    panels:
+      - source: tiny
+        pack: msd
+        product: msd-raw
+        select: {group: tma}
+        compute: {msd_type: xyz, grouping: residues}
+        plot:
+          title: tiny MSD
+
+  - name: density-tiny
+    layout: {ncols: 2}
+    panels:
+      - source: tiny
+        pack: density
+        product: density-2d
+        select: {group: tma}
+        compute: {delta: 2.0, binsize: 2.0}
+        plot: {plane: xy, title: xy}
+
+      - source: tiny
+        pack: density
+        product: density-line
+        select: {group: tma}
+        compute: {delta: 2.0, binsize: 2.0}
+        plot: {axis: z, title: 线密度}

@@ -48,6 +48,10 @@ class Figure:
         else:
             figure_width = base_w * self.ncols + 0.65 * (self.ncols - 1)
         figure_wspace = self.wspace if square_panels else max(self.wspace, 0.42)
+        if any(panel.colorbar_label for panel in panels):
+            # 色标占右侧独立轴，列间距不足时相邻 Panel 的色标会压到图上。
+            figure_wspace = max(figure_wspace, 0.62)
+            figure_width += 0.28 * self.ncols
         fig, axes_array = plt.subplots(
             nrows,
             self.ncols,
@@ -101,23 +105,3 @@ class Figure:
             hspace=self.hspace,
         )
         return fig
-
-
-def compose_panels(
-    panels: Sequence[Panel],
-    *,
-    ncols: int = 1,
-    title: str | None = None,
-    wspace: float = 0.20,
-    hspace: float = 0.38,
-    top: float = 0.92,
-) -> plt.Figure:
-    """兼容入口；新代码用 Figure(...).build()。"""
-    return Figure(
-        panels=panels,
-        ncols=ncols,
-        title=title,
-        wspace=wspace,
-        hspace=hspace,
-        top=top,
-    ).build()

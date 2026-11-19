@@ -30,6 +30,7 @@ class PlotContext:
     figure_sizes: Mapping[str, tuple[float, float]]
     windows: Mapping[str, tuple[float, float]]
     size_override: tuple[float, float] | None = None
+    plot: Mapping[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
 
     def label(self, key: str, **fmt: Any) -> str:

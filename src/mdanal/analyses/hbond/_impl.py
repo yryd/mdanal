@@ -49,13 +49,6 @@ COLUMN_LABELS = {
     "en": {"time_ps": "time (ps)", "hbond_count": "hydrogen bonds"},
 }
 
-COMPARE = {
-    "table": "hbond_count",
-    "x": "time_ps",
-    "y": ["hbond_count"],
-    "box_axis": False,
-}
-
 COORDINATES = "in_box"
 
 GEOMETRY = {"cell": "any", "periodicity": "full"}

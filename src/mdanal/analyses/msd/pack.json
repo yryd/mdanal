@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "pack": "msd",
+  "title": {
+    "zh": "均方位移",
+    "en": "Mean squared displacement"
+  },
+  "products": [
+    {
+      "id": "msd-raw",
+      "kind": "curve",
+      "requires": [
+        "msd"
+      ],
+      "default": true,
+      "compare": true,
+      "requires_derive": []
+    },
+    {
+      "id": "msd-fit",
+      "kind": "curve",
+      "requires": [
+        "msd",
+        "msd_fit",
+        "msd_fit_summary"
+      ],
+      "compare": false,
+      "requires_derive": [
+        "fit"
+      ]
+    },
+    {
+      "id": "msd-rdc",
+      "kind": "curve",
+      "requires": [
+        "msd_rdc"
+      ],
+      "compare": false,
+      "requires_derive": [
+        "rdc"
+      ]
+    }
+  ]
+}

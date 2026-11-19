@@ -1,120 +1,61 @@
-# 排错与限制
-
-先按报错里的路径/字段定位；大多数问题是“改错了层”（把计算输入放进 plot，或把呈现参数放进 system.yaml）。
-
-<a id="字体"></a>
+# 排错
 
 ## 字体
 
-报错类似：
+中文图需要：
 
-```text
-缺少字体 ['Noto Serif CJK SC']；图中文字会渲染成方块
+- `Noto Serif CJK SC`
+
+检查：
+
+```bash
+python -c "from mdanal.plot.chart import missing_fonts; print(missing_fonts())"
 ```
 
-处理：
+`render` 缺字体会直接报错。
 
-1. 安装 `Noto Serif CJK SC`（Debian/Ubuntu 常见包是 `fonts-noto-cjk`）；
-2. 确认 Matplotlib 能找到：
-   ```bash
-   python -c "from mdanal.plot.chart import missing_fonts; print(missing_fonts())"
-   ```
-3. 如果系统里字体名不同，改 `src/mdanal/plot/chart.py` 的 `CJK_FONT`。
+## 找不到图包/产品
 
-字体只影响图内文字；CSV 和 `plot.json` 不受影响，所以修好字体后可以直接 `replot`，不用重算。
+```bash
+python main.py packs
+python main.py check-pack density
+```
 
-## 输出目录/`--force`
+`check` 会列出可用产品。产品不存在通常是 `pack.json` 与 `PRODUCTS` 不一致或拼写错误。
 
-四个命令的 `--force` 不同：
+## `hbond-type` 没有表
 
-| 命令 | 非空输出 | `--force` |
-|---|---|---|
-| `run` | 默认拒绝 | 只清空含 `provenance.json` 的旧 run 输出；YAML/拓扑/轨迹位于输出目录内时直接拒绝 |
-| `replot` | 默认拒绝 | 只更新带 `replot.json` 的旧重绘目录 |
-| `compare` | 默认拒绝 | 允许覆盖非空目录，但拒绝与输入目录重叠 |
-| `derive` | 默认拒绝 | 只更新带 `derive.json` 的旧派生目录；输出不能与源结果重叠 |
+`hbond-type` 需要 source 配置 `naming`：
 
-不要把 `run` 的 `--force` 习惯套到 `replot`/`compare` 上。
+```yaml
+naming: {from_data: runs/A/data.lmp}
+```
 
-## 重绘相关
+没有 naming 时 `check` 会直接报。
 
-| 报错/现象 | 原因 | 处理 |
-|---|---|---|
-| “未保存独立重绘信息” | 旧结果没有 `plot.json` | 重新 `run`；命令不会自动重算 |
-| “表 ... 与绘图快照记录的哈希不一致” | 手改了 CSV 或用旧快照配新表 | 用原表，或重新 `run` |
-| “插件源码在生成快照后发生变化” | 插件代码/包内 note 改了 | 只是警告；保存端和重绘端现在共用整包哈希，未改代码不误报；确认标签/列仍兼容，必要时重新 `run` |
-| 选择坐标/原点不对 | 选择用选择帧盒原点；检查 `view.origin` 与 `prop` 区间是否按同一坐标系书写 |
-| 速度单位异常 | 加载层现在只在读入时换算一次 Å/fs → Å/ps；不要自己再乘 1000 |
-| 输出目录重叠 | `--out` 在 `--from` 里/相反 | 换独立目录 |
-| 输出非空 | 重复使用目录 | 换目录，或对合法旧重绘目录用 `--force` |
-| 语言/格式没变 | 只改了 `system.yaml` | `replot` 读保存的 `plot.json`，改原 `system.yaml` 不影响旧结果；用 `plot.yaml`/CLI 覆盖 |
-| `derive` 报“没有声明离线派生入口” | 插件没有 `derive_tables` | 只能重新 `run`；首版只有 MSD 支持 |
+## 输出目录已存在
 
-## 盒子/采样
+`render` 只覆盖自己写出的目录（存在 `project.json` 标记）。加 `--force`：
 
-- **`density`/`lineardensity` 警告“盒子在变化”**：它们只使用首帧并提示。要平均，选盒子不变的一段；要显式单帧，用 `section: [i, i+1]`。
-- **`velocity` 警告盒子变化**：剖面在首帧参考盒坐标中平均。
-- **氢键寿命提示帧间隔太大**：寿命需要足够密的采样；5 ps/帧不能分辨亚皮秒寿命。不要改 `timestep_fs` 伪造采样密度。
-- **MSD 曲线噪声大**：短轨迹/少帧的结果；不是时间轴错误。连续视图要求相邻帧位移小于半盒。自由截距只有两个拟合点时，`D_stderr` 为 NaN 是正确状态，不是缺值 bug。
-- **混合/非周期边界**：density/lineardensity/velocity 支持正交盒的 `ppf/pps`（x/y 周期，z 非周期，z 不 wrap）；RDF 逐帧用当前盒，非周期正交方向按直接距离计算，但 g(r) 的体积归一化对非周期体系没有唯一物理定义，结果标为定性；三斜盒+非周期直接拒绝。hbond 家族仍按 MDAnalysis 全周期距离内核，非周期输入会明确标成 `unsupported_geometry`，结果仅供定性参考。不要靠改 YAML 伪装成 `pp`/正交。
-- **同一段 TIMESTEP 步差异常**：`check`/`run` 会提示“与 dump_every 不一致”；这表示抽帧不均、丢帧或 `dump_every` 配错，涉及时间的分析（MSD/寿命/速度）可能偏差。合法的多段 TIMESTEP 重置不会被误报。
-- **连续视图盒变化**：`x/xs` 包裹坐标的 continuous 遇到 NPT 变盒会打印警告并按当前盒继续，结果仅供定性参考；严格定量仍应先裁到固定盒。已给 `xu/xsu` 的轨迹按输入定义计算，但仍要自行判断是否适合自扩散。
+```bash
+python main.py render --config figures.yaml --out OUT --force
+```
 
-## `palette` 不生效
+不要用 `--force` 指向包含输入轨迹或人工文件的目录。
 
-这是当前设计，不是 bug：
+## compare 报“不是可 compare 的曲线产品”
 
-| 图 | 是否跟随 `palette` |
-|---|---|
-| `rdf`/`msd`/`lineardensity`/`velocity` | 是（未显式设色的曲线） |
-| `hbond`/`hbond_lifetime`/`hbond_type` | 否，使用固定主色/对照色 |
-| `density` | 否，用连续色标 |
-| 标注/参考线 | 否，固定灰色/主色 |
-| `compare` | 是，用 `figure.palette` |
+- 2D 密度/hbond-type 不能叠加；
+- 2D 密度改成多个普通 Panel 并排；
+- 确认产品 `kind="curve"` 且声明了 `compare`。
 
-如果换 `palette` 后只有部分图变，先看 [颜色：生效范围](colors.md#生效范围)。
+## 变盒/非周期
 
-## 标注
+- density/lineardensity 变盒只用首帧并警告；
+- hbond 当前只支持全周期盒；
+- RDF 非周期正交方向结果仅定性；
+- 速度剖面在首帧参考盒中平均。
 
-- **竖线/阴影不画**：`axis: x/y/z` 只在正好是该图横轴时生效；时间/r 轴用 `axis: horizontal`。
-- **标注位置不对**：`horizontal/vertical` 是数据坐标，不是 0–1 比例；单位跟图轴。
-- **`--no-annotate` 后手写标注也没了？** 不会；`--annotate` 只控制自动帧信息，YAML `annotate` 是另一层。
-- **想清空标注**：`annotate: []`；不写表示继承。
-- **单条标注颜色/字号**：当前 YAML 不支持；用 Python 读表画，或改全局 `annotations.py`。
+## 旧配置
 
-## 选择/配置
-
-| 报错 | 处理 |
-|---|---|
-| “sel 有 N 个，需要 M 个” | `sel` 长度必须等于插件的 `SLOTS` 数；用 `mdanal list <name>` 查 |
-| “分组/选择 0 原子” | 检查 `type`/`resid` 是否来自自己的数据；`type` 只接受空格枚举，不支持 `3-13` |
-| “未知字段 `params`” | 参数直接写在分析条目本层，没有 `params:` 包裹 |
-| “plot 含未知字段” | 看 [plot 字段](plotting.md#plot-字段)；compare 的 figure 字段不同 |
-| `hbond_type` 标签是类型号 | 配置 `naming`；否则无法映射元素/分子 |
-| `check` 没算但读轨迹 | 正常：`check` 会加载体系和选择，只是不跑分析计算 |
-
-## compare
-
-- “该运行里没有分析目录”：`figure.analysis` 要写实际输出目录名（含 tag）；
-- “参数不同”：同一张图只能叠相同分析、相同参数；
-- “t_offset 只能用于时间轴”：空间轴删掉 `t_offset`，时间轴见 [compare 的时间轴](compare.md#时间轴)；
-- 两张 Panel 引用同一 analysis/table：第二张起写 `...__panel2.csv`，不是覆盖 bug；
-- `hbond_count` 可对比，`hbond_type` 没有 compare 声明；
-- 二维密度不能叠，各自看。
-
-<a id="限制"></a>
-
-## 限制
-
-当前没有：
-
-- 逐条标注颜色/字号/线宽；
-- hbond 三家的统一 `palette` 入口（氢键图仍用固定主色/对照色）；
-- 论文级扩散系数置信区间（`D_stderr` 只是回归标准误，且两点自由截距为 NaN）；
-- 一次 `run` 处理多个体系（用 `compare` 叠结果）；
-- `compare` 重绘（compare 保持现有入口）；
-- 非周期 RDF/HBA 的严格物理归一化（只标识为定性/不支持）。
-
-密度色标范围不是限制：用分析参数 `cmap/colors/vmin/vmax`；但它属于计算参数，replot 不能改。
-
-下一步：[插件手册](plugins.md) 或回 [手册入口](index.md)。
+旧 `system.yaml`、`run`、`compare`、`derive`、`FIGURES`、`panels()`、`COMPARE` 已移除。请改成 `figures.yaml`。

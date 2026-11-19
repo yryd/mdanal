@@ -6,7 +6,6 @@ import numpy as np
 
 from ...plot import annotations, chart
 from ...plot.panels import Panel
-from ...plot.recipes import FigureRecipe
 from ...plot.specs import Curve, PanelRequest, Series
 from .contract import LABELS
 
@@ -109,9 +108,6 @@ def panels_raw(ctx, tables):
     return [render_panel(ctx, panel_request(ctx, tables))]
 
 
-def figure_name(ctx, tables) -> str:
-    return "msd"
-
 
 def _draw_fit(ax, ctx, tables):
     raw = tables["msd"]
@@ -202,22 +198,3 @@ def panels_rdc(ctx, tables):
             panel_size=ctx.size("single"),
         )
     ]
-
-
-FIGURES = {
-    "raw": FigureRecipe(
-        name="raw", build=panels_raw, requires=("msd",), filename="msd"
-    ),
-    "fit": FigureRecipe(
-        name="fit",
-        build=panels_fit,
-        requires=("msd", "msd_fit", "msd_fit_summary"),
-        filename="msd-fit",
-    ),
-    "rdc": FigureRecipe(
-        name="rdc",
-        build=panels_rdc,
-        requires=("msd_rdc",),
-        filename="msd-rdc",
-    ),
-}

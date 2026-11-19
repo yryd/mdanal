@@ -1,161 +1,100 @@
-"""命令行入口。"""
+"""命令行入口：figure-first。"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
-from typing import Any, Mapping, Sequence
-
-import yaml
+from typing import Sequence
 
 from . import __version__
 from .errors import MdanalError, ValidationError
-from .config.check import check_analysis
-from .config.registry import (
-    AnalysisDef,
-    Discovery,
-    build_plan,
-    check_packages,
-    check_requirements,
-    discover,
-)
-from .run.runner import Prepared, RunOptions, execute, prepare
-from .config.system import (
-    SystemConfig,
-    UNKNOWN_INPUT_WARNING,
-    read_system,
-)
-
-PROGRAM_DIR = Path(__file__).resolve().parent
-DEFAULTS_PATH = PROGRAM_DIR / "config" / "defaults.yaml"
-LABELS_PATH = PROGRAM_DIR / "config" / "labels.yaml"
 
 EXIT_OK = 0
 EXIT_USAGE = 2
 EXIT_VALIDATION = 3
 EXIT_RUNTIME = 4
 
-INPUT_LABELS = {
-    "unwrapped": "未包裹",
-    "wrapped": "包裹",
-    "unknown": "无法判断",
-}
 
+def cmd_render(args: argparse.Namespace) -> int:
+    from dataclasses import replace
 
-# --------------------------------------------------------------------------- #
-# 命令
-# --------------------------------------------------------------------------- #
+    from .figure.config import read_project
+    from .figure.engine import render_project
 
-
-def cmd_list(args: argparse.Namespace) -> int:
-    discovery = discover()
-    if args.name:
-        return _print_analysis(discovery, args.name)
-    if args.system:
-        return _list_system(args.system, discovery)
-    _print_registry(discovery)
+    project = read_project(args.config)
+    project = replace(
+        project,
+        lang=args.lang or project.lang,
+        dpi=args.dpi or project.dpi,
+        annotate=bool(args.annotate) or project.annotate,
+    )
+    out = render_project(project, args.out, force=args.force)
+    print(f"输出：{out}")
     return EXIT_OK
 
 
 def cmd_check(args: argparse.Namespace) -> int:
-    prepared, problems, warnings = _prepare(args.system)
-    _print_inspection(prepared, warnings)
-    _raise_if_problems(problems)
-    print("\n校验通过。")
-    return EXIT_OK
+    from .figure.config import read_project
+    from .figure.engine import check_project
 
-
-def cmd_run(args: argparse.Namespace) -> int:
-    prepared, problems, warnings = _prepare(
-        args.system, memory=not args.no_memory
-    )
-    _print_inspection(prepared, warnings)
-    _raise_if_problems(problems)
-
-    defaults = _load_defaults()
-    options = RunOptions(
-        lang=args.lang or defaults["language"],
-        dpi=args.dpi or int(defaults["dpi"]),
-        annotate=bool(args.annotate or defaults["annotate"]),
-        force=bool(args.force),
-        aligned=bool(args.aligned),
-        figure_sizes={
-            key: tuple(float(v) for v in size)
-            for key, size in defaults["figure"].items()
-        },
-    )
-
-    print()
-    execute(
-        prepared=prepared,
-        outdir=args.out,
-        options=options,
-        common_labels=_load_labels(),
-    )
-    return EXIT_OK
-
-
-def cmd_check_analysis(args: argparse.Namespace) -> int:
-    discovery = discover()
-    problems = check_analysis(
-        discovery,
-        system=args.system,
-        keep=args.keep,
-        names=tuple(args.names),
-    )
+    project = read_project(args.config)
+    problems = check_project(project)
     if problems:
         print("\n发现的问题：", file=sys.stderr)
         for problem in problems:
             print(f"  - {problem}", file=sys.stderr)
         return EXIT_VALIDATION
-    print("契约检查通过")
+    print("图请求校验通过。")
     return EXIT_OK
 
 
-def cmd_compare(args: argparse.Namespace) -> int:
-    from .compare.compare import run_compare
+def cmd_packs(args: argparse.Namespace) -> int:
+    from .figure.catalog import discover_packs, pack_payload
 
-    lang = args.lang or _load_defaults()["language"]
-    out = run_compare(args.config, args.out, lang=lang, force=args.force)
-    print(f"输出：{out}")
+    packs = discover_packs()
+    if args.json:
+        print(
+            json.dumps(
+                {name: pack_payload(pack) for name, pack in packs.items()},
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return EXIT_OK
+    for name, pack in packs.items():
+        products = ", ".join(pack.products) or "-"
+        print(f"{name:<12} {products}")
+    return EXIT_OK
+
+
+def cmd_check_pack(args: argparse.Namespace) -> int:
+    from .figure.catalog import load_pack
+
+    pack = load_pack(args.name)
+    print(f"图包 {pack.name}：{len(pack.products)} 个产品")
+    for product in pack.products.values():
+        print(f"  {product.id:<18}{product.kind:<8}{', '.join(product.requires)}")
     return EXIT_OK
 
 
 def cmd_replot(args: argparse.Namespace) -> int:
-    from .plot.replot import run_replot
+    from .figure.replot import replot_from
 
-    out = run_replot(
-        args.from_dir,
-        args.out,
-        analyses=tuple(args.analysis or ()),
-        figures=tuple(args.figure or ()),
-        composite=tuple(args.composite or ()),
-        config=args.config,
-        lang=args.lang,
-        dpi=args.dpi,
-        fmt=args.format,
-        annotate=args.annotate,
-        force=args.force,
-    )
-    print(f"输出：{out}")
-    return EXIT_OK
-
-
-def cmd_derive(args: argparse.Namespace) -> int:
-    from .derive import run_derive
-
-    out = run_derive(
-        args.from_dir,
-        args.out,
-        config=args.config,
-        analyses=tuple(args.analysis or ()),
-        lang=args.lang,
-        dpi=args.dpi,
-        fmt=args.format,
-        force=args.force,
-    )
-    print(f"输出：{out}")
+    names = args.figure or [None]
+    written = []
+    for name in names:
+        written.extend(
+            replot_from(
+                args.from_dir,
+                args.out,
+                name=name,
+                lang=args.lang or "zh",
+                dpi=args.dpi or 300,
+            )
+        )
+    print(f"输出：{args.out}（{len(written)} 张图）")
     return EXIT_OK
 
 
@@ -164,358 +103,47 @@ def cmd_help(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
-# --------------------------------------------------------------------------- #
-# 准备与打印
-# --------------------------------------------------------------------------- #
-
-
-def _prepare(path: str, *, memory: bool = True) -> tuple[Prepared, list[str], list[str]]:
-    """读配置 → 建计划 → 查依赖 → 建视图 → 解析分组，返回 (输入, 问题, 提示)。"""
-    cfg = read_system(path)
-    discovery = discover()
-    plan = build_plan(cfg, discovery.definitions, discovery.failures)
-
-    problems: list[str] = list(check_packages(plan))
-    prepared = prepare(cfg, plan, memory=memory)
-    problems.extend(check_requirements(plan, prepared.views["in_box"]))
-    warnings = [UNKNOWN_INPUT_WARNING] if cfg.input_state == "unknown" else []
-    warnings.extend(cfg.seam_notes)
-    warnings.extend(cfg.time_notes)
-    if prepared.naming is not None and prepared.naming.warning:
-        warnings.append(prepared.naming.warning)
-    return prepared, problems, warnings
-
-
-def _print_inspection(prepared: Prepared, warnings: Sequence[str]) -> None:
-    cfg = prepared.cfg
-    in_box = prepared.views["in_box"]
-    print(f"体系：{cfg.name}（{cfg.directory}）")
-    print(f"配置：{cfg.yaml_path.name}    分析：{len(prepared.plan)} 条")
-    segments = len(cfg.all_trajectories)
-    prefix = f"轨迹：{segments} 段合并，" if segments > 1 else "轨迹："
-    print(
-        f"{prefix}{len(in_box.trajectory)} 帧    "
-        f"窗口：[{prepared.start}, {prepared.stop})    原子：{in_box.atoms.n_atoms}"
-    )
-    print(f"输入：{_input_text(cfg)}")
-    print(
-        f"视图：零点 {_point(cfg.view.origin)}（绝对坐标）    "
-        f"盒下角 {_point(cfg.view.shift)}（视图坐标）"
-    )
-    print(f"选择：按第 {prepared.selection_frame} 帧解析")
-    if prepared.naming is not None:
-        counts = "、".join(
-            f"{name} {count}"
-            for name, count in sorted(prepared.naming.residue_counts.items())
-        )
-        print(f"命名：{counts}    原子：{prepared.naming.atom_count} 个全部有名")
-
-    print("\n分组解析：")
-    for item in prepared.plan:
-        for slot, value in zip(item.definition.slots, item.selections):
-            group = prepared.groups[item.order][slot]
-            origin = f"分组 {group.key}" if group.key else "选择串"
-            print(
-                f"  {item.directory:<18}{slot:<10}{value:<34}"
-                f"{group.n_atoms:>7} 原子   （{origin}）"
-            )
-
-    if warnings:
-        print()
-        for message in warnings:
-            print(f"提示：{message}")
-    geometry_warnings = [
-        (item.directory, message)
-        for item in prepared.plan
-        for message in prepared.geometry_warnings.get(item.order, ())
-    ]
-    if geometry_warnings:
-        print()
-        for directory, message in geometry_warnings:
-            print(f"几何提示（{directory}）：{message}")
-
-
-def _input_text(cfg: SystemConfig) -> str:
-    label = INPUT_LABELS.get(cfg.input_state, cfg.input_state)
-    if cfg.input_state in ("unwrapped", "wrapped") and cfg.input_evidence:
-        return f"{label}坐标（{cfg.input_evidence}）"
-    return f"{label}坐标"
-
-
-def _point(values: Sequence[float]) -> str:
-    return "[" + ", ".join(f"{v:g}" for v in values) + "]"
-
-
-def _raise_if_problems(problems: Sequence[str]) -> None:
-    if not problems:
-        return
-    print("\n发现的问题：", file=sys.stderr)
-    for problem in problems:
-        print(f"  - {problem}", file=sys.stderr)
-    raise ValidationError("\n".join(problems), where="校验未通过")
-
-
-def _list_system(path: str, discovery: Discovery) -> int:
-    cfg = read_system(path)
-    print(f"体系：{cfg.name}")
-    print(f"目录：{cfg.directory}")
-    print(f"配置：{cfg.yaml_path}")
-    names = " + ".join(path.name for path in cfg.all_trajectories)
-    print(f"拓扑：{cfg.topology.name}    轨迹：{names}")
-    print(
-        f"时间步长：{cfg.timestep_fs} fs    "
-        f"每帧时间：{cfg.dump_every * cfg.dt_ps:g} ps"
-    )
-    print(
-        f"帧窗口：{list(cfg.frames)}（左闭右开）" if cfg.frames else "帧窗口：未指定（全帧）"
-    )
-    print(f"输入：{_input_text(cfg)}")
-    print(
-        f"视图：零点 {_point(cfg.view.origin)}（绝对坐标）    "
-        f"盒下角 {_point(cfg.view.shift)}（视图坐标）"
-    )
-
-    print(f"\n具名分组（{len(cfg.groups)}）：")
-    if cfg.groups:
-        for key, selection in cfg.groups.items():
-            print(f"  {key:<16} {selection}")
-    else:
-        print("  （无）")
-
-    plan = build_plan(cfg, discovery.definitions, discovery.failures)
-    print(f"\n将要运行的分析（{len(plan)}）：")
-    print(f"  {'序号':<4}{'子目录':<18}{'分析':<12}{'视图':<12}选择")
-    for item in plan:
-        print(
-            f"  {item.order:<6}{item.directory:<20}{item.name:<14}"
-            f"{item.view:<14}{', '.join(item.selections)}"
-        )
-    return EXIT_OK
-
-
-def _print_registry(discovery: Discovery) -> None:
-    rows = []
-    for name in sorted(discovery.definitions):
-        definition = discovery.definitions[name]
-        params = ", ".join(
-            f"{key}={spec['default']}"
-            for key, spec in definition.params.items()
-        ) or "-"
-        requires = ", ".join(definition.requires) or "-"
-        rows.append(
-            (
-                name,
-                ", ".join(definition.slots),
-                params,
-                requires,
-                definition.coordinates,
-                definition.module,
-            )
-        )
-
-    headers = ("分析", "槽位", "默认参数", "依赖", "坐标需求", "模块")
-    widths = [
-        max(len(headers[i]), max((len(row[i]) for row in rows), default=0))
-        for i in range(len(headers))
-    ]
-    print("  ".join(h.ljust(widths[i]) for i, h in enumerate(headers)))
-    print("  ".join("-" * w for w in widths))
-    for row in rows:
-        print("  ".join(cell.ljust(widths[i]) for i, cell in enumerate(row)))
-
-    if discovery.failures:
-        print(f"\n无法加载的模块（{len(discovery.failures)}）：")
-        for failure in discovery.failures:
-            print(f"  {failure.path:<18}{failure.category}：{failure.detail}")
-
-
-def _type_text(expected: Any) -> str:
-    if isinstance(expected, tuple):
-        return " / ".join(item.__name__ for item in expected)
-    return expected.__name__
-
-
-def _print_analysis(discovery: Discovery, name: str) -> int:
-    definition = discovery.definitions.get(name)
-    if definition is None:
-        failure = next(
-            (item for item in discovery.failures if item.name == name), None
-        )
-        if failure is not None:
-            raise ValidationError(
-                f"{name} 加载失败：{failure.category}（{failure.detail}）",
-                where=failure.path,
-            )
-        raise ValidationError(
-            f"没有名为 {name!r} 的分析；可用 {sorted(discovery.definitions)}"
-        )
-
-    print(f"分析：{definition.name}")
-    print(f"模块：{definition.module}")
-    print(f"坐标：{definition.coordinates}")
-    print(f"依赖：{', '.join(definition.requires) or '-'}")
-    if definition.package:
-        print(
-            f"第三方包：{definition.package['name']}"
-            f" >= {definition.package.get('min_version') or '任意'}"
-        )
-    print(f"槽位：{', '.join(definition.slots)}")
-    print("\n参数：")
-    for key, spec in definition.params.items():
-        parts = [_type_text(spec["type"]), f"默认 {spec['default']!r}"]
-        if spec.get("unit"):
-            parts.append(spec["unit"])
-        if spec.get("choices"):
-            parts.append(f"可选 {list(spec['choices'])}")
-        if spec.get("min") is not None:
-            parts.append(f"≥ {spec['min']}")
-        if spec.get("max") is not None:
-            parts.append(f"≤ {spec['max']}")
-        if spec.get("help"):
-            parts.append(str(spec["help"]))
-        print(f"  {key:<18}{'    '.join(parts)}")
-    if definition.derives:
-        print("\n派生：")
-        for name, spec in definition.derives.items():
-            keys = ", ".join(spec["keys"]) or "无参数"
-            print(f"  {name:<18}{keys}    {spec.get('help') or ''}".rstrip())
-    if definition.figure_ids:
-        print("\n图 recipe：", ", ".join(definition.figure_ids))
-    return EXIT_OK
-
-
-# --------------------------------------------------------------------------- #
-# 配置读取
-# --------------------------------------------------------------------------- #
-
-
-def _load_defaults() -> dict[str, Any]:
-    data = yaml.safe_load(DEFAULTS_PATH.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise MdanalError("defaults.yaml 顶层必须是映射", where=str(DEFAULTS_PATH))
-    data.setdefault("language", "zh")
-    data.setdefault("dpi", 300)
-    data.setdefault("annotate", False)
-    data.setdefault("figure", {"single": [3.5, 2.6]})
-    return data
-
-
-def _load_labels() -> dict[str, dict[str, str]]:
-    """labels.yaml 按语言合并各分节，得到 {lang: {键: 文案}}。"""
-    data = yaml.safe_load(LABELS_PATH.read_text(encoding="utf-8")) or {}
-    merged: dict[str, dict[str, str]] = {}
-    for section in data.values():
-        if not isinstance(section, dict):
-            continue
-        for lang, table in section.items():
-            if isinstance(table, dict):
-                merged.setdefault(lang, {}).update(table)
-    return merged
-
-
-# --------------------------------------------------------------------------- #
-# 参数解析
-# --------------------------------------------------------------------------- #
-
-
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="mdanal",
-        description="通用 MD 分析层：按体系目录下的 system.yaml 执行分析",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+        description="figure-first MD 分析：输入轨迹与图请求，输出 Panel/Figure",
     )
     parser.add_argument("--version", action="version", version=f"mdanal {__version__}")
     subparsers = parser.add_subparsers(dest="command", metavar="命令")
 
-    run = subparsers.add_parser("run", help="执行 system.yaml 中列出的分析")
-    run.add_argument("--system", required=True, metavar="PATH", help="体系目录或 system.yaml")
-    run.add_argument("--out", required=True, metavar="DIR", help="输出目录")
-    run.add_argument("--lang", choices=("zh", "en"), help="图内文字语言（默认取 defaults.yaml）")
-    run.add_argument("--dpi", type=int, help="图片分辨率（默认取 defaults.yaml）")
-    run.add_argument("--annotate", action="store_true", help="在图内标注帧窗口与参数")
-    run.add_argument("--force", action="store_true", help="允许覆盖已存在的输出目录")
-    run.add_argument(
-        "--no-memory", action="store_true", help="不把轨迹读入内存，按需读盘"
-    )
-    run.add_argument(
-        "--aligned", action="store_true", help="另写一份施加视图平移后的数据表"
-    )
-    run.set_defaults(func=cmd_run)
+    render = subparsers.add_parser("render", help="按 figures.yaml 计算并生成最终图")
+    render.add_argument("--config", required=True, metavar="FILE", help="图请求配置")
+    render.add_argument("--out", required=True, metavar="DIR", help="输出目录")
+    render.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
+    render.add_argument("--dpi", type=int, help="覆盖分辨率")
+    render.add_argument("--annotate", action="store_true", help="在图内标注帧窗口与参数")
+    render.add_argument("--force", action="store_true", help="覆盖本程序生成的输出")
+    render.set_defaults(func=cmd_render)
 
-    check = subparsers.add_parser("check", help="只校验，不计算")
-    check.add_argument("--system", required=True, metavar="PATH", help="体系目录或 system.yaml")
+    check = subparsers.add_parser("check", help="只校验图请求，不计算")
+    check.add_argument("--config", required=True, metavar="FILE", help="图请求配置")
     check.set_defaults(func=cmd_check)
 
-    listing = subparsers.add_parser("list", help="列出分析或体系信息")
-    listing.add_argument("name", nargs="?", help="查看某个分析的输入契约")
-    listing.add_argument("--system", metavar="PATH", help="查看某个体系的分组与计划")
-    listing.set_defaults(func=cmd_list)
+    packs_cmd = subparsers.add_parser("packs", help="列出图包与产品")
+    packs_cmd.add_argument("--json", action="store_true", help="输出机器可读 JSON")
+    packs_cmd.set_defaults(func=cmd_packs)
 
-    check_plugin = subparsers.add_parser(
-        "check-analysis", help="检查已安装分析的声明，按需实跑并出图"
-    )
-    check_plugin.add_argument("names", nargs="*", help="只检查这些分析")
-    check_plugin.add_argument("--system", metavar="PATH", help="按该体系实跑一遍")
-    check_plugin.add_argument("--keep", metavar="DIR", help="保留实跑输出（默认用临时目录）")
-    check_plugin.set_defaults(func=cmd_check_analysis)
+    check_pack = subparsers.add_parser("check-pack", help="检查一个图包的 pack.json")
+    check_pack.add_argument("name", help="图包名")
+    check_pack.set_defaults(func=cmd_check_pack)
 
-    compare = subparsers.add_parser(
-        "compare", help="按 compare.yaml 叠加多个体系的结果（只读已有输出）"
-    )
-    compare.add_argument("--config", required=True, metavar="FILE", help="对比配置")
-    compare.add_argument("--out", metavar="DIR", help="输出目录（默认取配置的 out）")
-    compare.add_argument("--lang", choices=("zh", "en"), help="图内文字语言（默认取 defaults.yaml）")
-    compare.add_argument("--force", action="store_true", help="允许覆盖非空输出目录")
-    compare.set_defaults(func=cmd_compare)
-
-    replot = subparsers.add_parser(
-        "replot", help="从已有 run 结果重绘（不读轨迹、不重算）"
-    )
+    replot = subparsers.add_parser("replot", help="从已有结果重绘；不读轨迹、不重算")
     replot.add_argument("--from", dest="from_dir", required=True, metavar="DIR",
-                        help="run 结果根目录")
-    replot.add_argument("--out", required=True, metavar="DIR", help="独立绘图输出目录")
-    replot.add_argument("--analysis", action="append", default=[], metavar="DIR",
-                        help="只重绘指定分析目录（可重复）")
+                        help="render 结果根目录")
+    replot.add_argument("--out", required=True, metavar="DIR", help="绘图输出目录")
     replot.add_argument("--figure", action="append", default=[], metavar="NAME",
-                        help="只重绘指定 figure recipe，例如 raw/fit/rdc（可重复）")
-    replot.add_argument("--composite", action="append", default=[], metavar="NAME",
-                        help="重绘指定跨分析组合图，可重复")
-    replot.add_argument("--config", metavar="FILE", help="呈现覆盖配置")
+                        help="只重绘指定最终图（可重复）")
     replot.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
     replot.add_argument("--dpi", type=int, help="覆盖分辨率")
-    replot.add_argument("--format", choices=("png", "svg", "pdf"), help="图件格式")
-    annotate_group = replot.add_mutually_exclusive_group()
-    annotate_group.add_argument("--annotate", dest="annotate", action="store_true",
-                                help="显示自动帧窗口/参数说明")
-    annotate_group.add_argument("--no-annotate", dest="annotate", action="store_false",
-                                help="关闭自动说明")
-    replot.set_defaults(annotate=None)
-    replot.add_argument("--force", action="store_true",
-                        help="仅更新本程序之前生成的重绘目录")
     replot.set_defaults(func=cmd_replot)
-
-    derive = subparsers.add_parser(
-        "derive", help="从已有表重算 fit/rdc 并重绘（不读轨迹）"
-    )
-    derive.add_argument("--from", dest="from_dir", required=True, metavar="DIR",
-                        help="已有 run 结果根目录")
-    derive.add_argument("--out", required=True, metavar="DIR",
-                        help="派生结果输出目录")
-    derive.add_argument("--config", required=True, metavar="FILE",
-                        help="派生配置（derive.yaml）")
-    derive.add_argument("--analysis", action="append", default=[], metavar="DIR",
-                        help="只派生指定分析目录（可重复）")
-    derive.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
-    derive.add_argument("--dpi", type=int, help="覆盖分辨率")
-    derive.add_argument("--format", choices=("png", "svg", "pdf"), default="png",
-                        help="图件格式")
-    derive.add_argument("--force", action="store_true",
-                        help="仅覆盖本程序之前生成的派生目录")
-    derive.set_defaults(func=cmd_derive)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")
     help_cmd.set_defaults(func=cmd_help, parser=parser)
-
     return parser
 
 
@@ -525,7 +153,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     if not getattr(args, "command", None):
         parser.print_help()
         return EXIT_USAGE
-
     try:
         return args.func(args)
     except ValidationError as exc:

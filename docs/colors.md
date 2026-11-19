@@ -6,7 +6,7 @@
 
 ![SciencePlots 颜色循环](assets/palette-preview.png)
 
-图片由当前实现生成：`scripts/build_docs_assets.py` 调用 `resolve_palette` 和 `chart.density_cmap`，数据在 [`palettes.json`](assets/palettes.json)。
+图片是静态展示素材；颜色循环由 `plot.palette` 选择，连续色标由 density 参数控制。
 
 不写 `palette` 时使用 mdanal 主题色；也可显式选择八套命名色板：
 
@@ -30,60 +30,26 @@
 
 ## 2. 怎么用
 
-### run / system.yaml
+在 Panel 的 `plot` 里写 `palette`：
 
 ```yaml
-analyses:
-  - name: lineardensity
-    sel: [water_o]
-    dim: z
+panels:
+  - source: A
+    pack: msd
+    product: msd-raw
+    select: {group: water}
     plot:
       palette: bright
 ```
 
-### replot / plot.yaml
+自定义颜色：
 
 ```yaml
-schema_version: 1
-defaults:
-  plot:
-    palette: bright
-analyses:
-  msd:
-    plot:
-      palette: ["#0077BB", "#EE7733"]
+plot:
+  palette: ["#0077BB", "#EE7733"]
 ```
 
-### compare
-
-```yaml
-figure:
-  analysis: lineardensity
-  align: left
-  palette: bright
-```
-
-完整上下文示例：
-
-```yaml
-schema_version: 1
-defaults:
-  lang: zh
-  plot:
-    palette: retro
-analyses:
-  msd:
-    plot:
-      palette: ["#0077BB", "#EE7733"]
-      size: [4.2, 3.0]
-```
-
-这里单分析项覆盖了默认 `palette`；MSD 只有一条普通数据曲线，所以主要看到列表第一色。要看完整色板，请看上面的多曲线预览或 `compare`。
-
-- 命名色板：`retro`、`bright`、`high-contrast`、`high-vis`、`light`、`muted`、`vibrant`、`std-colors`；
-- 自定义列表：十六进制、CSS 颜色名或 Matplotlib 颜色；
-- YAML 中 `#` 开头的值要加引号，否则会被当成注释；
-- 颜色数不够时循环复用；单条曲线通常只看到第一色；每张图重新开始循环。
+`palette` 只影响未显式设色的曲线；`hbond`/`hbond-type`/`density` 的固定色或连续色标不跟随。完整输入见 [输入与配置](configuration.md)。
 
 <a id="生效范围"></a>
 
@@ -91,11 +57,11 @@ analyses:
 
 | 图 | `palette` 是否生效 | 说明 |
 |---|---|---|
-| `rdf` / `msd` / `lineardensity` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
+| `rdf` / `msd-raw` / `density-line` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
 | `hbond` | 否 | 曲线显式使用固定主色 |
-| `hbond_lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
-| `hbond_type` | 否 | 条形图显式使用主色 |
-| `density` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
+| `hbond-lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
+| `hbond-type` | 否 | 条形图显式使用主色 |
+| `density-2d` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
 | `compare` | 是（`figure.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
 | 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
 
@@ -106,7 +72,7 @@ analyses:
 | primary | `#4165c0` | hbond、hbond_lifetime、hbond_type、部分标记 |
 | secondary | `#c05040` | hbond_lifetime 的第二条曲线 |
 
-`hbond_lifetime` 的第二色是 `#c05040`，**不是** `retro` 的第二色 `#e770a2`；这是当前实现的固定色，`palette` 不会改它。
+`hbond-lifetime` 的第二色是 `#c05040`，**不是** `retro` 的第二色 `#e770a2`；这是当前实现的固定色，`palette` 不会改它。
 
 ## 4. 密度色标
 
