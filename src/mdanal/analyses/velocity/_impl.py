@@ -5,10 +5,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel
-from ..plot.specs import Curve, PanelRequest, Series
-from ..errors import ValidationError
+from ...plot import annotations, chart, plotutil
+from ...plot.panels import Panel
+from ...plot.specs import Curve, PanelRequest, Series
+from ...errors import ValidationError
 
 AXES = ("x", "y", "z")
 

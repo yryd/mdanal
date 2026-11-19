@@ -6,11 +6,11 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.lib.distances import distance_array
 
-from ._geometry import geometry_meta
-from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel
-from ..plot.specs import Curve, PanelRequest, Series
-from ..errors import ValidationError
+from .._geometry import geometry_meta
+from ...plot import annotations, chart, plotutil
+from ...plot.panels import Panel
+from ...plot.specs import Curve, PanelRequest, Series
+from ...errors import ValidationError
 
 
 SLOTS = ("a", "b")

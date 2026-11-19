@@ -1,6 +1,6 @@
 # 插件手册
 
-插件可以是 `src/mdanal/analyses/` 下的一个 `.py` 文件，也可以是含 `__init__.py` 的包；名字就是分析名，放进目录就会被发现，不需要改注册表。复杂插件（多计算/多图/多模块）用包，简单插件保持单文件 + `<name>.note.md`。
+插件可以是 `src/mdanal/analyses/` 下的一个 `.py` 文件，也可以是含 `__init__.py` 的包；名字就是分析名，放进目录就会被发现，不需要改注册表。当前八个内置插件都已包化；外部简单插件仍可用单文件 + `<name>.note.md` 的兼容形式。
 
 三条路径：
 
@@ -62,7 +62,7 @@ analyses/msd/
 └── note.md            # 分析专属说明
 ```
 
-简单插件先用相邻的 `rdf.note.md` 即可。平台只维护通用协议和索引；每个插件的科学说明在 note 中。`scripts/build_plugin_index.py` 校验 note 并生成 `docs/analyses-index.md`。
+内置插件统一为包内 `note.md`；外部简单插件仍可用相邻的 `<name>.note.md`。平台只维护通用协议和索引；每个插件的科学说明在 note 中。`scripts/build_plugin_index.py` 校验 note 并生成 `docs/analyses-index.md`。
 
 ### 输出契约
 
