@@ -1,6 +1,6 @@
 # 插件手册
 
-插件 = `src/mdanal/analyses/` 下的一个 `.py` 文件。文件名就是分析名，放进目录就会被发现，不需要改注册表。
+插件可以是 `src/mdanal/analyses/` 下的一个 `.py` 文件，也可以是含 `__init__.py` 的包；名字就是分析名，放进目录就会被发现，不需要改注册表。复杂插件（多计算/多图/多模块）用包，简单插件保持单文件 + `<name>.note.md`。
 
 三条路径：
 
@@ -13,16 +13,18 @@
 ```python
 run(run_ctx) -> dict[str, pandas.DataFrame]
 meta(run_ctx, tables) -> dict                 # 可选
-panels(plot_ctx, tables) -> list[Panel]       # 当前主接口
-render_panel(plot_ctx, request) -> Panel      # 可选，compare 用
+panels(plot_ctx, tables) -> list[Panel]       # 兼容主接口
+render_panel(plot_ctx, request) -> Panel      # compare 用
+FIGURES = {"raw": FigureRecipe(...), ...}     # 新：一个分析多张图
 figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 旧接口，兼容外部插件
 ```
 
 - `run`：唯一可以访问轨迹、原子组和选择的地方；
 - `meta`：只导出结果摘要，在绘图前执行；
-- `panels`：插件只产出 Panel；平台负责 `ncols` 排版、`plot.layout` 和保存；
+- `panels`：单图兼容入口；平台负责 `ncols` 排版、`plot.layout` 和保存；
+- `FIGURES`：命名图 recipe；每个 recipe 声明需要的表并构造 Panel 列表；`figures:` 选择本次要出的图；
 - `render_panel`：把一个 `PanelRequest` 渲染成 Panel；原生运行和 `compare` 共用；
-- `figures`：旧绘图接口，只留给未迁移的外部插件；内置插件不再使用；
+- `figures`：旧绘图接口，只留给未迁移的外部插件；新插件优先用 `FIGURES`；
 - 没有绘图入口的数据分析是合法的；
 - 图由框架统一保存和关闭。
 
@@ -45,6 +47,22 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 旧接口，兼容外�
 | `render_panel` | 内置插件均已提供；`compare` 用插件自己的 Panel 模板，而不是通用曲线绘制 |
 
 未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会打印非物理警告并继续，不会静默；定量结果仍要求满足声明。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
+
+### 包插件与 note
+
+复杂包推荐：
+
+```text
+analyses/msd/
+├── __init__.py        # 轻量入口
+├── contract.py        # SLOTS/PARAMS/LABELS
+├── compute.py         # 轨迹 → 基础表
+├── derive.py          # 基础表 → D/RDC
+├── figures/           # raw/fit/rdc 等 recipe
+└── note.md            # 分析专属说明
+```
+
+简单插件先用相邻的 `rdf.note.md` 即可。平台只维护通用协议和索引；每个插件的科学说明在 note 中。`scripts/build_plugin_index.py` 校验 note 并生成 `docs/analyses-index.md`。
 
 ### 输出契约
 

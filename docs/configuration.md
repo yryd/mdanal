@@ -71,6 +71,8 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 | `tag` | 否 | 同一种分析写多条时区分输出目录；目录为 `name-tag` |
 | `section` | 否 | 在体系 `frames` 内再切 `[起, 止]`，相对偏移，左闭右开 |
 | `plot` | 否 | 具体字段见 [绘图与重绘](plotting.md#plot-字段) |
+| `figures` | 否 | 该分析的图 recipe 映射；见 [多图输出](plotting.md#多图输出) |
+| `derive` | 否 | 从基础表派生的科学结果；见 [MSD D/RDC](analyses.md#msd) |
 | `annotate` | 否 | 用户标注列表，与 `plot` 并列 |
 | 分析参数 | 否 | 如 `nbins`、`dim`、`delta`、`tau_max_ps`，直接写在本层；用 `mdanal list <name>` 查契约 |
 

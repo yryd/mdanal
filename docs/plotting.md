@@ -88,6 +88,27 @@ analyses:
 | `rc` | Matplotlib rc 映射 | 局部生效；显式写死的样式优先 |
 
 `plot.rc` 是高级入口：它能改字号、轴样式等，但不会覆盖插件里显式写的 `color=`、`lw=`，也不改标注的固定样式。`rc` 不允许改 `backend`。
+<a id="多图输出"></a>
+
+### 多图输出
+
+插件若声明 `FIGURES`，可在分析下选择 recipe：
+
+```yaml
+- name: msd
+  sel: [water]
+  derive:
+    fit: {window_ns: [1.0, 3.0], intercept: free}
+    rdc: {}
+  figures:
+    raw: {}
+    fit: {}
+    rdc: {}
+```
+
+`figures` 的键是稳定的 recipe ID，不是文件名；每个 recipe 的 `plot` 覆盖只影响该图。不写 `figures` 时保持当前默认输出（MSD 只出 raw）。`derive` 改变的是数值结果，`plot.xlim` 只改显示范围，不能改拟合窗口。
+
+
 
 <a id="标注"></a>
 
