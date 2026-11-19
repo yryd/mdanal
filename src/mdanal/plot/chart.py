@@ -51,9 +51,9 @@ THEME_COLORS: tuple[str, ...] = (
 )
 
 # 图内标注的统一尺寸/字重；默认主题下标注不能比轴文字更细。
-ANNOTATION_FONTSIZE = 10.0
+ANNOTATION_FONTSIZE = 8.5
 ANNOTATION_WEIGHT = "bold"
-ANNOTATION_LINEWIDTH = 1.2
+ANNOTATION_LINEWIDTH = 1.0
 
 # 密度用白→深蓝的顺序色标
 _DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d5c"]

@@ -102,12 +102,12 @@ def _draw_fit(ax, ctx, tables):
     ax.text(
         0.03,
         0.95,
-        f"{ctx.label('d')} = {float(summary['D_m2_per_s']) / 1e-9:.3f} "
+        f"{ctx.label('d')} = {float(summary['D_m2_per_s']) / 1e-9:.2f} "
         r"$\times 10^{-9}$ m$^2$ s$^{-1}$",
         transform=ax.transAxes,
         ha="left",
         va="top",
-        fontsize=chart.ANNOTATION_FONTSIZE, fontweight=chart.ANNOTATION_WEIGHT,
+        fontsize=8.0, fontweight=chart.ANNOTATION_WEIGHT,
     )
     chart.legend(ax, loc="upper right")
 
