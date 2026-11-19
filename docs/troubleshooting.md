@@ -51,7 +51,7 @@ python main.py render --config figures.yaml --out OUT --force
 
 ## 变盒/非周期
 
-- density/lineardensity 变盒只用首帧并警告；
+- `density` 包变盒只用首帧并警告；
 - hbond 当前只支持全周期盒；
 - RDF 非周期正交方向结果仅定性；
 - 速度剖面在首帧参考盒中平均。

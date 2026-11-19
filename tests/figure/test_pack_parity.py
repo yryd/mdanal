@@ -11,7 +11,7 @@ from mdanal.figure.engine import check_project, render_project
 
 ROOT = Path(__file__).resolve().parents[1]
 TINY = ROOT / "fixtures" / "tiny"
-BASELINE = ROOT / "baseline"
+HBOND_BASELINE = ROOT / "fixtures" / "hbond_baseline"
 
 
 def _config(tmp_path: Path) -> Path:
@@ -75,8 +75,6 @@ figures:
 
 @pytest.mark.analysis
 def test_hbond_tables_match_baseline(tmp_path):
-    if not BASELINE.is_dir():
-        pytest.skip("本地 baseline 快照不存在（tests/baseline 不入库）")
     project = read_project(_config(tmp_path))
     assert check_project(project) == []
     out = render_project(project, tmp_path / "out")
@@ -88,13 +86,13 @@ def test_hbond_tables_match_baseline(tmp_path):
         assert table in produced, table
 
     expected = {
-        "hbond_count": "hbond/tables/hbond_count.csv",
-        "hbond_occupancy": "hbond/tables/hbond_occupancy.csv",
-        "hbond_type": "hbond_type/tables/hbond_type.csv",
-        "hbond_lifetime": "hbond_lifetime/tables/hbond_lifetime.csv",
+        "hbond_count": "hbond_count.csv",
+        "hbond_occupancy": "hbond_occupancy.csv",
+        "hbond_type": "hbond_type.csv",
+        "hbond_lifetime": "hbond_lifetime.csv",
     }
     for table, rel in expected.items():
-        old = pd.read_csv(BASELINE / rel, encoding="utf-8-sig")
+        old = pd.read_csv(HBOND_BASELINE / rel, encoding="utf-8-sig")
         new = pd.read_csv(produced[table], encoding="utf-8-sig")
         assert len(new.columns) == len(old.columns), table
         assert len(new) == len(old), table

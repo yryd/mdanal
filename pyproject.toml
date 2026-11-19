@@ -33,5 +33,5 @@ mdanal = ["config/*.yaml", "analyses/*.md", "analyses/**/*.md", "analyses/**/*.j
 
 [tool.pytest.ini_options]
 # 默认跑 figure-first 单元/e2e；需要真实大算例的断言可另加 marker。
-testpaths = ["tests/figure"]
+testpaths = ["tests/analyses", "tests/figure"]
 markers = ["analysis: 需要真实分析的科学断言（默认不跑）"]

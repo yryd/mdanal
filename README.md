@@ -131,7 +131,5 @@ docs/                         # 手册
 
 ```bash
 python -m pytest
-python -m pytest tests/figure
+python -m pytest tests/analyses tests/figure
 ```
-
-`docs/analysis-audit.md` 是历史审计资料，不是用户手册。

@@ -49,7 +49,7 @@ plot:
   palette: ["#0077BB", "#EE7733"]
 ```
 
-`palette` 只影响未显式设色的曲线；`hbond`/`hbond-type`/`density` 的固定色或连续色标不跟随。完整输入见 [输入与配置](configuration.md)。
+`palette` 只影响未显式设色的曲线；`hbond-count`/`hbond-type`/`density-2d` 的固定色或连续色标不跟随。完整输入见 [输入与配置](configuration.md)。
 
 <a id="生效范围"></a>
 
@@ -58,7 +58,7 @@ plot:
 | 图 | `palette` 是否生效 | 说明 |
 |---|---|---|
 | `rdf` / `msd-raw` / `density-line` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
-| `hbond` | 否 | 曲线显式使用固定主色 |
+| `hbond-count` | 否 | 曲线显式使用固定主色 |
 | `hbond-lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
 | `hbond-type` | 否 | 条形图显式使用主色 |
 | `density-2d` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
@@ -69,8 +69,8 @@ plot:
 
 | 名称 | 值 | 用在哪 |
 |---|---|---|
-| primary | `#4165c0` | hbond、hbond_lifetime、hbond_type、部分标记 |
-| secondary | `#c05040` | hbond_lifetime 的第二条曲线 |
+| primary | `#4165c0` | hbond-count、hbond-lifetime、hbond-type、部分标记 |
+| secondary | `#c05040` | `hbond-lifetime` 的第二条曲线 |
 
 `hbond-lifetime` 的第二色是 `#c05040`，**不是** `retro` 的第二色 `#e770a2`；这是当前实现的固定色，`palette` 不会改它。
 

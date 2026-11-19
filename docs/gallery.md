@@ -6,7 +6,7 @@
 
 | 2D 密度 | 线密度 |
 |---|---|
-| ![](assets/gallery/density-xy.png) | ![](assets/gallery/lineardensity.png) |
+| ![](assets/gallery/density-2d.png) | ![](assets/gallery/density-line.png) |
 
 `density-2d` 用 `plot.plane` 选 xy/xz/yz；`density-line` 用 `plot.axis` 选轴。两者同属 `density` 图包，3D 网格只算一次。
 
@@ -14,11 +14,11 @@
 
 | 计数 | 类型 |
 |---|---|
-| ![](assets/gallery/hbond.png) | ![](assets/gallery/hbond_type.png) |
+| ![](assets/gallery/hbond-count.png) | ![](assets/gallery/hbond-type.png) |
 
 | 寿命 |
 |---|
-| ![](assets/gallery/hbond_lifetime.png) |
+| ![](assets/gallery/hbond-lifetime.png) |
 
 三个产品共享一次 HBA；`hbond-type` 需要 `naming`。
 
