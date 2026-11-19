@@ -106,3 +106,42 @@ def test_cross_figure_rejects_unknown_analysis_and_recipe(tmp_path):
     cfg = read_system(path)
     with pytest.raises(ValidationError, match="没有 figure recipe"):
         build_plan(cfg, load_registry())
+
+
+def test_composite_replot_applies_title_and_palette(tmp_path, monkeypatch):
+    from mdanal import cli
+    from mdanal.plot import chart
+
+    path = _config(tmp_path, derive=True)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    config = tmp_path / "plot.yaml"
+    config.write_text(
+        "schema_version: 1\n"
+        "defaults:\n"
+        "  plot:\n"
+        "    title: NEW\n"
+        "    palette: ['#112233']\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    real_save = chart.save
+
+    def save(fig, path, dpi):
+        captured["title"] = fig._suptitle.get_text() if fig._suptitle else None
+        captured["colors"] = [
+            line.get_color() for ax in fig.axes for line in ax.lines
+        ]
+        return real_save(fig, path, dpi)
+
+    monkeypatch.setattr(chart, "save", save)
+    run_replot(
+        out,
+        tmp_path / "replot",
+        composite=["msd-three"],
+        config=config,
+        lang="zh",
+    )
+    assert captured["title"] == "NEW"
+    assert captured["colors"] and captured["colors"][0] == "#112233"

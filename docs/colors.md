@@ -95,7 +95,7 @@ analyses:
 | `hbond` | 否 | 曲线显式使用固定主色 |
 | `hbond_lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
 | `hbond_type` | 否 | 条形图显式使用主色 |
-| `density` | 否 | 使用白→蓝连续色标 |
+| `density` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
 | `compare` | 是（`figure.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
 | 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
 
@@ -110,11 +110,21 @@ analyses:
 
 ## 4. 密度色标
 
-密度图使用单独的白→蓝连续色标，低值接近白色，高值深蓝；它不受 `palette` 影响。当前 YAML 也没有色标上下限字段。
+密度图使用单独的白→砖红→蓝连续色标（`cmap: mdanal`），不受曲线 `palette` 影响。色标属分析参数，不是 `plot` 覆盖：
+
+```yaml
+- name: density
+  sel: [water_o]
+  cmap: viridis          # 或 mdanal；也可用 colors: ["#fff", "#c05040", "#4165c0"]
+  vmin: 0.0
+  vmax: 0.8
+```
+
+这些字段改变的是计算后的色标映射，**需要重新 run**；`replot` 不能改。`density` 的多面板共享 `vmin/vmax`，每个 panel 的色标高度对齐自身纵轴。
 
 ![固定主色、对照色与密度色标](assets/palette-preview.png)
 
-如果要在密度图上用 `viridis`、`cividis` 或统一范围，需要 Python 读表重画；这是后续建议，不是当前 `plot` 字段。
+如果要逐 panel 用不同色标或逐条标注样式，仍需要 Python 读表重画；`plot.palette` 不是密度 colormap。
 
 ## 5. 不是“色盲保证”
 

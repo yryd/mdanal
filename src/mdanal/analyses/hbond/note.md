@@ -6,7 +6,7 @@
 
 ## 输入与前提
 
-槽位为 donor / hydrogen / acceptor；默认 `d_a_cutoff=3.5 Å`、`d_h_a_angle_cutoff=150°`。当前只支持全周期盒；非周期输入仍按 HBA 周期路径计算，meta 会记录 `effective_pbc` 和 `geometry_status=unsupported_geometry`，结果不能当作非周期氢键。
+槽位为 donor / hydrogen / acceptor；默认 `d_a_cutoff=3.5 Å`、`d_h_a_angle_cutoff=150°`。当前只支持全周期盒；非周期输入仍按 HBA 周期路径计算，meta 区分 `input_pbc`、`kernel_pbc`（全周期）、`effective_pbc`、`pbc_match` 和 `geometry_status=unsupported_geometry`，结果不能当作非周期氢键。
 
 ## 科学定义
 
@@ -24,4 +24,4 @@
 
 ## 注意
 
-同一判据的 hbond / hbond_type / hbond_lifetime 共享同一次 HBA 结果；不同阈值或帧窗口不能共享。
+同一判据的 hbond / hbond_type / hbond_lifetime 共享同一次 HBA 结果；不同阈值或帧窗口不能共享。`hbond_count` 声明了 `COMPARE`，可进入多体系对比。

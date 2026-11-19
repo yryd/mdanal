@@ -1,5 +1,9 @@
 # 分析审计记录
 
+> **历史审计资料（2026-11-12 起）**：保留当时的公式、环境与修正前后数字，用于追溯；
+> 当前用户契约以 README、`docs/analyses.md` 和各插件 `note.md` 为准。新增行为（RDF 逐帧盒、
+> 离线 derive、寿命 no_events、两点拟合误差等）见对应 note；本页不重复维护实时参数表。
+
 本文件是分析的"算术规格"：每个输出列/图的公式、单位、依据与状态，以及修正前后对照。
 方法：列输出 → 对库文档/源码 → 可手算的小体系核对 → 修错 → 改标签 → 留证据。
 
@@ -26,9 +30,9 @@
 | density | `{a}_angstrom`、`{b}_angstrom`、`number_density_A3` | 键集合一致 | 无（二维图不参与对比） | 公式修正后复核 |
 | lineardensity | `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_A3` | 一致 | 有 | 已改电荷单位 |
 | rdf | `r_angstrom`、`g_r` | 一致 | 有 | 已核对：真实索引排除自配对 |
-| hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | 已改归一化列名 |
-| hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 待交叉核对 |
-| hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`tau_1e_ps`、`tolerance_frames`、`note` | 一致 | 有 | 已改 `tau_1e_ps` |
+| hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | 已改归一化列名；包化后曾丢 COMPARE，已恢复 |
+| hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 已核对 |
+| hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`tau_1e_ps`、`status`、`tolerance_frames`、`note` | 一致 | 有 | 已改 `tau_1e_ps`；新增 `status` |
 | msd | `dt_ns`、`msd_A2` | 一致 | 有 | 已核对：质心/MSD 时间轴 |
 | velocity | `{axis}_angstrom`、`v{vdim}_A_per_ps`、`error_A_per_ps` | 一致 | 有 | 误差列确认是标准误 |
 
@@ -65,7 +69,7 @@
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
 | `r_angstrom` | 直方图 bin 中心 | Å | 自实现 | **已改** |
-| `g_r` | 交叉配对直方图 / (有效配对数 × 球壳体积 / 盒子体积) | 无量纲 | 自实现 | **已修**：按真实原子索引排除自配对；覆盖不重叠/同组/部分重叠/单原子组 |
+| `g_r` | 逐帧交叉配对直方图 / (有效配对数 × 球壳体积 / 该帧盒体积)，再对帧平均 | 无量纲 | 自实现 | **已修**：按真实原子索引排除自配对；变盒逐帧；非周期正交方向直接距离并标定性 |
 
 半盒检查已有；不再使用 `InterRDF.exclusion_block=(1,1)` 处理任意两组。
 
@@ -73,7 +77,7 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `frame` / `time_ps` / `hbond_count` | 每帧 `count_by_time()`；时间 = 帧号×dt | — / ps / 个 | MDAnalysis | 正确（待选择串修复） |
+| `frame` / `time_ps` / `hbond_count` | 每帧 `count_by_time()`；时间 = 帧号×dt | — / ps / 个 | MDAnalysis | 正确（选择串已修） |
 | `frames_present` / `occupancy` | 按 `(donor,hydrogen,acceptor)` 分组计数 / n_frames | 帧 / — | 自实现 | 正确 |
 | `n_frames` / `mean_hbonds` / `std_hbonds` | 计数序列统计 | — / 个 | 自实现 | 正确 |
 | `per_donor_atom` | `mean / 供体原子数` | — | 自实现 | **已修** |
@@ -96,14 +100,14 @@
 |---|---|---|---|---|
 | `lag_ps` | `lifetime()` 的 τ（帧）× dt | ps | MDAnalysis | 正确 |
 | `continuous` / `intermittent` | 存活曲线 C(τ) | — | MDAnalysis | 正确 |
-| `tau_1e_ps` | 首次 C(τ)≤1/e 的线性插值 | ps | 自实现 | **已改名**（原 `lifetime_ps`） |
+| `tau_1e_ps` | 首次 C(τ)≤1/e 的线性插值 | ps | 自实现 | **已改名**（原 `lifetime_ps`）；`status` 区分 reached/not_reached/no_events |
 | 氢键身份 | lifetime 按 H–受体对 | — | MDAnalysis 文档 | 与 occupancy 的三元组不同，README 已写明 |
 
 ### msd
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `dt_ns` | 全局帧号 × 帧间隔 / 1000 | ns | 加载层统一 | **已改**：MSD 时间轴改用 ns |
+| `dt_ns` | 滞后帧数 × 帧间隔 / 1000（从零开始，不是全局帧时间） | ns | 加载层统一 | **已改**：MSD 时间轴改用 ns；旧快照可为 `dt_ps` |
 | `msd_A2` | 残基质心位移平方平均（默认） | Å² | 自实现 | **已改**：默认质心，`grouping: atoms` 可回退原子路径 |
 
 ### velocity
@@ -133,7 +137,7 @@
 | hbond_lifetime | 列名 | `lifetime_ps` | `tau_1e_ps` | 1/e 交叉不是拟合寿命 |
 | velocity | 坐标原点 | 首帧参考组质心 | 平均盒长/2（盒坐标） | `bin_pos` 是相对盒心，不是相对参考组 |
 | rdf | 归一化 | `exclusion_block=(1,1)` | 真实索引排除 + 有效配对数归一化 | 修复单原子/部分重叠组 |
-| msd | 时间轴 | 未验证 | 匀速 MSD=(v·Δt)² | 解析核对 |
+| msd | 时间轴 | 已核对 | 匀速 MSD=(v·Δt)² | 解析核对 |
 
 
 ## 审计完成状态
@@ -177,7 +181,7 @@ velocity/tables/velocity.csv
 
 | 问题 | 修复 | 回归 |
 |---|---|---|
-| 多段续跑 TIMESTEP 归零导致 MSD 时间轴不一致 | 加载层统一 `ts.time = 全局帧号 × 帧间隔`；内存/读盘同源 | `test_frame_times_ignore_timestep_reset`、`test_segmented_reset_steps_keep_frame_time` |
+| 多段续跑 TIMESTEP 归零导致 MSD 时间轴不一致 | 加载层统一 `ts.time = 全局帧号 × 帧间隔`；MSD 横轴是从零滞后时间；内存/读盘同源 | `test_frame_times_ignore_timestep_reset`、`test_segmented_reset_steps_keep_frame_time` |
 | 双列/缩放坐标的判断与读取器不一致 | 扫描全部约定并按视图显式传 `lammps_coordinate_convention`；连续视图用显式包装器逐帧展开，回退从 0 重放 | `test_scan_matches_reader_coordinate_precedence`、`test_dual_coordinate_columns_use_unwrapped`、`test_wrapped_no_bond_continuous_view` |
 | velocity 的参考组居中坐标被误当盒坐标 | 改为逐帧按原盒坐标分箱，实验室系速度；参考组只记 meta | `test_nonuniform_profile_uses_box_coordinates`、`test_moving_reference_does_not_shift_profile` |
 | compare 覆盖输入目录的溯源 | 输出与输入目录重叠时先失败；非空输出需 `--force` | `test_compare_refuses_to_write_into_input_directory`、`test_compare_refuses_nonempty_output_without_force` |

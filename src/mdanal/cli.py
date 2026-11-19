@@ -142,6 +142,23 @@ def cmd_replot(args: argparse.Namespace) -> int:
     return EXIT_OK
 
 
+def cmd_derive(args: argparse.Namespace) -> int:
+    from .derive import run_derive
+
+    out = run_derive(
+        args.from_dir,
+        args.out,
+        config=args.config,
+        analyses=tuple(args.analysis or ()),
+        lang=args.lang,
+        dpi=args.dpi,
+        fmt=args.format,
+        force=args.force,
+    )
+    print(f"输出：{out}")
+    return EXIT_OK
+
+
 def cmd_help(args: argparse.Namespace) -> int:
     args.parser.print_help()
     return EXIT_OK
@@ -163,6 +180,7 @@ def _prepare(path: str, *, memory: bool = True) -> tuple[Prepared, list[str], li
     problems.extend(check_requirements(plan, prepared.views["in_box"]))
     warnings = [UNKNOWN_INPUT_WARNING] if cfg.input_state == "unknown" else []
     warnings.extend(cfg.seam_notes)
+    warnings.extend(cfg.time_notes)
     if prepared.naming is not None and prepared.naming.warning:
         warnings.append(prepared.naming.warning)
     return prepared, problems, warnings
@@ -356,6 +374,13 @@ def _print_analysis(discovery: Discovery, name: str) -> int:
         if spec.get("help"):
             parts.append(str(spec["help"]))
         print(f"  {key:<18}{'    '.join(parts)}")
+    if definition.derives:
+        print("\n派生：")
+        for name, spec in definition.derives.items():
+            keys = ", ".join(spec["keys"]) or "无参数"
+            print(f"  {name:<18}{keys}    {spec.get('help') or ''}".rstrip())
+    if definition.figure_ids:
+        print("\n图 recipe：", ", ".join(definition.figure_ids))
     return EXIT_OK
 
 
@@ -468,6 +493,25 @@ def build_parser() -> argparse.ArgumentParser:
     replot.add_argument("--force", action="store_true",
                         help="仅更新本程序之前生成的重绘目录")
     replot.set_defaults(func=cmd_replot)
+
+    derive = subparsers.add_parser(
+        "derive", help="从已有表重算 fit/rdc 并重绘（不读轨迹）"
+    )
+    derive.add_argument("--from", dest="from_dir", required=True, metavar="DIR",
+                        help="已有 run 结果根目录")
+    derive.add_argument("--out", required=True, metavar="DIR",
+                        help="派生结果输出目录")
+    derive.add_argument("--config", required=True, metavar="FILE",
+                        help="派生配置（derive.yaml）")
+    derive.add_argument("--analysis", action="append", default=[], metavar="DIR",
+                        help="只派生指定分析目录（可重复）")
+    derive.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
+    derive.add_argument("--dpi", type=int, help="覆盖分辨率")
+    derive.add_argument("--format", choices=("png", "svg", "pdf"), default="png",
+                        help="图件格式")
+    derive.add_argument("--force", action="store_true",
+                        help="仅覆盖本程序之前生成的派生目录")
+    derive.set_defaults(func=cmd_derive)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")
     help_cmd.set_defaults(func=cmd_help, parser=parser)

@@ -56,7 +56,7 @@ ANNOTATION_WEIGHT = "bold"
 ANNOTATION_LINEWIDTH = 1.0
 
 # 密度用白→深蓝的顺序色标
-_DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d5c"]
+_DENSITY_COLORS = ["#ffffff", "#c05040", "#4165c0"]
 
 _styled = False
 

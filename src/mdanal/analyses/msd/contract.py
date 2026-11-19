@@ -57,3 +57,14 @@ COMPARE = {
 
 COORDINATES = "continuous"
 GEOMETRY = {"cell": "any", "periodicity": "any"}
+
+DERIVE = {
+    "fit": {
+        "keys": ("window_ns", "intercept"),
+        "help": "线性拟合；window_ns=[起,止]，intercept=free/zero",
+    },
+    "rdc": {
+        "keys": (),
+        "help": "运行扩散系数 MSD/(2dt)",
+    },
+}

@@ -15,10 +15,6 @@ import numpy as np
 from ..errors import ValidationError
 
 
-def _as_cell(values: Sequence[Sequence[float]]) -> tuple[tuple[float, float, float], ...]:
-    return tuple(tuple(float(v) for v in row) for row in values)
-
-
 def _parse_boundary(tokens: Sequence[str]) -> tuple[str, str, str]:
     if len(tokens) >= 3:
         return tuple(str(token).lower() for token in tokens[-3:])  # type: ignore[return-value]
@@ -33,6 +29,7 @@ class FrameGeometry:
     origin: tuple[float, float, float]
     cell: tuple[tuple[float, float, float], ...]
     boundary_types: tuple[str, str, str] = ("unknown", "unknown", "unknown")
+    step: int | None = None
 
     @property
     def cell_array(self) -> np.ndarray:
@@ -72,6 +69,7 @@ class FrameGeometry:
             "orthorhombic": self.orthorhombic,
             "lengths": list(self.lengths),
             "volume": self.volume,
+            "step": self.step,
         }
 
 
@@ -215,7 +213,11 @@ def _read_geometry_file(path: Path, offset: int) -> tuple[list[FrameGeometry], i
             if not line.startswith("ITEM: TIMESTEP"):
                 continue
             # 每帧必须按固定顺序出现这三块表头；TIMESTEP 后一行是步号。
-            handle.readline()
+            step_line = handle.readline().strip()
+            try:
+                step = int(step_line)
+            except ValueError:
+                step = None
             number_line = handle.readline()
             if not number_line.startswith("ITEM: NUMBER OF ATOMS"):
                 raise ValidationError(
@@ -244,6 +246,7 @@ def _read_geometry_file(path: Path, offset: int) -> tuple[list[FrameGeometry], i
                     origin=origin,
                     cell=(row0, row1, row2),
                     boundary_types=_parse_boundary(tokens),
+                    step=step,
                 )
             )
             atom_header = handle.readline()

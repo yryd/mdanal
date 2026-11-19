@@ -5,12 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .._geometry import geometry_meta
-from ...plot import annotations, chart, plotutil
+from .._geometry import full_periodic_meta
+from ...plot import annotations, chart
 from ...plot.panels import Panel
 from ...plot.specs import Bars, PanelRequest, Series
 from ...errors import ValidationError
-from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -55,6 +54,10 @@ LABELS = {
 COLUMNS = ("donor", "acceptor", "count", "per_frame", "share")
 FIGURE_ROWS = 12
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
+
 
 def _selection(group) -> str:
     """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
@@ -95,7 +98,7 @@ def meta(ctx, tables) -> dict:
     return {
         "total": int(ctx.extras.get("hbond_type_total", 0)),
         "types": int(len(table)),
-        **geometry_meta(ctx),
+        **full_periodic_meta(ctx),
     }
 
 
@@ -212,32 +215,6 @@ def _label(pair: str, elements: dict[str, str]) -> str:
     resname, _, type_value = pair.partition(":")
     element = elements.get(type_value)
     return f"{resname}-{element}" if element else pair
-
-
-def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
-    labels = (table["donor"] + " → " + table["acceptor"]).tolist()
-    values = table[column].to_numpy(dtype=float)
-
-    fig, ax = chart.figure(ctx.size("wide"))
-    # 数值与占比标在条末：占比极小的类型在条形图上几乎看不见，靠数字读
-    shares = table["share"].to_numpy(dtype=float)
-    chart.bars(
-        ax,
-        labels,
-        values,
-        notes=[f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)],
-        height=0.7,
-        color=chart.COLORS["primary"],
-        note_fontsize=8,
-        headroom=1.35,
-    )
-    ax.set_xlabel(ctx.label(suffix))
-    plotutil.limit(ax, "x", ctx.window("x"))
-    ax.set_title(ctx.label("title"))
-    annotations.draw(ax, ctx)
-    if ctx.annotate:
-        chart.note(ax, ctx.annotation())
-    return fig
 
 
 def _number(value: float) -> str:

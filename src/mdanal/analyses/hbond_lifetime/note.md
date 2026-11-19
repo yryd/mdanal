@@ -11,8 +11,8 @@
 ## 输出
 
 - `hbond_lifetime`：lag_ps、continuous、intermittent。
-- `hbond_lifetime_summary`：criterion、tau_1e_ps、tolerance_frames、note。
+- `hbond_lifetime_summary`：criterion、tau_1e_ps、status、tolerance_frames、note。
 
 ## 注意
 
-`intermittency` 的单位是帧，不是 ps；采样间隔变化会改变其物理时间。没有事件不等于曲线达到 1/e；summary 的 note 会区分。
+`intermittency` 的单位是帧，不是 ps；采样间隔变化会改变其物理时间。`status` 区分 `reached`、`not_reached`（窗口内没衰减到 1/e）和 `no_events`（没有氢键事件，寿命未定义）；没有事件不等于“尚未衰减”。

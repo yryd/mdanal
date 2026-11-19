@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from MDAnalysis.lib.distances import distance_array
+from MDAnalysis.lib.distances import capped_distance
 
 from .._geometry import geometry_meta
-from ...plot import annotations, chart, plotutil
+from ...plot import annotations, chart
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 from ...errors import ValidationError
@@ -62,6 +62,45 @@ COORDINATES = "in_box"
 GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
 
 
+def _box_for_frame(dimensions, pbc, positions, rmax):
+    """该帧距离计算用的盒；非周期正交轴放大到不会产生最小镜像。
+
+    `capped_distance` 只接受一个盒，无法逐轴关闭 PBC。把非周期轴放大到
+    大于该方向全部坐标跨度 + 2 rmax，就能保证真实距离小于盒长的一半，
+    最小镜像不会再折回。三斜盒的非周期方向没有简单做法，由调用方拒绝。
+    """
+    values = np.asarray(dimensions, dtype=float).copy()
+    if all(pbc):
+        return values
+    for axis, periodic in enumerate(pbc):
+        if periodic:
+            continue
+        coordinates = np.asarray(positions, dtype=float)[:, axis]
+        if coordinates.size:
+            extent = float(coordinates.max() - coordinates.min())
+        else:
+            extent = 0.0
+        values[axis] = max(float(values[axis]), 2.0 * extent + 2.0 * rmax, 1.0)
+    return values
+
+
+def _count_frame(
+    positions_a, positions_b, box, rmax, edges, chunk
+) -> np.ndarray:
+    """一帧的配对距离直方图；用截断邻居搜索避免 a×b 全距离。"""
+    counts = np.zeros(len(edges) - 1, dtype=float)
+    for start in range(0, len(positions_a), chunk):
+        _, distances = capped_distance(
+            positions_a[start : start + chunk],
+            positions_b,
+            max_cutoff=float(rmax),
+            box=box,
+            return_distances=True,
+        )
+        counts += np.histogram(distances, bins=edges)[0]
+    return counts
+
+
 def run(ctx) -> dict[str, pd.DataFrame]:
     group_a = ctx.groups["a"].atoms
     group_b = ctx.groups["b"].atoms
@@ -70,15 +109,36 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     if rmax <= rmin or nbins < 2:
         raise ValidationError("rdf 需要 rmax > rmin 且 nbins >= 2")
 
+    window = getattr(ctx, "geometry_window", None)
+    geometry = getattr(ctx, "geometry", None)
+    pbc = tuple(bool(value) for value in getattr(geometry, "pbc", (True, True, True)))
+    if window is not None:
+        pbc = tuple(bool(value) for value in window.pbc_all)
+        if window.pbc_changed:
+            ctx.warn(
+                "分析窗口内边界类型发生变化；RDF 按各方向“全窗口均周期”处理，"
+                "变化方向的非周期结果仅供定性参考。"
+            )
+
+    # 先定位到分析起始帧，避免使用上一个分析停留帧的盒。
+    ctx.universe.trajectory[ctx.start]
     dimensions = ctx.universe.dimensions
     if dimensions is None:
         raise ValidationError("轨迹缺少盒尺寸，无法计算 RDF")
-    if not np.allclose(np.asarray(dimensions[3:]), 90.0, atol=1e-3):
+    triclinic = not np.allclose(np.asarray(dimensions[3:]), 90.0, atol=1e-3)
+    if window is not None and not window.orthorhombic:
+        triclinic = True
+    if triclinic:
+        if not all(pbc):
+            raise ValidationError(
+                "非周期边界与三斜盒同时出现时 RDF 不支持；请使用正交盒或全周期边界",
+                where="rdf",
+            )
         ctx.warn(
             f"检测到三斜盒角 {np.asarray(dimensions[3:]).tolist()}；"
             "RDF 的球壳范围/归一化尚未验证，结果仅供定性参考。"
         )
-    window = getattr(ctx, "geometry_window", None)
+
     if window is not None:
         limit = 0.5 * float(window.min_length)
         source = f"分析窗口最短盒长 {window.min_length:g} Å 的一半"
@@ -91,15 +151,6 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             "距离超过该范围时球壳归一化不适用，结果仅供定性参考。"
         )
 
-    geometry = getattr(ctx, "geometry", None)
-    pbc = tuple(bool(value) for value in getattr(geometry, "pbc", (True, True, True)))
-    box = np.asarray(dimensions, dtype=float).copy()
-    if not all(pbc):
-        # 非周期方向不能用真实盒长做最小镜像；放大到远大于 rmax 的长度。
-        for axis, periodic in enumerate(pbc):
-            if not periodic:
-                box[axis] = max(float(box[axis]), 4.0 * rmax, 1.0)
-
     indices_a = set(int(value) for value in group_a.indices)
     indices_b = set(int(value) for value in group_b.indices)
     n_self = len(indices_a & indices_b)
@@ -108,38 +159,65 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         raise ValidationError("RDF 两组没有可用的交叉配对")
 
     edges = np.linspace(rmin, rmax, nbins + 1)
-    counts = np.zeros(nbins, dtype=float)
-    n_frames = 0
+    shell = 4.0 / 3.0 * np.pi * (edges[1:] ** 3 - edges[:-1] ** 3)
     chunk = max(1, int(2_000_000 / max(group_b.n_atoms, 1)))
+    g_sum = np.zeros(nbins, dtype=float)
+    n_frames = 0
     for frame in range(ctx.start, ctx.stop):
         ctx.universe.trajectory[frame]
+        frame_dimensions = ctx.universe.dimensions
+        if frame_dimensions is None:
+            raise ValidationError(f"第 {frame} 帧缺少盒尺寸，无法计算 RDF")
         positions_a = np.asarray(group_a.positions, dtype=float)
         positions_b = np.asarray(group_b.positions, dtype=float)
-        for start in range(0, len(positions_a), chunk):
-            distances = distance_array(
-                positions_a[start : start + chunk],
-                positions_b,
-                box=box,
-            )
-            counts += np.histogram(distances, bins=edges)[0]
+        all_positions = np.concatenate((positions_a, positions_b), axis=0)
+        box = _box_for_frame(frame_dimensions, pbc, all_positions, rmax)
+        counts = _count_frame(
+            positions_a, positions_b, box, rmax, edges, chunk
+        )
+        # 同组/部分重叠时，距离 0 的自配对会进入第一个 bin。
+        if rmin <= 0.0 and n_self:
+            counts[0] -= n_self
+        volume = float(np.prod(np.asarray(frame_dimensions[:3], dtype=float)))
+        if volume <= 0:
+            raise ValidationError(f"第 {frame} 帧盒体积非正，无法归一化 RDF")
+        ideal = n_valid * shell / volume
+        g_sum += np.divide(
+            counts,
+            ideal,
+            out=np.full_like(counts, np.nan),
+            where=ideal > 0,
+        )
         n_frames += 1
 
     if n_frames == 0:
         raise ValidationError("RDF 帧窗口为空")
-    # 同组/部分重叠时，distance_array 会把 i=i 的零距离也算进第一个 bin。
-    if rmin <= 0.0 and n_self:
-        counts[0] -= n_self * n_frames
-
-    volume = float(np.prod(np.asarray(dimensions[:3], dtype=float)))
-    shell = 4.0 / 3.0 * np.pi * (edges[1:] ** 3 - edges[:-1] ** 3)
-    ideal = n_valid * n_frames * shell / volume
-    g_r = np.divide(counts, ideal, out=np.full_like(counts, np.nan), where=ideal > 0)
+    g_r = g_sum / n_frames
     centers = 0.5 * (edges[1:] + edges[:-1])
+    if not all(pbc):
+        ctx.warn(
+            "非周期方向的 RDF 用直接距离计算，但 g(r) 的体积归一化对非周期体系"
+            "没有唯一物理定义；结果仅供定性参考。"
+        )
+    elif triclinic:
+        ctx.warn("三斜盒逐帧归一化按盒体积处理；球壳在倾斜盒中的定义仍需谨慎解释。")
+    extras = getattr(ctx, "extras", None)
+    if isinstance(extras, dict):
+        extras["rdf_geometry"] = {
+            "kernel_pbc": list(pbc),
+            "status": "qualitative" if (not all(pbc) or triclinic) else "supported",
+        }
     return {"rdf": pd.DataFrame({"r_angstrom": centers, "g_r": g_r})}
 
 
 def meta(ctx, tables) -> dict:
-    return geometry_meta(ctx)
+    info = dict(getattr(ctx, "extras", {}).get("rdf_geometry") or {})
+    kernel = tuple(info["kernel_pbc"]) if info.get("kernel_pbc") is not None else None
+    return geometry_meta(
+        ctx,
+        kernel_pbc=kernel,
+        geometry_status=info.get("status"),
+    )
 
 
 def build_series(ctx, tables) -> list[Series]:

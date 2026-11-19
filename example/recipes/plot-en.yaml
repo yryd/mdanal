@@ -7,4 +7,4 @@ analyses:
   msd:
     plot:
       title: {zh: 均方位移, en: Mean squared displacement}
-      xlim: [0, 95]
+      xlim: [0, 0.095]

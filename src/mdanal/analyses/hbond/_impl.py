@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import numpy as np
 import pandas as pd
-from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from ...plot import annotations, chart, plotutil
-from .._geometry import geometry_meta
+from ...plot import annotations, chart
+from .._geometry import full_periodic_meta
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 
@@ -44,6 +43,22 @@ LABELS = {
         "y": "hydrogen bonds",
     },
 }
+
+COLUMN_LABELS = {
+    "zh": {"time_ps": "时间 (ps)", "hbond_count": "氢键数"},
+    "en": {"time_ps": "time (ps)", "hbond_count": "hydrogen bonds"},
+}
+
+COMPARE = {
+    "table": "hbond_count",
+    "x": "time_ps",
+    "y": ["hbond_count"],
+    "box_axis": False,
+}
+
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 OCCUPANCY_COLUMNS = ("donor", "hydrogen", "acceptor", "frames_present", "occupancy")
 
@@ -91,7 +106,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
 
 def meta(ctx, tables) -> dict:
-    return geometry_meta(ctx)
+    return full_periodic_meta(ctx)
 
 
 def build_series(ctx, tables) -> list[Series]:

@@ -5,12 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .._geometry import geometry_meta
-from ...plot import annotations, chart, plotutil
+from .._geometry import full_periodic_meta
+from ...plot import annotations, chart
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 from ...errors import ValidationError
-from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -90,6 +89,10 @@ COMPARE = {
     "box_axis": False,
 }
 
+COORDINATES = "in_box"
+
+GEOMETRY = {"cell": "any", "periodicity": "full"}
+
 
 def _selection(group) -> str:
     """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
@@ -151,12 +154,39 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     tau_cont = _crossing(lag, continuous[1])
     tau_inter = _crossing(lag, intermittent[1])
+    no_events = len(analysis.results.hbonds) == 0
+    if no_events:
+        ctx.warn(
+            "分析窗口内没有任何氢键事件；寿命曲线没有可估计样本，"
+            "tau_1e_ps 不是“尚未衰减”，而是未定义。"
+        )
+
+    def _status(tau: float) -> str:
+        if no_events:
+            return "no_events"
+        return "reached" if np.isfinite(tau) else "not_reached"
+
+    def _note(tau: float) -> str:
+        if no_events:
+            return "no hydrogen-bond events; lifetime undefined"
+        return "" if np.isfinite(tau) else "not decayed to 1/e within tau_max"
+
     summary = pd.DataFrame(
         [
-            {"criterion": "continuous", "tau_1e_ps": tau_cont, "tolerance_frames": 0,
-             "note": "" if np.isfinite(tau_cont) else "not reached 1/e"},
-            {"criterion": "intermittent", "tau_1e_ps": tau_inter, "tolerance_frames": intermittency,
-             "note": "" if np.isfinite(tau_inter) else "not reached 1/e"},
+            {
+                "criterion": "continuous",
+                "tau_1e_ps": tau_cont,
+                "status": _status(tau_cont),
+                "tolerance_frames": 0,
+                "note": _note(tau_cont),
+            },
+            {
+                "criterion": "intermittent",
+                "tau_1e_ps": tau_inter,
+                "status": _status(tau_inter),
+                "tolerance_frames": intermittency,
+                "note": _note(tau_inter),
+            },
         ]
     )
 
@@ -167,6 +197,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         "tau_cont": tau_cont,
         "tau_inter": tau_inter,
         "intermittency": intermittency,
+        "no_events": no_events,
     }
     return {"hbond_lifetime": table, "hbond_lifetime_summary": summary}
 
@@ -174,7 +205,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 def meta(ctx, tables) -> dict:
     return {
         **dict(ctx.extras.get("hbond_lifetime", {})),
-        **geometry_meta(ctx),
+        **full_periodic_meta(ctx),
     }
 
 
@@ -227,7 +258,6 @@ def panel_request(ctx, tables) -> PanelRequest:
 
 def render_panel(ctx, request: PanelRequest) -> Panel:
     info = ctx.extras.get("hbond_lifetime", {})
-    intermittency = int(info.get("intermittency", 0))
     native = bool(request.options.get("native"))
 
     def draw(ax):

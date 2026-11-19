@@ -242,3 +242,29 @@ def test_render_applies_palette_to_cycle(tmp_path, monkeypatch):
         settings={"palette": ["#112233", "#445566"]},
     )
     assert captured["colors"] == ["#112233", "#445566"]
+
+
+def test_render_failure_closes_only_new_figures(tmp_path):
+    import matplotlib.pyplot as plt
+    from mdanal.config.registry import build_plan, load_registry
+    from mdanal.config.system import read_system
+    from mdanal.errors import MdanalError
+    from mdanal.plot.render import render
+    from mdanal.run.runner import RunOptions, execute, prepare
+    from helpers import SYSTEM, write_system
+
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - name: msd\n"
+        "    sel: [all_atoms]\n"
+        "    figures: {raw: {}, fit: {}}\n",
+        frames="[0, 5]",
+    )
+    cfg = read_system(path)
+    prepared = prepare(cfg, build_plan(cfg, load_registry()))
+    before = set(plt.get_fignums())
+    with pytest.raises(MdanalError, match="缺少表"):
+        execute(prepared, tmp_path / "out", RunOptions(), {})
+    assert set(plt.get_fignums()) == before

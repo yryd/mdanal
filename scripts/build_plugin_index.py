@@ -27,9 +27,15 @@ def note_path(module) -> Path:
 
 
 def main() -> int:
+    discovery = discover()
+    if discovery.failures:
+        print("插件发现失败，拒绝生成索引：")
+        for failure in discovery.failures:
+            print(f" - {failure.name}（{failure.category}）：{failure.detail}")
+        return 1
     missing = []
     rows = []
-    for name, definition in sorted(discover().definitions.items()):
+    for name, definition in sorted(discovery.definitions.items()):
         module = importlib.import_module(definition.module)
         path = note_path(module)
         if not path.is_file():

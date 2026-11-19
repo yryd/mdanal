@@ -454,7 +454,6 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     """density 的 Panel 模板：Field + 坐标轴 + 注释 + 色标。"""
     options = request.options
     a = str(options.get("a", "x"))
-    b = str(options.get("b", "y"))
     x_range = options.get("xlim")
     y_range = options.get("ylim")
 

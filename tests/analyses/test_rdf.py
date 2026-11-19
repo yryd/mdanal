@@ -147,3 +147,63 @@ def test_partial_overlap_excludes_only_true_self_pairs():
     table = rdf_module.run(ctx)["rdf"]
     assert np.isfinite(table["g_r"]).all()
     assert table["g_r"].sum() > 0.0
+
+
+def test_variable_box_is_frame_local_and_order_independent(tmp_path):
+    """变盒 RDF 必须逐帧用当前盒；同参数换分析顺序结果不变。"""
+    source = (SYSTEM / "run.lammpstrj").read_text(encoding="utf-8").splitlines(keepends=True)
+    starts = [i for i, line in enumerate(source) if line.startswith("ITEM: TIMESTEP")]
+    frames = source[starts[0] : starts[2]]
+    # 第二帧 z 盒长翻倍；第一帧保持不变。
+    second = [i for i, line in enumerate(frames) if line.startswith("ITEM: BOX BOUNDS")][1]
+    for offset in (1, 2, 3):
+        low, high = frames[second + offset].split()
+        frames[second + offset] = f"{float(low):.16e} {float(high) * 2:.16e}\n"
+    trajectory = tmp_path / "variable.lammpstrj"
+    trajectory.write_text("".join(frames), encoding="utf-8")
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        trajectory,
+        '  - {name: rdf, tag: first, sel: [all_atoms, all_atoms], range: [0.5, 8.0], nbins: 30}\n'
+        '  - {name: rdf, tag: second, sel: [all_atoms, all_atoms], range: [0.5, 8.0], nbins: 30}\n',
+        frames="[0, 2]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    first = pd.read_csv(out / "rdf-first/tables/rdf.csv", encoding="utf-8-sig")
+    second = pd.read_csv(out / "rdf-second/tables/rdf.csv", encoding="utf-8-sig")
+    pd.testing.assert_frame_equal(first, second)
+
+
+def test_nonperiodic_axis_does_not_wrap_distant_pair():
+    """非周期方向不能把 0.5/9.5 Å 折成 1 Å 的假近邻。"""
+    from types import SimpleNamespace
+
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import rdf as rdf_module
+
+    universe = mda.Universe.empty(2, trajectory=True)
+    universe.load_new(
+        np.array([[[0.5, 5.0, 5.0], [9.5, 5.0, 5.0]]]), format=MemoryReader
+    )
+    universe.dimensions = [10.0, 10.0, 10.0, 90, 90, 90]
+    ctx = SimpleNamespace(
+        groups={
+            "a": SimpleNamespace(atoms=universe.atoms),
+            "b": SimpleNamespace(atoms=universe.atoms),
+        },
+        universe=universe,
+        start=0,
+        stop=1,
+        geometry=SimpleNamespace(pbc=(False, True, True)),
+        params={"range": [0.0, 4.0], "nbins": 4},
+        extras={},
+        warn=lambda message: None,
+    )
+    table = rdf_module.run(ctx)["rdf"]
+    assert table["g_r"].sum() == pytest.approx(0.0, abs=1e-12)
+    meta = rdf_module.meta(ctx, {"rdf": table})
+    assert meta["input_pbc"] == [False, True, True]
+    assert meta["kernel_pbc"] == [False, True, True]
+    assert meta["geometry_status"] == "qualitative"

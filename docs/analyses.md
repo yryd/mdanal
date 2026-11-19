@@ -51,7 +51,8 @@
 - 参数：`range`（Å）、`nbins`；
 - 输出：`r_angstrom`、`g_r`；
 - 含义：两组原子间的径向分布函数，`g_r` 无量纲；同一原子与自身的配对已排除，部分重叠组也不会产生 0 距离自配对峰；
-- 限制：当前 RDF 插件声明正交全周期盒；不满足会警告并继续，但结果仅供参考。`range` 上限按**整个实际窗口**的最短盒长检查，不是当前读取器偶然帧；不计算配位数；tiny 的尖峰包含分子内相关；自配对按真实原子索引排除，并同步修正归一化分母。
+- 限制：插件声明正交全周期盒；非周期正交方向会按直接距离计算并警告，`g(r)` 的体积归一化对非周期体系没有唯一物理定义，结果仅供定性参考；三斜盒+非周期直接拒绝。`range` 上限按**整个实际窗口**的最短盒长检查，不是当前读取器偶然帧；不计算配位数；tiny 的尖峰包含分子内相关；自配对按真实原子索引排除，并同步修正归一化分母。
+- 变盒：每帧用该帧盒计算距离与理想配对数，再对逐帧 `g_i(r)` 取平均；同一分析换顺序/换停留帧不再改变结果。
 
 <a id="hbond"></a>
 
@@ -59,6 +60,7 @@
 
 - 输入：供体重原子、氢、受体重原子；当前库路径按全周期盒计算；非周期输入会打印非物理警告并继续，结果仅供定性参考。
 - 参数：`d_a_cutoff`（供体-受体距离上限 Å）、`d_h_a_angle_cutoff`（D-H-A 角下限，度）；
+- 可对比：声明 `COMPARE`，`hbond_count` 可以直接进入 `compare`。
 - 输出：
   - `hbond_count`：`frame`、`time_ps`、`hbond_count`；
   - `hbond_summary`：`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；
@@ -83,8 +85,8 @@
 - 参数：同 hbond，另 `tau_max_ps`、`intermittency`、`window_step`；
 - 输出：
   - `hbond_lifetime`：`lag_ps`、`continuous`、`intermittent`；
-  - `hbond_lifetime_summary`：`criterion`、`tau_1e_ps`、`tolerance_frames`、`note`；
-- 含义：`tau_1e_ps` 是存活曲线首次降到 1/e 的线性插值时间，不是指数拟合寿命；`note` 说明是否达到 1/e；
+  - `hbond_lifetime_summary`：`criterion`、`tau_1e_ps`、`status`、`tolerance_frames`、`note`；
+- 含义：`tau_1e_ps` 是存活曲线首次降到 1/e 的线性插值时间，不是指数拟合寿命；`status` 区分 `reached`（已达到）、`not_reached`（窗口内未衰减到 1/e）和 `no_events`（窗口内没有氢键事件，寿命未定义）；
 - 身份：库按 H-受体对识别同一个氢键；
 - 限制：采样必须足够密；tiny 的 5 ps/帧太粗，程序会提示寿命不可信。
 
@@ -95,10 +97,10 @@
 - 输入：一个原子组；
 - 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（是否用 FFT 自相关加速，默认 true）；
 - 输出：基础表 `dt_ns`、`msd_A2`；可选派生表 `msd_fit`、`msd_fit_summary`、`msd_rdc`；
-- 含义：均方位移；默认质心路径按残基质量和质心计算；时间轴按全局帧号 × 帧间隔，不跟随 TIMESTEP 重置；
+- 含义：均方位移；默认质心路径按残基质量和质心计算；横轴是**从零开始的滞后时间** `τ`（表内 `dt_ns`），不是全局帧时间；`check`/`run` 会提示同一段内 TIMESTEP 步差异常；
 - 图：`raw`（默认，`msd.png`）、`fit`（拟合 + D + 拟合窗口）、`rdc`（运行扩散系数 + 稳定窗口）；由 `figures:` 选择；
-- 派生：`derive.fit` 用 `window_ns` 线性拟合，`D = slope/(2·d)`；`derive.rdc` 输出 `MSD/(2·d·t)`；RDC 在 τ=0 为 NaN；
-- 限制：首版手工给拟合窗口，不自动采用“稳定区”；不同时间单位必须按表实际 `dt_ns` 换算；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
+- 派生：`derive.fit` 用 `window_ns` 线性拟合，`D = slope/(2·d)`；`derive.rdc` 输出 `MSD/(2·d·t)`；RDC 在 τ=0 为 NaN；自由截距少于 3 点时 `D_stderr` 为未定义（NaN），`dof` 记录残差自由度；
+- 限制：首版手工给拟合窗口，不自动采用“稳定区”；不同时间单位必须按表实际单位换算（新表 `dt_ns`，旧快照 `dt_ps`）；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
 
 ```yaml
 - name: msd
@@ -134,7 +136,7 @@
 | hbond | `time_ps` / `hbond_count` / `occupancy` | ps / 个 / — |
 | hbond_type | `count` / `per_frame` / `share` | 个 / 个·帧⁻¹ / — |
 | hbond_lifetime | `lag_ps` / `tau_1e_ps` | ps |
-| msd | `dt_ns` / `msd_A2` | ns / Å² |
+| msd | `dt_ns` / `msd_A2`（旧快照可为 `dt_ps`） | ns / Å² |
 | velocity | `v*_A_per_ps` / `error_A_per_ps` | Å·ps⁻¹ |
 
 `x_angstrom/y_angstrom/z_angstrom` 是盒局部位置列；`r_angstrom` 是距离，不是盒坐标，不能加盒原点平移；`dt_ns`/`lag_ps` 是时间。`--aligned` 只对位置列施加视图平移，`replot` 使用原表，不用 aligned 副本。

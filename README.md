@@ -14,6 +14,9 @@ python main.py run   --system example/quickstart --out /tmp/mdanal-demo --force
 # 打开 /tmp/mdanal-demo/msd/figures/msd.png
 python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-en \
   --lang en --format svg --config example/recipes/plot-en.yaml
+# 已有表、只改拟合窗口/重新出 fit 图时：
+# python main.py derive --from /tmp/mdanal-demo --out /tmp/mdanal-demo-fit \
+#   --config example/recipes/derive.yaml
 ```
 
 `example/quickstart` 用仓库自带的 tiny 数据，只跑一个 MSD；它不是研究结论，只用于把流程跑通。完整步骤见 [首次使用](docs/getting-started.md)。
@@ -50,6 +53,7 @@ data.lmp + dump + system.yaml
   CSV + plot.json + 初次 PNG
           │
           ├── plot.yaml + replot ──> 新图目录（不读轨迹）
+          ├── derive.yaml + derive ──> 新派生表/图（不读轨迹）
           │
 多个 run 结果 + compare.yaml ──> 对比图 + 对齐后的表
           │
@@ -58,6 +62,7 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 
 - `run` 执行分析并读轨迹；`check` 也会加载体系做校验，但不计算；每条分析保存 `plot.json` 和标准 CSV；
 - `replot` 只读 `plot.json` + CSV，切换语言/颜色/范围/标注/格式时不用重算；
+- `derive` 只读已有表，按配置重算 MSD 的 fit/RDC 并重绘；不读轨迹；
 - `compare` 只读多个 `run` 的输出；
 - 表是稳定机器列名，图内文字才随 `--lang` 改变。
 
@@ -77,15 +82,16 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 
 - 一次 `run` 处理一个体系；多体系在 `compare` 阶段叠图。
 - `density`/`lineardensity` 在盒子变化时只算首帧并警告；`msd` 的连续视图要求每帧位移小于半盒；氢键寿命需要足够密的采样。
-- 首版按每帧 `BOX BOUNDS` 处理原点、盒矩阵和 `pp/ff` 标记：density/lineardensity/velocity 支持 `ppf/pps`（x/y 周期、z 非周期，z 不 wrap）；RDF 和氢键家族当前插件仍声明全周期；不满足声明时只打印“非物理/仅供定性参考”警告，不再阻止运行。`msd` 的连续视图按输入路径受限。逐个插件的条件见 [配置](docs/configuration.md#坐标视图与每帧几何)。
+- 按每帧 `BOX BOUNDS` 处理原点、盒矩阵和 `pp/ff` 标记：density/lineardensity/velocity 支持 `ppf/pps`（x/y 周期、z 非周期，z 不 wrap）；RDF 逐帧用当前盒，非周期正交方向用直接距离但 g(r) 归一化没有唯一物理定义，结果标为定性；氢键家族内部仍按全周期盒，非周期输入会明确标注不支持。`msd` 的连续视图按输入路径受限。逐个插件的条件见 [配置](docs/configuration.md#坐标视图与每帧几何)。
 - 速度剖面在首帧参考盒坐标中平均；误差是未校正时间相关性的样本标准误。
 - `palette` 只改未显式设色的曲线；氢键部分图、密度连续色标、标注颜色仍单独设置。
-- 当前没有密度色标范围、逐条标注样式、论文级误差估计；见 [排错与限制](docs/troubleshooting.md#限制)。
+- 密度色标在分析参数里控制：`cmap`、`colors`、`vmin`、`vmax`（见 [分析说明](docs/analyses.md#density)）；`plot` 层没有“色标范围”字段，replot 不能改密度色标。
+- 逐条标注样式、论文级误差估计仍未实现；见 [排错与限制](docs/troubleshooting.md#限制)。
 - 旧结果没有 `plot.json` 时不能重绘，需要重新 `run`。
 
 ## 插件与开发
 
-分析是 `src/mdanal/analyses/` 下的一个 `.py` 文件，`run` 算数、`figures` 只画图；不从主执行器里特判某个库。模板、声明表、上下文和第三方适配步骤见 [插件手册](docs/plugins.md)。
+内置分析是 `src/mdanal/analyses/<name>/` 包：`run` 算数、`figures`/`FIGURES` 只画图，`note.md` 写科学说明；外部简单插件仍可写成单个 `.py`。不从主执行器里特判某个库。模板、声明表、上下文和第三方适配步骤见 [插件手册](docs/plugins.md)。
 
 ```bash
 python main.py list

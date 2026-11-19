@@ -295,3 +295,46 @@ def test_scan_matches_reader_coordinate_precedence(tmp_path):
     scan = _scan_dump(scaled_unwrapped)
     assert scan.conventions == ("scaled_unwrapped",)
     assert scan.state == "unwrapped"
+
+
+def test_irregular_timestep_is_diagnosed(tmp_path):
+    """同一段内 TIMESTEP 步差异常时，配置层必须留下明确提示。"""
+    lines = (SYSTEM / "run.lammpstrj").read_text(encoding="utf-8").splitlines(keepends=True)
+    starts = [i for i, line in enumerate(lines) if line.startswith("ITEM: TIMESTEP")]
+    frames = lines[starts[0] : starts[3]]
+    steps = [i for i, line in enumerate(frames) if line.startswith("ITEM: TIMESTEP")]
+    for index, step in zip(steps, (0, 100, 300)):
+        frames[index + 1] = f"{step}\n"
+    trajectory = tmp_path / "irregular.lammpstrj"
+    trajectory.write_text("".join(frames), encoding="utf-8")
+    path = tmp_path / "system.yaml"
+    path.write_text(
+        f"""name: irregular
+topology: {SYSTEM / 'data.lmp'}
+trajectory: {trajectory}
+timestep_fs: 1.0
+dump_every: 100
+frames: [0, 3]
+groups:
+  all_atoms: "all"
+analyses:
+  - {{name: fake, sel: [all_atoms, all_atoms]}}
+""",
+        encoding="utf-8",
+    )
+    cfg = read_system(path)
+    assert len(cfg.time_notes) == 1
+    assert "TIMESTEP" in cfg.time_notes[0]
+    assert "300" in cfg.time_notes[0]
+
+
+def test_legal_segment_reset_has_no_time_note(tmp_path):
+    first, second, total = split_trajectory(tmp_path, reset_second_steps=True)
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        f"[{first}, {second}]",
+        "  - {name: fake, sel: [all_atoms, all_atoms]}\n",
+        frames=f"[0, {total}]",
+    )
+    assert read_system(path).time_notes == ()

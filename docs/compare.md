@@ -36,7 +36,7 @@ python main.py compare --config compare.yaml --out compare-out
 
 ## 3. 时间轴
 
-时间偏移只用于**非盒坐标、列名以 `_ps` 结尾**的横轴，例如 MSD：
+时间偏移只用于**非盒坐标、列名以 `_ps` 或 `_ns` 结尾**的横轴，例如 MSD：
 
 ```yaml
 items:
@@ -44,11 +44,11 @@ items:
   - {root: runs/b/out, label: 5 ns,  t_offset: 5}
 figure:
   analysis: msd
-  xlim: [0, 95]
+  xlim: [0, 0.095]
 out: compare-msd
 ```
 
-`t_offset` 是加到该体系横轴上的数值，单位跟横轴（这里是 ps）；它不会把不同体系的绝对时间混在一起，只是把曲线的起点平移。
+`t_offset` 是加到该体系横轴上的数值，单位跟横轴（MSD 新表是 ns，旧快照可以是 ps）；它不会把不同体系的绝对时间混在一起，只是把曲线的起点平移。`xlim` 也只按当前表单位写。
 
 **空间轴不能加 `t_offset`**。`lineardensity` 的 `z_angstrom` 是盒坐标，写了会报：
 
@@ -79,7 +79,8 @@ figure:
 - 不同 Panel 可以使用不同分析/方向；
 - 同一 Panel 内每个 item 必须使用相同分析、相同参数；
 - `layout.ncols` 只控制一行放几个 Panel；
-- 输出是一张 `compare.png`，表按 Panel 分别写到 `tables/`。
+- 输出是一张 `compare.png`，表按 Panel 分别写到 `tables/`；同一 analysis/table 被多个 Panel 引用时，第二张起为 `...__panel2.csv`，不会覆盖。
+- 氢键 `hbond_count` 已声明 `COMPARE`，可以直接叠图；`hbond_type` 没有 compare 声明。
 
 ## 5. 输出
 
@@ -91,7 +92,7 @@ COMPARE/
 ```
 
 - 合并表含 `item`、对齐后的 `x` 和各列；
-- `provenance.json` 记录每个体系的平移量、`t_offset`、语言、palette 和 xlim；
+- `provenance.json` 记录每个体系的平移量、`t_offset`、语言、palette、xlim 和每个 Panel 实际引用的表；
 - 非空输出默认拒绝，`--force` 允许覆盖；输出不能等于/位于输入结果目录内。
 
 ## 6. 示例图

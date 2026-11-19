@@ -44,7 +44,7 @@
 
 ![MSD](assets/gallery/msd.png)
 
-`dt_ns` 对 `msd_A2`；当前不拟合扩散系数。
+`dt_ns` 对 `msd_A2`；默认只画 raw。需要拟合线/D 时在上层配置 `derive.fit` 并选择 `figures.fit`，或对已有表用 `mdanal derive`。
 
 ### 流速剖面
 

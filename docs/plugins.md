@@ -15,14 +15,17 @@ run(run_ctx) -> dict[str, pandas.DataFrame]
 meta(run_ctx, tables) -> dict                 # 可选
 panels(plot_ctx, tables) -> list[Panel]       # 兼容主接口
 render_panel(plot_ctx, request) -> Panel      # compare 用
-FIGURES = {"raw": FigureRecipe(...), ...}     # 新：一个分析多张图
+FIGURES = {"raw": FigureRecipe(...), ...}     # 一个分析多张图
+DERIVE = {"fit": {"keys": (...), ...}, ...}   # 声明的离线/运行内派生 ID
+derive_tables(ctx, tables, spec) -> dict      # 可选；供 run 与离线 derive 共用
 figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 旧接口，兼容外部插件
 ```
 
 - `run`：唯一可以访问轨迹、原子组和选择的地方；
 - `meta`：只导出结果摘要，在绘图前执行；
 - `panels`：单图兼容入口；平台负责 `ncols` 排版、`plot.layout` 和保存；
-- `FIGURES`：命名图 recipe；每个 recipe 声明需要的表并构造 Panel 列表；`figures:` 选择本次要出的图；
+- `FIGURES`：命名图 recipe；每个 recipe 声明需要的表并构造 Panel 列表；`figures:` 只能选择这里声明的 ID；
+- `DERIVE`：命名派生 ID 和允许的参数键；`derive:` 只能选择这里声明的 ID；只有声明了入口的插件才能离线派生；
 - `render_panel`：把一个 `PanelRequest` 渲染成 Panel；原生运行和 `compare` 共用；
 - `figures`：旧绘图接口，只留给未迁移的外部插件；新插件优先用 `FIGURES`；
 - 没有绘图入口的数据分析是合法的；
@@ -39,11 +42,13 @@ figures(plot_ctx, tables) -> list[tuple[str, Figure]]  # 旧接口，兼容外�
 | `LABELS` | `zh`/`en` 两套图内文字；公共标签和 `window` 占位符来自 `labels.yaml` |
 | `COLUMN_LABELS` | 机器列名 → 展示标签；compare 使用 |
 | `COORDINATES` | `in_box`/`continuous`/`any`；`any` 是“无特殊连续需求”，当前实际按 `in_box` 运行，不代表任意几何 |
-| `GEOMETRY` | `{cell: orthorhombic/any, periodicity: full/xy/xz/yz/any}`；`xy` 表示只要求 x/y 周期，`any` 表示作者自行处理所有方向 |
+| `GEOMETRY` | `{cell: orthorhombic/any, periodicity: full/xy/xz/yz/any}`；`xy` 表示只要求 x/y 周期，`any` 表示作者自行处理所有方向；`geometry_meta` 记录 `input_pbc`、`kernel_pbc`、`effective_pbc`、`pbc_match`、`geometry_status`，不要把输入 PBC 冒充内核实际假设 |
 | `REQUIRES` | 当前已识别 `velocities`；不要写未识别的字符串假装检查了其他能力 |
 | `PACKAGE` | 外部包名和最低版本；不是安装器 |
 | `MUTATES_POSITIONS` | 会就地改坐标时必须 `True`；仍要避免污染其他分析 |
 | `COMPARE` | 表名、x、y、`box_axis`；不是所有分析都适合一维叠图；声明后 `compare` 可读该分析 |
+| `DERIVE` | 派生 ID → `{keys: (...), help: ...}`；未声明的键在 `check` 阶段直接报错 |
+| `FIGURES` | 图 recipe ID → `FigureRecipe`；未声明的 recipe 在 `check` 阶段直接报错 |
 | `render_panel` | 内置插件均已提供；`compare` 用插件自己的 Panel 模板，而不是通用曲线绘制 |
 
 未声明 `GEOMETRY` 的旧插件按保守默认 `orthorhombic/full` 检查：遇到非正交或非全周期输入会打印非物理警告并继续，不会静默；定量结果仍要求满足声明。内置 density/lineardensity/velocity 声明 `xy`，RDF/氢键家族声明 `full`，msd 声明 `any`。
@@ -58,11 +63,11 @@ analyses/msd/
 ├── contract.py        # SLOTS/PARAMS/LABELS
 ├── compute.py         # 轨迹 → 基础表
 ├── derive.py          # 基础表 → D/RDC
-├── figures/           # raw/fit/rdc 等 recipe
+├── figures.py         # raw/fit/rdc 等 recipe（复杂时也可拆成 figures/ 包）
 └── note.md            # 分析专属说明
 ```
 
-内置插件统一为包内 `note.md`；外部简单插件仍可用相邻的 `<name>.note.md`。平台只维护通用协议和索引；每个插件的科学说明在 note 中。`scripts/build_plugin_index.py` 校验 note 并生成 `docs/analyses-index.md`。
+内置插件统一为包内 `note.md`；外部简单插件仍可用相邻的 `<name>.note.md`。平台只维护通用协议和索引；每个插件的科学说明在 note 中。`scripts/build_plugin_index.py` 校验 note 并生成 `docs/analyses-index.md`；若插件发现阶段有失败，脚本直接失败，不会跳过坏插件继续生成。
 
 ### 输出契约
 
@@ -148,6 +153,8 @@ PARAMS = {
 | `ctx.start` / `ctx.stop` | int | 该分析实际帧窗口，左闭右开，已含 `section` |
 | `ctx.frame_dt_ps` | float | 帧间隔 |
 | `ctx.view` | str | `in_box`/`continuous` |
+| `ctx.geometry` | `FrameGeometry` | 当前分析起始帧的盒原点/矩阵/边界 |
+| `ctx.geometry_window` | `GeometryWindow` | 实际窗口的正交性、PBC、最小盒长等摘要 |
 | `ctx.window(axis)` | tuple/None | 该轴显示窗口；只在画图时用 |
 | `ctx.warn("...")` | — | 写入 provenance |
 | `ctx.extras` | dict | 给绘图的 JSON 小数据 |
@@ -159,8 +166,6 @@ PARAMS = {
 | `ctx.params` / `ctx.meta` / `ctx.extras` | mapping | 计算参数 + 结果摘要 |
 | `ctx.start` / `ctx.stop` / `ctx.frame_dt_ps` | int/float | 图注/轴 |
 | `ctx.shift` | 三元组 | 位置列的显示平移；不参与科学计算 |
-| `ctx.geometry` | `FrameGeometry` | 当前分析起始帧的盒原点、矩阵、边界；需要逐帧时按帧号读取 |
-| `ctx.geometry_window` | `GeometryWindow` | 实际窗口的正交性、PBC、最小盒长等摘要 |
 | `ctx.lang` / `ctx.dpi` | str/int | 语言/分辨率 |
 | `ctx.annotate` | bool | 是否显示自动说明 |
 | `ctx.annotations` | tuple | 用户标注 |
@@ -170,7 +175,7 @@ PARAMS = {
 | `ctx.annotation()` | str | 自动帧窗口/参数说明 |
 | `ctx.warn("...")` | — | 绘图警告 |
 
-`figures` 没有 `universe`、`groups`、`system`、`plan_item`。
+`figures` 没有 `universe`、`groups`、`system`、`plan_item`。几何事实（盒原点/矩阵/PBC）属于 `run_ctx`；需要写进图注时通过 `meta`/`extras` 传递，不要在 `plot_ctx` 上找 `geometry`。
 
 ### 输出路径
 
@@ -186,7 +191,7 @@ system.yaml:
 
 ## 4. 路径三：改造第三方分析
 
-以现有 `rdf.py`/`msd.py` 为对照，逐步映射：
+以现有 `rdf/`、`msd/` 包为对照，逐步映射：
 
 1. 第三方脚本自己 `Universe` → 改用 `ctx.universe` 和 `ctx.groups[slot].atoms`，避免重复读轨迹；
 2. 硬编码选择字符串 → 声明 `SLOTS`，由 `sel` 决定；
@@ -197,9 +202,9 @@ system.yaml:
 7. 库需要质量、键、电荷、连续坐标 → 先检查真实前提，不要靠名字猜或默默补默认值；
 8. 处理坐标原位修改、版本差异、空结果和异常。
 
-### 现成对照：`rdf.py` / `msd.py`
+### 现成对照：`rdf/` / `msd/`
 
-完整带注释的实现见 [`rdf.py`](../src/mdanal/analyses/rdf.py) 和 [`msd.py`](../src/mdanal/analyses/msd.py)。以 RDF 为例：
+完整带注释的实现见 [`rdf/_impl.py`](../src/mdanal/analyses/rdf/_impl.py) 和 [`msd/`](../src/mdanal/analyses/msd/)。以 RDF 为例：
 
 | 独立脚本里 | 本仓库插件 |
 |---|---|
@@ -208,9 +213,9 @@ system.yaml:
 | `rmin, rmax, nbins` 硬编码 | `PARAMS["range"/"nbins"]` + `ctx.params[...]` |
 | `analysis.run(start=0, stop=len(u.trajectory))` | `analysis.run(start=ctx.start, stop=ctx.stop)` |
 | `r, g = analysis.results...` | `{"rdf": DataFrame({"r_angstrom": ..., "g_r": ...})}` |
-| `plt.plot(...); plt.savefig(...)` | `figures(ctx, tables)` 只用表，返回 Figure |
+| `plt.plot(...); plt.savefig(...)` | `FIGURES["raw"]` / `render_panel` 只用表，返回 Panel |
 
-RDF 的半盒检查放在 `run`，不放在 `figures`；MSD 声明 `COORDINATES = "continuous"`，因为它需要连续坐标，而不是盒内坐标。两者都把库参数、时间窗口和标签分别放进 `PARAMS`、`ctx.start/stop`、`LABELS`，绘图只读 `tables`。
+RDF 的半盒检查放在 `run`，不放在 `figures`；RDF 逐帧读取当前盒，非周期正交方向按直接距离计算。MSD 声明 `COORDINATES = "continuous"`，因为它需要连续坐标，而不是盒内坐标。两者都把库参数、时间窗口和标签分别放进 `PARAMS`、`ctx.start/stop`、`LABELS`，绘图只读 `tables`。
 
 每个适配至少做一次**与库原始调用一致或可手算**的小样本核对，再跑 `run → replot`。契约检查通过不代表物理算法正确。
 

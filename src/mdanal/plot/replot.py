@@ -6,6 +6,7 @@ import importlib
 import json
 import shutil
 import uuid
+from dataclasses import replace
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
@@ -23,6 +24,7 @@ from .snapshot import (
     json_safe,
     load_snapshot,
     make_plot_context,
+    module_sha256,
     read_tables,
     snapshot_defaults,
 )
@@ -233,6 +235,12 @@ def run_replot(
             specs = spec_from_snapshot(payload)
         except (OSError, json.JSONDecodeError, ValidationError) as exc:
             raise ValidationError(f"跨分析图快照无法读取：{path}（{exc}）") from exc
+        global_plot = config_defaults.get("plot") or {}
+        if global_plot:
+            specs = tuple(
+                replace(spec, plot=merge_plot(spec.plot, global_plot))
+                for spec in specs
+            )
         requested_composites.extend(specs)
 
     if out.exists():
@@ -280,8 +288,12 @@ def run_replot(
                 raise ValidationError(
                     f"{directory} 的绘图模块 {module_name} 不可用：{exc}"
                 ) from exc
-            current_hash = sha256(Path(module.__file__))
-            if current_hash != snapshot["analysis"].get("implementation_sha256"):
+            current_hash = module_sha256(module)
+            expected_hash = snapshot["analysis"].get("implementation_sha256")
+            # 旧快照（包化前）只哈希了 __init__.py；同时接受两种算法，避免未改代码误报。
+            legacy_hash = sha256(Path(module.__file__))
+            changed = expected_hash not in (current_hash, legacy_hash)
+            if changed:
                 message = (
                     f"{directory} 的插件源码在生成快照后发生变化；"
                     "已按当前版本尝试重绘，结果不保证与原图一致"
@@ -301,16 +313,26 @@ def run_replot(
             render_options = {
                 "fmt": chosen_fmt,
                 "settings": plot,
+                "override_priority": "settings",
             }
             selected_figures = dict(snapshot["context"].get("figures") or {})
             if figures:
-                unknown_figures = [name for name in figures if name not in selected_figures]
-                if unknown_figures:
-                    raise ValidationError(
-                        f"{directory} 中没有 figure {unknown_figures}；"
-                        f"可用 {sorted(selected_figures)}"
-                    )
-                selected_figures = {name: selected_figures[name] for name in figures}
+                if selected_figures:
+                    unknown_figures = [
+                        name for name in figures if name not in selected_figures
+                    ]
+                    if unknown_figures:
+                        raise ValidationError(
+                            f"{directory} 中没有 figure {unknown_figures}；"
+                            f"可用 {sorted(selected_figures)}"
+                        )
+                    selected_figures = {
+                        name: selected_figures[name] for name in figures
+                    }
+                else:
+                    # 旧快照没有记录默认 figure；允许按 recipe ID 重新选择，
+                    # 由 render 对未知 ID 给出统一错误。
+                    selected_figures = {name: {"plot": {}} for name in figures}
             if selected_figures:
                 render_options["figures"] = selected_figures
             figure_paths = render(module, plot_ctx, tables, target, **render_options)
@@ -323,8 +345,7 @@ def run_replot(
                         "sha256": sha256(analysis_dir / "plot.json"),
                     },
                     "plugin_sha256": current_hash,
-                    "plugin_changed": current_hash
-                    != snapshot["analysis"].get("implementation_sha256"),
+                    "plugin_changed": changed,
                     "figures": [_safe_relative(path, temp) for path in figure_paths],
                     "warnings": list(plot_ctx.warnings),
                     "lang": chosen_lang,

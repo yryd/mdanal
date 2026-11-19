@@ -51,6 +51,7 @@ def test_hbond_lifetime_output(real, tmp_path):
     assert list(summary.columns) == [
         "criterion",
         "tau_1e_ps",
+        "status",
         "tolerance_frames",
         "note",
     ]
@@ -71,3 +72,21 @@ def test_hbond_lifetime_rejects_tau_below_one_frame(real, tmp_path):
     path = write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
     out = tmp_path / "out"
     assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 3
+
+
+def test_hbond_lifetime_no_events_is_not_not_reached(real, tmp_path):
+    cfg, _ = real
+    analyses = (
+        '  - {name: hbond_lifetime, sel: ["type 1 3", "type 5 6", "type 1 3"],'
+        ' d_a_cutoff: 0.1, tau_max_ps: 20}'
+    )
+    path = write_system(tmp_path, cfg.topology, cfg.trajectory, analyses)
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    summary = pd.read_csv(
+        out / "hbond_lifetime/tables/hbond_lifetime_summary.csv",
+        encoding="utf-8-sig",
+    )
+    assert set(summary["status"]) == {"no_events"}
+    assert summary["tau_1e_ps"].isna().all()
+    assert all("undefined" in note for note in summary["note"])

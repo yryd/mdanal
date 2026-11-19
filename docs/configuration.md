@@ -10,10 +10,12 @@
 | `system.yaml` | 你 | 轨迹、时间、选择、分析和初次呈现 | 换计算对象/参数时改 |
 | `plot.yaml` | 你（文件名自定） | `replot` 的呈现覆盖 | 反复调图时改 |
 | `compare.yaml` | 你（文件名自定） | 选择多个结果并对齐叠图 | 多体系对比时改 |
+| `derive.yaml` | 你（文件名自定） | 从已有表重算 fit/RDC | 改拟合窗口时 |
 | `tables/*.csv` | 程序 | 稳定机器列名的数据 | 可读；手改后原快照哈希会失效 |
 | `plot.json` | 程序 | 重绘所需上下文 | 不手改 |
 | `manifest.csv` / `provenance.json` | 程序 | 分析目录、参数、警告、输入校验和 | 阅读/排错 |
 | `replot.json` | 程序 | 本次重绘设置与产物记录 | 阅读，不当配置 |
+| `derive.json` | 程序 | 离线派生源、配置与产物记录 | 阅读，不当配置 |
 | `analyses/<name>/` | 分析作者 | 插件包（实现 + note） | 写插件时编辑 |
 
 数据流：
@@ -24,24 +26,26 @@ data + dump + system.yaml ──run──> CSV + plot.json + 初次 PNG
                          plot.yaml + replot ──> 新图目录
 
 多个 run 结果 + compare.yaml ──compare──> 对比图 + 对齐表
+已有表 + derive.yaml ──derive──> 新派生表/图（不读轨迹）
 CSV / 自己的数组 + Python/chart ──> 自由绘图
 ```
 
 ## 2. 三种 YAML 的分工
 
-| | `system.yaml` | `plot.yaml`（replot） | `compare.yaml` |
-|---|---|---|---|
-| 作用 | 计算输入 | 已有结果的呈现覆盖 | 多个结果的对齐叠图 |
-| `analyses` 形态 | 列表 | 按输出目录名索引的映射 | 没有 `analyses`，用 `items` |
-| 能否改计算 | 能 | **不能** | **不能** |
-| 主要字段 | topology/trajectory/frames/groups/analyses | defaults/analyses | items/figure/out |
-| 典型命令 | `run` / `check` | `replot` | `compare` |
+| | `system.yaml` | `plot.yaml`（replot） | `compare.yaml` | `derive.yaml` |
+|---|---|---|---|---|
+| 作用 | 计算输入 | 已有结果的呈现覆盖 | 多个结果的对齐叠图 | 已有表重算派生 |
+| `analyses` 形态 | 列表 | 按输出目录名索引的映射 | 没有 `analyses`，用 `items` | 按输出目录名索引的映射 |
+| 能否改计算 | 能 | **不能** | **不能** | 只改派生，不重算轨迹 |
+| 主要字段 | topology/trajectory/frames/groups/analyses | defaults/analyses | items/figure/out | analyses.<dir>.derive/figures |
+| 典型命令 | `run` / `check` | `replot` | `compare` | `derive` |
 
-三个最容易混的点：
+四个最容易混的点：
 
 1. `system.yaml` 的 `analyses` 是列表；`plot.yaml` 的 `analyses` 是按**输出目录名**索引的映射。`name: density` + `tag: xy` 的输出目录是 `density-xy`。
 2. 分析参数（`nbins`、`dim`、`delta` 等）写在分析条目本层；呈现参数放在 `plot`；用户标注 `annotate` 与 `plot` 并列。没有 `params:` 包裹层。
 3. `system.yaml` 内路径相对配置文件目录；`compare.yaml` 的 `item.root` 和 `out` 相对 compare 配置目录；命令行相对当前工作目录。
+4. `derive.yaml` 只读已有 `plot.json` + CSV，不读轨迹；它改变派生数值，不是纯呈现覆盖。
 
 ## 3. `system.yaml` 字段
 
@@ -72,8 +76,8 @@ CSV / 自己的数组 + Python/chart ──> 自由绘图
 | `tag` | 否 | 同一种分析写多条时区分输出目录；目录为 `name-tag` |
 | `section` | 否 | 在体系 `frames` 内再切 `[起, 止]`，相对偏移，左闭右开 |
 | `plot` | 否 | 具体字段见 [绘图与重绘](plotting.md#plot-字段) |
-| `figures` | 否 | 该分析的图 recipe 映射；见 [多图输出](plotting.md#多图输出) |
-| `derive` | 否 | 从基础表派生的科学结果；见 [MSD D/RDC](analyses.md#msd) |
+| `figures` | 否 | 该分析的图 recipe 映射；键必须是插件 `FIGURES` 声明过的 ID |
+| `derive` | 否 | 从基础表派生的科学结果；键必须是插件 `DERIVE` 声明过的 ID；未知键直接报错 |
 | `annotate` | 否 | 用户标注列表，与 `plot` 并列 |
 | 分析参数 | 否 | 如 `nbins`、`dim`、`delta`、`tau_max_ps`，直接写在本层；用 `mdanal list <name>` 查契约 |
 
@@ -123,8 +127,8 @@ figures:
 | 分析 | 盒形状 | 边界 |
 |---|---|---|
 | density / lineardensity / velocity | 正交 | x/y 周期；z 可为 `ppf/pps` 非周期 |
-| rdf | 正交 | 三向周期（当前插件声明 full）；`range` 上限按整个窗口最短盒长检查 |
-| hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期（当前插件声明 full） |
+| rdf | 正交（变盒逐帧） | 声明三向周期；非周期正交方向按直接距离计算并标定性；三斜+非周期拒绝 |
+| hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期；非周期输入会明确标为 `unsupported_geometry` |
 | msd | 连续视图按输入路径限制 | 包裹坐标只支持固定盒矩阵；已给 `xu/xsu` 按输入定义 |
 
 不满足声明时 `run`/`check` 会打印“非物理/仅供定性参考”警告并继续执行，不会阻止运行；警告会写入 provenance。不要靠改 YAML 假装周期；需要定量结果时仍应使用满足条件的数据。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。
@@ -136,7 +140,7 @@ figures:
 第 i 帧时间 = i × 帧间隔
 ```
 
-多段轨迹的 TIMESTEP 可以重置；程序按**合并后的全局帧号**计时，不跟随 LAMMPS 的 TIMESTEP 跳变。
+多段轨迹的 TIMESTEP 可以重置；程序按**合并后的全局帧号**计时，不跟随 LAMMPS 的 TIMESTEP 跳变。同一段内若 TIMESTEP 步差与 `dump_every` 不一致（抽帧不均/丢帧/配错 `dump_every`），`check`/`run` 会给出明确提示；合法接缝重置不误报。
 
 ## 4. 输出结构
 
@@ -156,7 +160,7 @@ OUT/
     └── figures/density_xz.png
 ```
 
-- `plot.json` 保存表路径/哈希、参数、帧窗口、视角平移、双语标签、用户标注和呈现默认值；
+- `plot.json` 保存表路径/哈希、参数、帧窗口、视角平移、双语标签、用户标注、呈现默认值和实际生成的图选择（默认 MSD `raw` 也会记录）；
 - `--aligned` 会另写 `tables/*.aligned.csv`，正表仍是盒局部坐标；
 - `provenance.json` 记录输入校验和、视图、参数、警告和库版本；`manifest.csv` 是每条分析的目录、选择、原子数和参数。
 
@@ -179,6 +183,19 @@ COMPARE/
 └── provenance.json
 ```
 
+同一 analysis/table 被多个 Panel 引用时，第二张起写成 `...__panel2.csv`，不会互相覆盖；`provenance.json` 记录每个 Panel 实际引用的表。
+
+### `derive`
+
+```text
+DERIVED/
+├── derive.json
+└── msd/
+    ├── plot.json
+    ├── tables/msd.csv + msd_fit.csv + msd_fit_summary.csv + msd_rdc.csv
+    └── figures/msd.png / msd-fit.png / msd-rdc.png
+```
+
 ## 5. 命令与选项
 
 | 命令 | 主要选项 | 输出处理 |
@@ -186,11 +203,12 @@ COMPARE/
 | `list` / `list <name>` / `list --system DIR` |  | 只打印 |
 | `check --system DIR` |  | 加载体系、解析选择、检查依赖，不计算 |
 | `check-analysis [names]` | `--system DIR`、`--keep DIR` | 静态检查；带 `--system` 会实跑中英各一遍 |
-| `run --system DIR --out DIR` | `--lang`、`--dpi`、`--annotate`、`--force`、`--no-memory`、`--aligned` | `--force` 只清空含 `provenance.json` 的旧 run 输出 |
+| `run --system DIR --out DIR` | `--lang`、`--dpi`、`--annotate`、`--force`、`--no-memory`、`--aligned` | `--force` 只清空含 `provenance.json` 的旧 run 输出；输入（YAML/拓扑/轨迹）位于输出目录内时直接拒绝 |
 | `replot --from DIR --out DIR` | `--analysis`、`--config`、`--lang`、`--dpi`、`--format`、`--annotate/--no-annotate`、`--force` | 非空输出默认拒绝；`--force` 只更新带 `replot.json` 的旧重绘目录 |
 | `compare --config FILE [--out DIR]` | `--lang`、`--force` | 非空输出默认拒绝；`--force` 允许覆盖，但拒绝与输入目录重叠 |
+| `derive --from DIR --out DIR --config FILE` | `--analysis`、`--lang`、`--dpi`、`--format`、`--force` | 非空输出默认拒绝；`--force` 只更新带 `derive.json` 的旧派生目录；不读轨迹 |
 
-`--force` 在三个命令里的含义不同，不能互相套用。
+`--force` 在各命令里的含义不同，不能互相套用。
 
 ## 6. 选择、帧窗口和常见错误
 

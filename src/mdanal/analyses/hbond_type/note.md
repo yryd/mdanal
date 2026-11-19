@@ -6,7 +6,7 @@
 
 ## 输入与前提
 
-三个槽位与 hbond 相同；需要 `naming` 提供残基名和元素，用于 donor/acceptor 类型标签。几何前提同 hbond。
+三个槽位与 hbond 相同；需要 `naming` 提供残基名和元素，用于 donor/acceptor 类型标签。几何前提同 hbond：声明全周期，非周期输入标为不支持并只作定性。
 
 ## 输出
 
@@ -14,4 +14,4 @@
 
 ## 注意
 
-类型由分子名和元素组成；命名规则覆盖文件名字时会记录警告。full HBA 结果与 hbond/hbond_lifetime 共享。
+类型由分子名和元素组成；命名规则覆盖文件名字时会记录警告。full HBA 结果与 hbond/hbond_lifetime 共享；`hbond_type` 没有 `COMPARE` 声明，不进入一维 compare。

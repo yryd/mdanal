@@ -1,0 +1,14 @@
+# 离线派生示例：从已有 run 结果重算 MSD 拟合/RDC，不读取轨迹。
+# 用法：
+#   python main.py derive --from /tmp/mdanal-demo --out /tmp/mdanal-demo-fit \
+#     --config example/recipes/derive.yaml
+schema_version: 1
+analyses:
+  msd:
+    derive:
+      fit: {window_ns: [0.01, 0.05], intercept: free}
+      rdc: {}
+    figures:
+      raw: {}
+      fit: {}
+      rdc: {}

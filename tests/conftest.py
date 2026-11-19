@@ -6,3 +6,17 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parent / "src"))
 sys.path.insert(0, str(HERE))
+
+
+import pytest as _pytest
+
+
+@_pytest.fixture(autouse=True)
+def _close_matplotlib_figures():
+    """测试之间关闭 Figure，避免超 20 个的全局警告掩盖真实泄漏。"""
+    yield
+    try:
+        import matplotlib.pyplot as plt
+    except ImportError:
+        return
+    plt.close("all")

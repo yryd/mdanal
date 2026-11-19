@@ -198,3 +198,16 @@ def test_hbond_family_runs_one_hba(real, tmp_path):
             )
             kernel.analysis(ctx)
     assert len(calls) == 1
+
+
+def test_hydrogen_bond_meta_records_actual_full_periodic_kernel():
+    from types import SimpleNamespace
+    from mdanal.analyses._geometry import full_periodic_meta
+
+    ctx = SimpleNamespace(geometry=SimpleNamespace(pbc=(False, True, True)))
+    meta = full_periodic_meta(ctx)
+    assert meta["input_pbc"] == [False, True, True]
+    assert meta["kernel_pbc"] == [True, True, True]
+    assert meta["effective_pbc"] == [True, True, True]
+    assert meta["pbc_match"] is False
+    assert meta["geometry_status"] == "unsupported_geometry"

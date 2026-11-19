@@ -488,15 +488,15 @@ def test_msd_fft_matches_direct_on_random_com():
         assert np.allclose(fast, direct, rtol=1e-10, atol=1e-10)
 
 
-def test_msd_old_dt_ps_table_is_converted_to_ns():
-    """旧 MSD 快照的 dt_ps 表仍可用于当前 ns 绘图。"""
+def test_msd_old_dt_ps_table_keeps_ps_unit():
+    """旧 MSD 快照的 dt_ps 表按 ps 绘制，不能只换数值不换标签。"""
     from types import SimpleNamespace
     from mdanal.analyses import msd as msd_module
 
     table = pd.DataFrame({"dt_ps": [0.0, 5.0, 10.0], "msd_A2": [0.0, 1.0, 4.0]})
     series = msd_module.build_series(SimpleNamespace(label=lambda key: key), {"msd": table})
     x = series[0].curves[0].x
-    assert np.allclose(x, [0.0, 0.005, 0.01])
+    assert np.allclose(x, [0.0, 5.0, 10.0])
 
 
 def test_msd_compare_panel_shows_series_legend():
@@ -592,3 +592,67 @@ def test_msd_derive_formula_and_rdc():
     rdc = out["msd_rdc"]["rdc_A2_per_ps"].to_numpy()
     assert np.isnan(rdc[0])
     assert np.allclose(rdc[1:], 0.001)
+
+
+def test_old_msd_snapshot_keeps_ps_label_and_window(tmp_path, monkeypatch):
+    """旧 dt_ps 表重绘时数值、标签和窗口必须同为 ps。"""
+    import hashlib
+
+    from mdanal.plot import chart
+    from mdanal.plot.replot import run_replot
+
+    cfg_path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - {name: msd, sel: [all_atoms]}\n",
+        frames="[0, 5]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(cfg_path), "--out", str(out)]) == 0
+    table_path = out / "msd/tables/msd.csv"
+    table = pd.read_csv(table_path, encoding="utf-8-sig")
+    table["dt_ps"] = table["dt_ns"] * 1000.0
+    table = table.drop(columns=["dt_ns"])[["dt_ps", "msd_A2"]]
+    table.to_csv(table_path, index=False, encoding="utf-8-sig", float_format="%.8g")
+    snapshot_path = out / "msd/plot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    snapshot["tables"]["msd"]["columns"] = [
+        {"name": "dt_ps", "kind": "float"},
+        {"name": "msd_A2", "kind": "float"},
+    ]
+    snapshot["tables"]["msd"]["sha256"] = hashlib.sha256(
+        table_path.read_bytes()
+    ).hexdigest()
+    snapshot["context"]["labels"]["zh"]["x"] = r"$\Delta t$ (ps)"
+    snapshot["context"]["labels"]["en"]["x"] = r"$\Delta t$ (ps)"
+    snapshot_path.write_text(json.dumps(snapshot, ensure_ascii=False), encoding="utf-8")
+
+    captured = {}
+    real_save = chart.save
+
+    def save(fig, path, dpi):
+        captured["xlabel"] = fig.axes[0].get_xlabel()
+        captured["xlim"] = fig.axes[0].get_xlim()
+        return real_save(fig, path, dpi)
+
+    monkeypatch.setattr(chart, "save", save)
+    run_replot(out, tmp_path / "replot")
+    assert "ps" in captured["xlabel"]
+    assert captured["xlim"][1] > 1.0
+
+
+def test_two_point_free_fit_has_undefined_stderr():
+    """两点自由截距能定直线，但没有残差自由度，标准误不能报成有限值。"""
+    from types import SimpleNamespace
+    from mdanal.analyses import msd as msd_module
+
+    table = pd.DataFrame(
+        {"dt_ns": [0.0, 1.0], "msd_A2": [0.0, 2.0]}
+    )
+    ctx = SimpleNamespace(params={"msd_type": "xyz"})
+    out = msd_module.derive_tables(ctx, {"msd": table}, {"fit": {"intercept": "free"}})
+    summary = out["msd_fit_summary"].iloc[0]
+    assert summary["n_points"] == 2
+    assert summary["dof"] == 0
+    assert np.isnan(summary["D_stderr_A2_per_ps"])

@@ -259,7 +259,7 @@ def execute(
 ) -> Path:
     """执行全部计划条目：先算表写快照，再统一渲染；渲染失败保留结果。"""
     outdir = Path(outdir).expanduser().resolve()
-    _prepare_outdir(outdir, options.force)
+    _prepare_outdir(outdir, options.force, prepared.cfg)
 
     cfg = prepared.cfg
     plotutil.apply_style()
@@ -302,6 +302,7 @@ def execute(
         if options.aligned:
             write_aligned(target, tables, cfg.view.shift)
         meta = _collect_meta(module, ctx, tables, item)
+        figures = _selected_figures(module, item)
         payload = build_snapshot(
             module=module,
             item=item,
@@ -314,6 +315,7 @@ def execute(
             dpi=options.dpi,
             annotate=options.annotate,
             figure_sizes=options.figure_sizes,
+            figures=figures,
             fmt="png",
             target=target,
         )
@@ -329,6 +331,7 @@ def execute(
                 "payload": payload,
                 "snapshot_path": snapshot_path,
                 "meta": meta,
+                "figures": figures,
             }
         )
 
@@ -452,6 +455,7 @@ def execute(
                     "frames": list(prepared.segment_frames),
                     "steps": [list(pair) for pair in cfg.segment_steps],
                     "seam_notes": list(cfg.seam_notes),
+                    "time_notes": list(cfg.time_notes),
                 },
             },
             "input": {
@@ -517,6 +521,17 @@ def execute(
     return outdir
 
 
+def _selected_figures(module, item: PlanItem) -> dict[str, Any]:
+    """把实际会生成的默认图写进快照；旧逻辑只存 item.figures，默认 raw 无法重选。"""
+    if item.figures:
+        return dict(item.figures)
+    recipes = getattr(module, "FIGURES", None)
+    if isinstance(recipes, Mapping) and recipes:
+        preferred = "raw" if "raw" in recipes else next(iter(recipes))
+        return {preferred: {"plot": {}}}
+    return {}
+
+
 def _naming_payload(summary: NamingSummary | None) -> dict[str, Any] | None:
     if summary is None:
         return None
@@ -539,8 +554,24 @@ def _view_warnings(cfg: SystemConfig, item: PlanItem) -> list[str]:
     return []
 
 
-def _prepare_outdir(outdir: Path, force: bool) -> None:
-    """准备输出目录：--force 时清空上一次的结果，避免残留旧分析的子目录。"""
+def _input_paths(cfg: SystemConfig) -> tuple[Path, ...]:
+    """参与本次运行的输入文件；输出目录不得包含其中任何一个。"""
+    return (cfg.yaml_path, cfg.topology, *cfg.all_trajectories)
+
+
+def _prepare_outdir(
+    outdir: Path, force: bool, cfg: SystemConfig | None = None
+) -> None:
+    """准备输出目录：--force 时清空上一次的结果，避免残留旧分析的子目录。
+
+    先检查输入/输出重叠：`--force` 会递归删除输出目录，若 YAML、拓扑或轨迹
+    位于其中，删除后就再也无法重跑。该检查不依赖 provenance 是否可信。
+    """
+    inputs = (
+        tuple(Path(path).expanduser().resolve() for path in _input_paths(cfg))
+        if cfg is not None
+        else ()
+    )
     if not outdir.exists():
         outdir.mkdir(parents=True)
         return
@@ -548,6 +579,20 @@ def _prepare_outdir(outdir: Path, force: bool) -> None:
         raise ValidationError("输出目录已存在；加 --force 才会覆盖", where=str(outdir))
     if not any(outdir.iterdir()):
         return
+    for resolved in inputs:
+        if resolved.is_relative_to(outdir):
+            raise ValidationError(
+                f"输入文件 {resolved} 位于输出目录 {outdir} 内；"
+                "拒绝清空，否则会删除本次运行的输入。请换一个输出目录",
+                where=str(outdir),
+            )
+    for path in outdir.rglob("*"):
+        if path.is_symlink() and path.resolve() in inputs:
+            raise ValidationError(
+                f"输出目录中的符号链接 {path} 指向输入文件；"
+                "拒绝清空，否则会删除该链接。请换一个输出目录",
+                where=str(outdir),
+            )
     if not (outdir / "provenance.json").is_file():
         raise ValidationError(
             "输出目录非空且不含 provenance.json，不像是本程序的输出，拒绝清空；请换一个目录",

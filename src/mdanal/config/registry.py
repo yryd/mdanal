@@ -64,6 +64,8 @@ class AnalysisDef:
     mutates_positions: bool = False
     compare: Mapping[str, Any] | None = None
     geometry: Mapping[str, str] = field(default_factory=dict)
+    derives: Mapping[str, Mapping[str, Any]] = field(default_factory=dict)
+    figure_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -269,6 +271,9 @@ def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:
     package = _normalise_package(getattr(module, "PACKAGE", None), where)
     compare = _normalise_compare(getattr(module, "COMPARE", None), where)
     geometry = _normalise_geometry(getattr(module, "GEOMETRY", None), where)
+    derives = _normalise_derives(getattr(module, "DERIVE", None), where)
+    figures = getattr(module, "FIGURES", None)
+    figure_ids = tuple(str(key) for key in figures) if isinstance(figures, Mapping) else ()
 
     mutates = getattr(module, "MUTATES_POSITIONS", False)
     if not isinstance(mutates, bool):
@@ -291,6 +296,8 @@ def _definition_from_module(name: str, module: Any, path: Path) -> AnalysisDef:
         mutates_positions=mutates,
         compare=compare,
         geometry=geometry,
+        derives=derives,
+        figure_ids=figure_ids,
     )
 
 
@@ -321,6 +328,37 @@ def _normalise_geometry(value: Any, where: str) -> dict[str, str]:
             where=f"{where}:GEOMETRY",
         )
     return {"cell": str(cell), "periodicity": str(periodicity)}
+
+
+def _normalise_derives(value: Any, where: str) -> dict[str, dict[str, Any]]:
+    """解析插件可选的 DERIVE 声明；未声明表示不支持任何派生。"""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError("DERIVE 必须是映射", where=f"{where}:DERIVE")
+    result: dict[str, dict[str, Any]] = {}
+    for name, spec in value.items():
+        if not isinstance(name, str) or not name:
+            raise ValidationError(
+                "DERIVE 的名称必须是非空字符串", where=f"{where}:DERIVE"
+            )
+        if not isinstance(spec, Mapping):
+            raise ValidationError(
+                f"DERIVE.{name} 必须是映射", where=f"{where}:DERIVE.{name}"
+            )
+        keys = spec.get("keys", ())
+        if not isinstance(keys, (list, tuple)) or any(
+            not isinstance(key, str) for key in keys
+        ):
+            raise ValidationError(
+                f"DERIVE.{name}.keys 必须是字符串列表",
+                where=f"{where}:DERIVE.{name}.keys",
+            )
+        result[name] = {
+            "keys": tuple(keys),
+            "help": str(spec.get("help") or ""),
+        }
+    return result
 
 
 def _normalise_slots(value: Any, where: str) -> tuple[str, ...]:
@@ -617,8 +655,10 @@ def build_plan(
         try:
             section = _parse_section(entry.get("section"), where)
             plot_settings = parse_plot(entry.get("plot"), f"{where}.plot")
-            figure_settings = _parse_figures(entry.get("figures"), where)
-            derive_settings = _parse_derive(entry.get("derive"), where)
+            figure_settings = _parse_figures(
+                entry.get("figures"), where, definition
+            )
+            derive_settings = _parse_derive(entry.get("derive"), where, definition)
             window = dict(plot_settings.get("window") or {})
         except ValidationError as exc:
             problems.append(str(exc))
@@ -675,12 +715,15 @@ def build_plan(
     return items
 
 
-def _parse_derive(value: Any, where: str) -> dict[str, Any]:
-    """派生参数保持为映射；具体字段由对应插件校验。"""
+def _parse_derive(
+    value: Any, where: str, definition: AnalysisDef
+) -> dict[str, Any]:
+    """校验插件声明的派生 ID 与参数键，避免拼写错误静默变成默认行为。"""
     if value is None:
         return {}
     if not isinstance(value, Mapping):
         raise ValidationError(f"{where}.derive 必须是映射", where=f"{where}.derive")
+    supported = dict(definition.derives)
     result: dict[str, Any] = {}
     for name, spec in value.items():
         if not isinstance(name, str) or not TAG_PATTERN.match(name):
@@ -688,17 +731,55 @@ def _parse_derive(value: Any, where: str) -> dict[str, Any]:
                 f"{where}.derive 的名字必须是安全标识符，收到 {name!r}",
                 where=f"{where}.derive",
             )
+        if name not in supported:
+            allowed = sorted(supported)
+            raise ValidationError(
+                f"{where}.derive.{name} 不是 {definition.name} 支持的派生；"
+                f"可用 {allowed}",
+                where=f"{where}.derive.{name}",
+            )
         if spec is None:
             spec = {}
         if not isinstance(spec, Mapping):
             raise ValidationError(
                 f"{where}.derive.{name} 必须是映射", where=f"{where}.derive.{name}"
             )
+        allowed_keys = set(supported[name]["keys"])
+        unknown = set(spec) - allowed_keys
+        if unknown:
+            raise ValidationError(
+                f"{where}.derive.{name} 含未知字段 {sorted(unknown)}；"
+                f"允许 {sorted(allowed_keys)}",
+                where=f"{where}.derive.{name}",
+            )
+        if name == "fit":
+            window = spec.get("window_ns")
+            if window is not None and (
+                not isinstance(window, (list, tuple))
+                or len(window) != 2
+                or any(
+                    isinstance(item, bool)
+                    or not isinstance(item, (int, float))
+                    for item in window
+                )
+            ):
+                raise ValidationError(
+                    f"{where}.derive.fit.window_ns 必须是 [起, 止] 两个数",
+                    where=f"{where}.derive.fit.window_ns",
+                )
+            intercept = spec.get("intercept", "free")
+            if intercept not in ("free", "zero"):
+                raise ValidationError(
+                    f"{where}.derive.fit.intercept 只能是 free 或 zero",
+                    where=f"{where}.derive.fit.intercept",
+                )
         result[name] = dict(spec)
     return result
 
 
-def _parse_figures(value: Any, where: str) -> dict[str, Any]:
+def _parse_figures(
+    value: Any, where: str, definition: AnalysisDef
+) -> dict[str, Any]:
     if value is None:
         return {}
     if not isinstance(value, Mapping):
@@ -709,6 +790,12 @@ def _parse_figures(value: Any, where: str) -> dict[str, Any]:
             raise ValidationError(
                 f"{where}.figures 的名字必须是安全标识符，收到 {name!r}",
                 where=f"{where}.figures",
+            )
+        if name not in definition.figure_ids:
+            raise ValidationError(
+                f"{where}.figures.{name} 不是 {definition.name} 的 figure recipe；"
+                f"可用 {list(definition.figure_ids)}",
+                where=f"{where}.figures.{name}",
             )
         if spec is None:
             spec = {}

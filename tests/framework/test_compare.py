@@ -259,3 +259,58 @@ def test_compare_multi_panel_one_command(tmp_path):
         "lineardensity-y",
         "lineardensity-z",
     ]
+
+
+def test_hbond_count_can_be_compared(tmp_path):
+    from mdanal import cli
+
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - {name: hbond, sel: [tma_o, tma_h, tma_o]}\n",
+        frames="[0, 5]",
+    )
+    out = tmp_path / "run"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    config = tmp_path / "compare.yaml"
+    config.write_text(
+        f"items:\n  - {{root: {out}, label: tiny}}\n"
+        "figure:\n  analysis: hbond\n",
+        encoding="utf-8",
+    )
+    target = tmp_path / "compare"
+    run_compare(config, target)
+    assert (target / "hbond.png").is_file()
+
+
+def test_compare_panels_with_same_table_do_not_overwrite(tmp_path):
+    from mdanal import cli
+
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - {name: lineardensity, sel: [all_atoms], dim: z}\n",
+        frames="[0, 5]",
+    )
+    out = tmp_path / "run"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    config = tmp_path / "compare.yaml"
+    config.write_text(
+        f"items:\n  - {{root: {out}, label: tiny}}\n"
+        "figure:\n"
+        "  panels:\n"
+        "    - {analysis: lineardensity, title: mass, y: [mass_density_g_cm3]}\n"
+        "    - {analysis: lineardensity, title: charge, y: [charge_density_e_A3]}\n",
+        encoding="utf-8",
+    )
+    target = tmp_path / "compare"
+    run_compare(config, target)
+    tables = sorted((target / "tables").glob("*.csv"))
+    assert len(tables) == 2
+    columns = {
+        tuple(pd.read_csv(table, encoding="utf-8-sig").columns) for table in tables
+    }
+    assert ("item", "x", "mass_density_g_cm3") in columns
+    assert ("item", "x", "charge_density_e_A3") in columns

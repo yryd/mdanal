@@ -13,11 +13,11 @@
 | 字号等默认样式 | `plot.rc` | 不用 | 显式写死的字号/线宽优先 |
 | 竖线、横线、阴影、文字 | `annotate` | 不用 | 用实际图轴数据坐标；当前四个字段 |
 | 标注单独颜色/字号/线宽 | 当前 YAML 不支持 | — | 用 Python 读表画，见 [Python](#python) |
-| 密度色标/色标范围 | 当前 YAML 不支持 | — | `palette` 不是密度 colormap |
+| 密度色标/色标范围 | 分析参数 `cmap/colors/vmin/vmax` | **要重算**（`replot` 不能改） | `palette` 不是密度 colormap；见 [分析说明](analyses.md#density) |
 | 单条曲线线型/标记/复杂排版 | 插件 figure recipe 或 Python | 可复用已保存表 | 现有插件常显式指定线型 |
 | 一次分析出多张图 | `figures: {raw, fit, rdc}` | 不重算基础表 | 需插件声明 `FIGURES`；MSD 已支持 |
-| 改拟合窗口/D/RDC | `derive:` | **要派生，不重算轨迹** | 只对声明 derive 的插件；首版 MSD |
-| 只重绘某张图 | `replot --figure NAME` | 不重算 | 需快照包含 figures |
+| 改拟合窗口/D/RDC | `derive:`（run）或 `mdanal derive`（已有表） | **要派生，不重扫轨迹** | 只对声明 `DERIVE` 的插件；首版 MSD |
+| 只重绘某张图 | `replot --figure NAME` | 不重算 | 新 run 会把默认 raw 写入快照；旧快照没有 figures 时按 recipe 名重选 |
 | 重绘跨分析组合图 | `replot --composite NAME` | 不重算 | 需 run 已生成 `figures/NAME.json` |
 | PNG/SVG/PDF | `replot --format` | 不用 | `run` 和 `compare` 没有同样的格式选项 |
 | 选择组、帧窗口、分箱、截断、参数 | `system.yaml` | **要** | 不能塞进 `plot.yaml` |
@@ -74,6 +74,11 @@ analyses:
 
 映射字段 `plot.window`、`plot.rc` 递归合并；列表和标量整体替换。没给的 CLI 选项不会覆盖快照。
 
+两层分析配置的优先级不同：
+
+- **run**：分析默认 `plot` < `figures.<id>.plot`（单图覆盖）；
+- **replot**：快照里的单图 `plot` < 重绘配置 `defaults`/`analyses` < CLI。
+
 <a id="plot-字段"></a>
 
 ## 3. `plot` 字段
@@ -88,7 +93,7 @@ analyses:
 | `palette` | 色板名或颜色列表 | 曲线颜色循环；见 [颜色](colors.md) |
 | `rc` | Matplotlib rc 映射 | 局部生效；显式写死的样式优先 |
 
-`plot.rc` 是高级入口：它能改字号、轴样式等，但不会覆盖插件里显式写的 `color=`、`lw=`，也不改标注的固定样式。`rc` 不允许改 `backend`。
+`plot.rc` 是高级入口：它能改字号、轴样式等，但不会覆盖插件里显式写的 `color=`、`lw=`，也不改标注的固定样式。`rc` 不允许改 `backend`。单图 `plot` 的 `palette/rc/size/window` 现在在 Panel 构建前生效；`xlim/ylim/title` 在最终 Figure 上生效。
 <a id="多图输出"></a>
 
 ### 多图输出
@@ -107,7 +112,30 @@ analyses:
     rdc: {}
 ```
 
-`figures` 的键是稳定的 recipe ID，不是文件名；每个 recipe 的 `plot` 覆盖只影响该图。不写 `figures` 时保持当前默认输出（MSD 只出 raw）。`derive` 改变的是数值结果，`plot.xlim` 只改显示范围，不能改拟合窗口。
+`figures` 的键是稳定的 recipe ID，不是文件名；每个 recipe 的 `plot` 覆盖只影响该图。不写 `figures` 时保持当前默认输出（MSD 只出 raw，并记录进快照）。`derive` 改变的是数值结果，`plot.xlim` 只改显示范围，不能改拟合窗口。
+
+### 离线 `derive`
+
+已有表、只想换拟合窗口或补 fit/rdc 图时，不重新扫轨迹：
+
+```bash
+python main.py derive --from OUT --out DERIVED --config derive.yaml
+```
+
+```yaml
+schema_version: 1
+analyses:
+  msd:
+    derive:
+      fit: {window_ns: [1.0, 3.0], intercept: free}
+      rdc: {}
+    figures: {raw: {}, fit: {}, rdc: {}}
+```
+
+- `--from` 必须是已有 `run` 结果；`derive` 只读 `plot.json` + CSV，不加载 trajectory；
+- 输出新的表、`plot.json`、图目录和 `derive.json`；输出目录不能与源目录重叠；
+- `figures` 省略时沿用源快照的图选择；`derive` 的键必须是插件 `DERIVE` 声明过的名字；
+- 非声明派生的插件明确报错，不会猜。
 
 <a id="跨分析组合图"></a>
 
@@ -159,7 +187,7 @@ out/
 - `fit` recipe 依赖 `msd_fit`/`msd_fit_summary`，对应 analysis 必须配置 `derive.fit`；
 - 每个 Panel 项必须恰好产生一个 Panel；
 - 跨分析图失败不会删除已经算好的分析表；
-- `mdanal replot --from OUT --out FIG --composite msd-3comp-fit` 可重绘，不需要轨迹。
+- `mdanal replot --from OUT --out FIG --composite msd-3comp-fit` 可重绘，不需要轨迹；重绘配置的 `defaults.plot` 可覆盖组合图标题/palette/rc，Panel 标题仍由各 Panel 的 `plot` 决定。
 
 
 
@@ -189,7 +217,7 @@ out/
 - `text` 支持字符串或 `{zh, en}`；`vline+vertical` 等矛盾组合报错。
 - 标注是**你自己写的**，程序不会自动识别界面；`at` 的单位由图轴决定，不自动 ps→ns。
 - `--annotate` / `show_run_info` 只控制自动的帧窗口/参数说明；YAML `annotate` 是用户标注。未提供列表继承，`[]` 清空，列表替换不追加。
-- 当前标注颜色/字号/线宽固定：竖线/横线灰色 0.45、字号 6、线宽 0.8；阴影主色 `#4165c0`、alpha 0.12。`plot.rc` 不会覆盖这些显式样式。
+- 当前标注颜色/字号/线宽固定：竖线/横线灰色 0.45、字号 8.5 粗体、线宽 1.0；阴影主色 `#4165c0`、alpha 0.12。`plot.rc` 不会覆盖这些显式样式。
 
 RDF 的距离区间更具体：
 

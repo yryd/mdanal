@@ -235,3 +235,43 @@ def test_frame_times_ignore_timestep_reset(tmp_path):
             universe.trajectory[frame]
             times.append(universe.trajectory.ts.time)
         assert np.allclose(times, expected)
+
+
+def test_force_refuses_to_clear_inputs_inside_output(tmp_path):
+    """输出目录内若有输入文件，--force 必须在删除前拒绝。"""
+    case = tmp_path / "case"
+    path = write_system(
+        case, SYSTEM / "data.lmp", SYSTEM / "run.lammpstrj", FAKE, frames="[0, 5]"
+    )
+    (case / "provenance.json").write_text("{}", encoding="utf-8")
+    before = {item.name for item in case.iterdir()}
+    with pytest.raises(ValidationError, match="位于输出目录"):
+        run_fake(path, case, force=True)
+    assert {item.name for item in case.iterdir()} == before
+    assert (case / "system.yaml").is_file()
+
+
+def test_force_refuses_symlink_to_input_inside_output(tmp_path):
+    case = tmp_path / "case"
+    case.mkdir()
+    (case / "provenance.json").write_text("{}", encoding="utf-8")
+    link = case / "traj-link"
+    link.symlink_to(SYSTEM / "run.lammpstrj")
+    path = tmp_path / "system.yaml"
+    path.write_text(
+        f"""name: link
+topology: {SYSTEM / 'data.lmp'}
+trajectory: {SYSTEM / 'run.lammpstrj'}
+timestep_fs: 1.0
+dump_every: 5000
+frames: [0, 5]
+groups:
+  all_atoms: "all"
+analyses:
+  - {{name: fake, sel: [all_atoms, all_atoms]}}
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="符号链接"):
+        run_fake(path, case, force=True)
+    assert link.is_symlink()

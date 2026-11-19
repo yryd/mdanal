@@ -92,6 +92,7 @@ class SystemConfig:
     coordinate_conventions: tuple[str, ...] = ()
     trajectories: tuple[Path, ...] = ()
     seam_notes: tuple[str, ...] = ()
+    time_notes: tuple[str, ...] = ()
     segment_steps: tuple[tuple[int | None, int | None], ...] = ()
     geometry: GeometryTrack | None = None
 
@@ -197,6 +198,7 @@ def read_system(path: str | Path) -> SystemConfig:
     input_state = scans[0].state
     input_evidence = scans[0].evidence
     seam_notes = _seam_notes(trajectory, scans)
+    time_notes = _time_axis_notes(geometry, dump_every, frames)
     view = _parse_view(data.get("view"), box_low, where)
     naming = parse_naming(data.get("naming"), directory, where)
     figures = parse_figures(data.get("figures"), f"{where}:figures")
@@ -222,6 +224,7 @@ def read_system(path: str | Path) -> SystemConfig:
         coordinate_conventions=scans[0].conventions,
         trajectories=trajectory,
         seam_notes=seam_notes,
+        time_notes=time_notes,
         segment_steps=tuple((scan.first_step, scan.last_step) for scan in scans),
         geometry=geometry,
     )
@@ -670,6 +673,36 @@ def _resolve_trajectories(
             )
         paths.append(path.resolve())
     return tuple(paths)
+
+
+def _time_axis_notes(
+    geometry: GeometryTrack,
+    dump_every: int,
+    selected: tuple[int, int] | None = None,
+) -> tuple[str, ...]:
+    """检查同一段内的 TIMESTEP 步差；接缝/重置不报，丢帧或错 dump_every 明确提示。"""
+    notes: list[str] = []
+    start, stop = selected or (0, len(geometry.frames))
+    frames = geometry.frames[start:stop]
+    previous = frames[0].step if frames else None
+    for index, frame in enumerate(frames[1:], start=start + 1):
+        current = frame.step
+        if previous is None or current is None:
+            previous = current
+            continue
+        delta = current - previous
+        # 续跑段可以重置 TIMESTEP；差值非正视为接缝，不对上一段做判断。
+        if delta > 0 and delta != dump_every:
+            notes.append(
+                f"第 {index} 帧 TIMESTEP 从 {previous} 到 {current}"
+                f"（差 {delta}），与 dump_every={dump_every} 不一致；"
+                "时间轴仍按等间隔重建，涉及时间的分析可能偏差"
+            )
+        previous = current
+    if len(notes) > 3:
+        extra = len(notes) - 3
+        notes = notes[:3] + [f"另有 {extra} 处 TIMESTEP 步差异常"]
+    return tuple(notes)
 
 
 def _seam_notes(paths: tuple[Path, ...], scans: list[DumpScan]) -> tuple[str, ...]:

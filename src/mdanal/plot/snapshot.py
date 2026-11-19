@@ -71,6 +71,7 @@ def build_snapshot(
     dpi: int,
     annotate: bool,
     figure_sizes: Mapping[str, Sequence[float]],
+    figures: Mapping[str, Any] | None = None,
     fmt: str = "png",
     target: Path,
 ) -> dict[str, Any]:
@@ -110,7 +111,13 @@ def build_snapshot(
             "meta": json_safe(meta),
             "extras": json_safe(dict(ctx.extras)),
             "annotations": json_safe(list(item.annotations)),
-            "figures": json_safe(dict(getattr(item, "figures", {}) or {})),
+            "figures": json_safe(
+                dict(
+                    figures
+                    if figures is not None
+                    else (getattr(item, "figures", {}) or {})
+                )
+            ),
             "derive": json_safe(dict(getattr(item, "derive", {}) or {})),
             "defaults": {
                 "lang": str(lang),

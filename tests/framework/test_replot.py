@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import shutil
 from pathlib import Path
@@ -135,7 +136,7 @@ analyses:
     )
     captured = {}
 
-    def fake_render(module, ctx, tables, target, *, fmt, settings):
+    def fake_render(module, ctx, tables, target, *, fmt, settings, **kwargs):
         captured["ctx"] = ctx
         captured["fmt"] = fmt
         captured["settings"] = settings
@@ -271,3 +272,167 @@ def test_plot_palette_roundtrips_through_snapshot(tmp_path):
     target = tmp_path / "replot"
     run_replot(out, target)
     assert (target / "fake/figures/fake.png").is_file()
+
+
+def _run_msd(tmp_path, analyses, *, tag="msd"):
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        analyses,
+        frames="[0, 5]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    return out
+
+
+def test_per_figure_plot_reaches_actual_figure(tmp_path, monkeypatch):
+    from mdanal.plot import chart
+    from mdanal.plot.render import render
+    from mdanal.plot.snapshot import load_snapshot, make_plot_context, read_tables
+
+    out = _run_msd(
+        tmp_path,
+        "  - name: msd\n"
+        "    sel: [all_atoms]\n"
+        "    figures:\n"
+        "      raw:\n"
+        "        plot:\n"
+        "          title: OLD\n"
+        "          palette: [green]\n"
+        "          rc: {lines.linewidth: 7}\n"
+        "          size: [8, 4]\n"
+        "          window: {x: [0, 0.01]}\n",
+    )
+    snapshot = load_snapshot(out / "msd")
+    ctx = make_plot_context(snapshot)
+    tables = read_tables(snapshot, out / "msd")
+    module = importlib.import_module(snapshot["analysis"]["module"])
+    captured = {}
+
+    def save(fig, path, dpi):
+        axis = fig.axes[0]
+        captured.update(
+            title=axis.get_title(),
+            xlim=axis.get_xlim(),
+            color=axis.lines[0].get_color(),
+            linewidth=axis.lines[0].get_linewidth(),
+            size=fig.get_size_inches(),
+        )
+        return path
+
+    monkeypatch.setattr(chart, "save", save)
+    render(
+        module,
+        ctx,
+        tables,
+        tmp_path / "inspect",
+        settings=snapshot["context"]["defaults"].get("plot") or {},
+        figures=snapshot["context"]["figures"],
+    )
+    assert captured["title"] == "OLD"
+    assert captured["xlim"] == pytest.approx((0.0, 0.01))
+    assert captured["color"] == "green"
+    assert captured["linewidth"] == pytest.approx(7.0)
+    assert captured["size"][0] == pytest.approx(8.0)
+
+
+def test_default_raw_is_recorded_and_replottable(tmp_path):
+    out = _run_msd(tmp_path, "  - {name: msd, sel: [all_atoms]}\n")
+    snapshot = json.loads((out / "msd/plot.json").read_text(encoding="utf-8"))
+    assert "raw" in snapshot["context"]["figures"]
+    target = tmp_path / "replot"
+    run_replot(out, target, figures=["raw"])
+    assert (target / "msd/figures/msd.png").is_file()
+
+
+def test_replot_settings_beat_snapshot_figure_title(tmp_path, monkeypatch):
+    from mdanal.plot import chart
+
+    out = _run_msd(
+        tmp_path,
+        "  - name: msd\n"
+        "    sel: [all_atoms]\n"
+        "    figures:\n"
+        "      raw: {plot: {title: OLD}}\n",
+    )
+    config = tmp_path / "plot.yaml"
+    config.write_text(
+        "schema_version: 1\ndefaults:\n  plot:\n    title: NEW\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def save(fig, path, dpi):
+        captured["title"] = fig.axes[0].get_title()
+        return path
+
+    monkeypatch.setattr(chart, "save", save)
+    run_replot(out, tmp_path / "replot", config=config)
+    assert captured["title"] == "NEW"
+
+
+def test_package_plugin_hash_does_not_false_positive(tmp_path):
+    from mdanal.plot.snapshot import module_sha256
+
+    out = _run_msd(tmp_path, "  - {name: msd, sel: [all_atoms]}\n")
+    target = tmp_path / "replot"
+    run_replot(out, target)
+    record = json.loads((target / "replot.json").read_text(encoding="utf-8"))
+    assert record["analyses"][0]["plugin_changed"] is False
+    assert record["warnings"] == []
+
+    # 旧快照只哈希 __init__.py；仍应判定为未变化。
+    snapshot_path = out / "msd/plot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    module = importlib.import_module(snapshot["analysis"]["module"])
+    snapshot["analysis"]["implementation_sha256"] = hashlib.sha256(
+        Path(module.__file__).read_bytes()
+    ).hexdigest()
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    legacy_target = tmp_path / "legacy"
+    run_replot(out, legacy_target)
+    record = json.loads((legacy_target / "replot.json").read_text(encoding="utf-8"))
+    assert record["analyses"][0]["plugin_changed"] is False
+
+
+def test_old_snapshot_without_figures_can_select_default_recipe(tmp_path):
+    out = _run_msd(tmp_path, "  - {name: msd, sel: [all_atoms]}\n")
+    snapshot_path = out / "msd/plot.json"
+    snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+    snapshot["context"]["figures"] = {}
+    snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+    target = tmp_path / "replot"
+    run_replot(out, target, figures=["raw"])
+    assert (target / "msd/figures/msd.png").is_file()
+
+
+def test_fit_recipe_keeps_user_annotations(tmp_path, monkeypatch):
+    from mdanal.plot import chart
+
+    out = _run_msd(
+        tmp_path,
+        "  - name: msd\n"
+        "    sel: [all_atoms]\n"
+        "    derive: {fit: {window_ns: [0.0, 0.02]}}\n"
+        "    figures: {raw: {}, fit: {}}\n",
+    )
+    config = tmp_path / "plot.yaml"
+    config.write_text(
+        "schema_version: 1\n"
+        "analyses:\n"
+        "  msd:\n"
+        "    annotate:\n"
+        "      - {kind: text, at: [0.01, 0.1], text: USER}\n",
+        encoding="utf-8",
+    )
+    captured = {}
+
+    def save(fig, path, dpi):
+        captured["texts"] = [text.get_text() for text in fig.axes[0].texts]
+        return path
+
+    monkeypatch.setattr(chart, "save", save)
+    run_replot(out, tmp_path / "replot", figures=["fit"], config=config)
+    assert "USER" in captured["texts"]

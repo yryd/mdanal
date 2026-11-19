@@ -84,6 +84,15 @@ SVG 示例：[quickstart-msd-en.svg](assets/quickstart-msd-en.svg)。
 
 `replot` 只读 `plot.json` 和 CSV，不加载轨迹。中文/英文、PNG/SVG/PDF、标题、范围、颜色和标注都属于这一层。
 
+只想换 MSD 拟合窗口、不重扫轨迹时，用 `derive`：
+
+```bash
+python main.py derive --from /tmp/mdanal-demo --out /tmp/mdanal-demo-fit \
+  --config example/recipes/derive.yaml
+```
+
+输出新的派生表和 `fit`/`rdc` 图；详见 [绘图与重绘：离线 derive](plotting.md#离线-derive)。
+
 ## 4. 换成自己的数据
 
 复制 `example/quickstart/system.yaml` 到自己的算例目录，至少改这些字段：

@@ -341,6 +341,7 @@ def _run_panel_compare(
 
     rendered_panels = []
     panel_records: list[dict[str, Any]] = []
+    used_table_files: set[str] = set()
     for panel_spec in panel_specs:
         directory = str(panel_spec["analysis"])
         module_name, params = _resolve_analysis(items[0], directory)
@@ -399,7 +400,15 @@ def _run_panel_compare(
                 block[column] = frame[column].to_numpy(dtype=float)
             blocks.append(block)
         merged = pd.concat(blocks, ignore_index=True)
-        table_file = out / "tables" / f"{directory}__{table_name}.csv"
+        # 同一 analysis/table 可被多个 Panel 引用，但列不同；不能互相覆盖。
+        table_stem = f"{directory}__{table_name}"
+        candidate = table_stem
+        serial = 2
+        while candidate in used_table_files:
+            candidate = f"{table_stem}__panel{serial}"
+            serial += 1
+        used_table_files.add(candidate)
+        table_file = out / "tables" / f"{candidate}.csv"
         merged.to_csv(
             table_file, index=False, encoding="utf-8-sig", float_format="%.8g"
         )
