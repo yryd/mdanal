@@ -131,7 +131,7 @@ figures:
 | hbond / hbond_type / hbond_lifetime | 任意盒（由 MDAnalysis 距离实现） | 三向周期；非周期输入会明确标为 `unsupported_geometry` |
 | msd | 连续视图按输入路径限制 | 包裹坐标只支持固定盒矩阵；已给 `xu/xsu` 按输入定义 |
 
-不满足声明时 `run`/`check` 会打印“非物理/仅供定性参考”警告并继续执行，不会阻止运行；警告会写入 provenance。不要靠改 YAML 假装周期；需要定量结果时仍应使用满足条件的数据。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。
+不满足声明时通常打印“非物理/仅供定性参考”警告并继续执行，不阻止运行；例外是 RDF 的“三斜盒 + 非周期”组合直接拒绝（没有可靠的逐轴最小镜像做法）。警告会写入 provenance。不要靠改 YAML 假装周期；需要定量结果时仍应使用满足条件的数据。每帧几何和窗口摘要写入 `provenance.json` 的 `geometry`。
 
 ### 时间
 
