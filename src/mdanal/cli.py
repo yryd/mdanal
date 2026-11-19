@@ -129,6 +129,7 @@ def cmd_replot(args: argparse.Namespace) -> int:
         args.from_dir,
         args.out,
         analyses=tuple(args.analysis or ()),
+        figures=tuple(args.figure or ()),
         config=args.config,
         lang=args.lang,
         dpi=args.dpi,
@@ -449,6 +450,8 @@ def build_parser() -> argparse.ArgumentParser:
     replot.add_argument("--out", required=True, metavar="DIR", help="独立绘图输出目录")
     replot.add_argument("--analysis", action="append", default=[], metavar="DIR",
                         help="只重绘指定分析目录（可重复）")
+    replot.add_argument("--figure", action="append", default=[], metavar="NAME",
+                        help="只重绘指定 figure recipe，例如 raw/fit/rdc（可重复）")
     replot.add_argument("--config", metavar="FILE", help="呈现覆盖配置")
     replot.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
     replot.add_argument("--dpi", type=int, help="覆盖分辨率")

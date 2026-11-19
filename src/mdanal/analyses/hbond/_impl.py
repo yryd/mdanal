@@ -6,10 +6,10 @@ import numpy as np
 import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
-from ..plot import annotations, chart, plotutil
-from ._geometry import geometry_meta
-from ..plot.panels import Panel
-from ..plot.specs import Curve, PanelRequest, Series
+from ...plot import annotations, chart, plotutil
+from .._geometry import geometry_meta
+from ...plot.panels import Panel
+from ...plot.specs import Curve, PanelRequest, Series
 
 
 SLOTS = ("donor", "hydrogen", "acceptor")
@@ -54,39 +54,12 @@ def _selection(group) -> str:
     return "bynum " + " ".join(str(index) for index in indices)
 
 
-def _build(ctx) -> HydrogenBondAnalysis:
-    """按三个槽位与两个判据构造分析。
+def _build(ctx):
+    """兼容旧测试/调用；实际构建委托给共享 kernel。"""
+    from .._hbond import build
 
-    氢键判据与 hbond_type.py / hbond_lifetime.py 必须一致；改动需三处同步
-    （由 tests/analyses 的一致性测试守护）。
-    """
-    return HydrogenBondAnalysis(
-        ctx.universe,
-        donors_sel=_selection(ctx.groups["donor"]),
-        hydrogens_sel=_selection(ctx.groups["hydrogen"]),
-        acceptors_sel=_selection(ctx.groups["acceptor"]),
-        d_a_cutoff=float(ctx.params["d_a_cutoff"]),
-        d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
-        update_selections=False,
-    )
+    return build(ctx)
 
-
-COLUMN_LABELS = {
-    "zh": {"time_ps": "时间 (ps)", "hbond_count": "氢键数"},
-    "en": {"time_ps": "time (ps)", "hbond_count": "hydrogen bonds"},
-}
-
-COMPARE = {
-    "table": "hbond_count",
-    "x": "time_ps",
-    "y": ["hbond_count"],
-    "box_axis": False,
-}
-
-
-COORDINATES = "in_box"
-
-GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -94,8 +67,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     # 单位：count_by_time() 是每帧氢键数（个）；results.hbonds 的列为
     # [frame, donor, hydrogen, acceptor, distance(Å), angle(度)]
-    analysis = _build(ctx)
-    analysis.run(start=ctx.start, stop=ctx.stop)
+    from .._hbond import analysis as _analysis
+
+    analysis = _analysis(ctx)
 
     counts = np.asarray(analysis.count_by_time(), dtype=int)
     frames = np.arange(ctx.start, ctx.start + len(counts))

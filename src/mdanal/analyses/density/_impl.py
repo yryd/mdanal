@@ -10,10 +10,10 @@ import pandas as pd
 from matplotlib import colormaps
 from matplotlib.colors import LinearSegmentedColormap, is_color_like
 
-from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel
-from ..plot.specs import Field, PanelRequest, Series
-from ..errors import ValidationError
+from ...plot import annotations, chart, plotutil
+from ...plot.panels import Panel
+from ...plot.specs import Field, PanelRequest, Series
+from ...errors import ValidationError
 
 AXES = ("x", "y", "z")
 DIRECTIONS = {"xy": "z", "xz": "y", "yz": "x"}

@@ -543,3 +543,37 @@ def test_msd_fft_is_translation_stable():
     direct = msd_module._msd_from_com(com, "xyz", fft=False)
     shifted = msd_module._msd_from_com(com + offset, "xyz", fft=True)
     assert np.allclose(shifted, direct, rtol=1e-6, atol=1e-6)
+
+
+def test_msd_package_derives_and_multiple_figures(tmp_path):
+    """一个 MSD run 可同时输出 raw/fit/rdc，且只计算一次基础表。"""
+    from mdanal import cli
+    from helpers import SYSTEM, write_system
+
+    path = write_system(
+        tmp_path,
+        SYSTEM / "data.lmp",
+        SYSTEM / "run.lammpstrj",
+        "  - name: msd\n"
+        "    tag: multi\n"
+        "    sel: [all_atoms]\n"
+        "    section: [0, 8]\n"
+        "    derive:\n"
+        "      fit: {window_ns: [0.0, 0.02], intercept: free}\n"
+        "      rdc: {}\n"
+        "    figures:\n"
+        "      raw: {}\n"
+        "      fit: {}\n"
+        "      rdc: {}\n",
+        frames="[0, 8]",
+    )
+    out = tmp_path / "out"
+    assert cli.main(["run", "--system", str(path), "--out", str(out)]) == 0
+    base = out / "msd-multi"
+    assert (base / "figures" / "msd.png").is_file()
+    assert (base / "figures" / "msd-fit.png").is_file()
+    assert (base / "figures" / "msd-rdc.png").is_file()
+    assert (base / "tables" / "msd.csv").is_file()
+    assert (base / "tables" / "msd_fit.csv").is_file()
+    assert (base / "tables" / "msd_fit_summary.csv").is_file()
+    assert (base / "tables" / "msd_rdc.csv").is_file()

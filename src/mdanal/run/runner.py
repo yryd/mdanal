@@ -357,6 +357,7 @@ def execute(
                 target,
                 fmt="png",
                 settings=payload["context"]["defaults"].get("plot") or {},
+                figures=payload["context"].get("figures") or {},
             )
             plot_warnings = list(plot_ctx.warnings)
         except Exception as exc:  # 保留表/快照，记录失败，稍后统一报错

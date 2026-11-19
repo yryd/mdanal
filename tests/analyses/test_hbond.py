@@ -156,3 +156,45 @@ def test_geometry_meta_records_unsupported_pbc():
     meta = geometry_meta(ctx)
     assert meta["effective_pbc"] == [True, False, True]
     assert meta["geometry_status"] == "unsupported_geometry"
+
+
+def test_hbond_family_runs_one_hba(real, tmp_path):
+    """三个旧入口在相同请求下共享一次 HBA run。"""
+    import types
+    from unittest.mock import patch
+
+    from mdanal.analyses import _hbond as kernel
+    from mdanal.config.registry import build_plan, load_registry
+    from mdanal.run.runner import prepare
+
+    cfg, _ = real
+    path = write_system(
+        tmp_path,
+        cfg.topology,
+        cfg.trajectory,
+        "  - {name: hbond, sel: [tma_o, tma_h, tma_o]}\n"
+        "  - {name: hbond_type, sel: [tma_o, tma_h, tma_o]}\n"
+        "  - {name: hbond_lifetime, sel: [tma_o, tma_h, tma_o]}\n",
+    )
+    config = read_system(path)
+    plan = build_plan(config, load_registry())
+    prepared = prepare(config, plan)
+    kernel._CACHE.clear()
+    calls = []
+    original = kernel.HydrogenBondAnalysis.run
+
+    def counted(self, *args, **kwargs):
+        calls.append(1)
+        return original(self, *args, **kwargs)
+
+    with patch.object(kernel.HydrogenBondAnalysis, "run", counted):
+        for item in plan:
+            ctx = types.SimpleNamespace(
+                universe=prepared.views[item.view],
+                groups=prepared.item_groups(item),
+                params=item.params,
+                start=prepared.start,
+                stop=prepared.stop,
+            )
+            kernel.analysis(ctx)
+    assert len(calls) == 1

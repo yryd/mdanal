@@ -1,5 +1,7 @@
 # 分析说明
 
+插件 note 索引见 [analyses-index.md](analyses-index.md)。
+
 八种内置分析的科学含义、选择顺序、主要参数和限制。参数默认值和完整契约用 `mdanal list <name>` 查看。
 
 ## 总表
@@ -92,9 +94,23 @@
 
 - 输入：一个原子组；
 - 参数：`msd_type`（xyz/xy/x 等）、`grouping`（`residues` 默认按残基/分子质心，`atoms` 为原子 MSD）、`fft`（是否用 FFT 自相关加速，默认 true）；
-- 输出：`dt_ns`、`msd_A2`；
+- 输出：基础表 `dt_ns`、`msd_A2`；可选派生表 `msd_fit`、`msd_fit_summary`、`msd_rdc`；
 - 含义：均方位移；默认质心路径按残基质量和质心计算；时间轴按全局帧号 × 帧间隔，不跟随 TIMESTEP 重置；
-- 限制：当前只画原始 MSD，不做线性拟合，不计算扩散系数；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
+- 图：`raw`（默认，`msd.png`）、`fit`（拟合 + D + 拟合窗口）、`rdc`（运行扩散系数 + 稳定窗口）；由 `figures:` 选择；
+- 派生：`derive.fit` 用 `window_ns` 线性拟合，`D = slope/(2·d)`；`derive.rdc` 输出 `MSD/(2·d·t)`；RDC 在 τ=0 为 NaN；
+- 限制：首版手工给拟合窗口，不自动采用“稳定区”；不同时间单位必须按表实际 `dt_ns` 换算；`continuous` 对 `x/xs` 包裹坐标只支持固定盒矩阵并逐帧展开，`xu/xsu` 按输入定义；采样需足够密。
+
+```yaml
+- name: msd
+  sel: [water]
+  derive:
+    fit: {window_ns: [1.0, 3.0], intercept: free}
+    rdc: {}
+  figures:
+    raw: {}
+    fit: {}
+    rdc: {}
+```
 
 <a id="velocity"></a>
 

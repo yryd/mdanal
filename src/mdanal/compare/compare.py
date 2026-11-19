@@ -29,7 +29,7 @@ TOP_KEYS = {"items", "figure", "out"}
 ITEM_KEYS = {"root", "label", "anchor", "t_offset"}
 FIGURE_KEYS = {
     "analysis", "table", "align", "xlim", "ylim", "xlabel", "ylabel", "title", "y",
-    "palette", "panels", "layout",
+    "palette", "panels", "layout", "recipe",
 }
 PANEL_KEYS = {"analysis", "table", "x", "y", "xlim", "ylim", "xlabel", "ylabel", "title", "legend"}
 
@@ -282,6 +282,7 @@ def run_compare(
             "config": str(config_path),
             "analysis": directory,
             "module": module_name,
+            "recipe": str(figure.get("recipe") or "raw"),
             "table": table_name,
             "x": x_column,
             "y": y_columns,
@@ -503,6 +504,7 @@ def _run_panel_compare(
             "palette": list(figure["palette"]) if figure.get("palette") else None,
             "align": dict(align),
             "layout": {"ncols": ncols},
+            "recipe": str(figure.get("recipe") or "raw"),
             "panels": panel_records,
             "items": [
                 {
@@ -558,6 +560,14 @@ def _load_config(path: Path) -> dict[str, Any]:
             f"figure 含未知字段 {sorted(unknown)}；允许 {sorted(FIGURE_KEYS)}",
             where=f"{path}:figure",
         )
+    if "recipe" in figure:
+        if not isinstance(figure["recipe"], str) or not figure["recipe"]:
+            raise ValidationError("figure.recipe 必须是非空字符串", where=f"{path}:figure")
+        if figure["recipe"] != "raw":
+            raise ValidationError(
+                "当前 compare 只支持 figure.recipe: raw；fit/rdc 比较需后续实现",
+                where=f"{path}:figure.recipe",
+            )
     panels = figure.get("panels")
     if panels is not None:
         if not isinstance(panels, list) or not panels:

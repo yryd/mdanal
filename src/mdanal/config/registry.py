@@ -24,7 +24,7 @@ from .system import SystemConfig
 ANALYSES_PACKAGE = "mdanal.analyses"
 ANALYSES_DIR = Path(__file__).resolve().parent.parent / "analyses"
 
-RESERVED_KEYS = {"name", "tag", "sel", "annotate", "section", "plot"}
+RESERVED_KEYS = {"name", "tag", "sel", "annotate", "section", "plot", "figures", "derive"}
 TAG_PATTERN = re.compile(r"^[A-Za-z0-9_.-]+$")
 KNOWN_REQUIREMENTS = {"velocities"}
 COORDINATE_NEEDS = ("in_box", "continuous", "any")
@@ -88,6 +88,8 @@ class PlanItem:
     section: tuple[int, int] | None = None
     window: Mapping[str, tuple[float, float]] = field(default_factory=dict)
     plot: Mapping[str, Any] = field(default_factory=dict)
+    figures: Mapping[str, Any] = field(default_factory=dict)
+    derive: Mapping[str, Any] = field(default_factory=dict)
 
     @property
     def needs_velocity(self) -> bool:
@@ -120,10 +122,25 @@ def discover() -> Discovery:
     definitions: dict[str, AnalysisDef] = {}
     failures: list[ImportFailure] = []
 
-    for path in sorted(ANALYSES_DIR.glob("*.py")):
-        name = path.stem
-        if name.startswith("_"):
+    candidates: list[tuple[str, Path]] = []
+    for path in sorted(ANALYSES_DIR.iterdir()):
+        name = path.name
+        if name.startswith("_") or name == "__pycache__":
             continue
+        if path.is_file() and path.suffix == ".py":
+            candidates.append((path.stem, path))
+        elif path.is_dir() and (path / "__init__.py").is_file():
+            candidates.append((name, path / "__init__.py"))
+    names = [name for name, _ in candidates]
+    for name in sorted({value for value in names if names.count(value) > 1}):
+        failures.append(
+            ImportFailure(
+                name, name, "声明错误", "同名 .py 与插件包同时存在，无法决定入口"
+            )
+        )
+        candidates = [(n, p) for n, p in candidates if n != name]
+
+    for name, path in candidates:
         try:
             module = importlib.import_module(f"{ANALYSES_PACKAGE}.{name}")
         except SyntaxError as exc:
@@ -162,9 +179,12 @@ def discover() -> Discovery:
 
     for failure in failures:
         if failure.declaration is None:
-            failure.declaration = _definition_from_source(
-                ANALYSES_DIR / failure.path, failure.name
-            )
+            source = ANALYSES_DIR / failure.path
+            if source.name == "__init__.py":
+                contract = source.parent / "contract.py"
+                if contract.is_file():
+                    source = contract
+            failure.declaration = _definition_from_source(source, failure.name)
     return Discovery(definitions, tuple(failures))
 
 
@@ -596,6 +616,8 @@ def build_plan(
         try:
             section = _parse_section(entry.get("section"), where)
             plot_settings = parse_plot(entry.get("plot"), f"{where}.plot")
+            figure_settings = _parse_figures(entry.get("figures"), where)
+            derive_settings = _parse_derive(entry.get("derive"), where)
             window = dict(plot_settings.get("window") or {})
         except ValidationError as exc:
             problems.append(str(exc))
@@ -634,6 +656,8 @@ def build_plan(
                 section=section,
                 window=window,
                 plot=plot_settings,
+                figures=figure_settings,
+                derive=derive_settings,
             )
         )
 
@@ -647,6 +671,59 @@ def build_plan(
         raise ValidationError("\n".join(problems), where=str(cfg.yaml_path))
 
     return items
+
+
+def _parse_derive(value: Any, where: str) -> dict[str, Any]:
+    """派生参数保持为映射；具体字段由对应插件校验。"""
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError(f"{where}.derive 必须是映射", where=f"{where}.derive")
+    result: dict[str, Any] = {}
+    for name, spec in value.items():
+        if not isinstance(name, str) or not TAG_PATTERN.match(name):
+            raise ValidationError(
+                f"{where}.derive 的名字必须是安全标识符，收到 {name!r}",
+                where=f"{where}.derive",
+            )
+        if spec is None:
+            spec = {}
+        if not isinstance(spec, Mapping):
+            raise ValidationError(
+                f"{where}.derive.{name} 必须是映射", where=f"{where}.derive.{name}"
+            )
+        result[name] = dict(spec)
+    return result
+
+
+def _parse_figures(value: Any, where: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        raise ValidationError(f"{where}.figures 必须是映射", where=f"{where}.figures")
+    result: dict[str, Any] = {}
+    for name, spec in value.items():
+        if not isinstance(name, str) or not TAG_PATTERN.match(name):
+            raise ValidationError(
+                f"{where}.figures 的名字必须是安全标识符，收到 {name!r}",
+                where=f"{where}.figures",
+            )
+        if spec is None:
+            spec = {}
+        if not isinstance(spec, Mapping):
+            raise ValidationError(
+                f"{where}.figures.{name} 必须是映射", where=f"{where}.figures.{name}"
+            )
+        unknown = set(spec) - {"plot"}
+        if unknown:
+            raise ValidationError(
+                f"{where}.figures.{name} 含未知字段 {sorted(unknown)}；允许 ['plot']",
+                where=f"{where}.figures.{name}",
+            )
+        result[name] = {
+            "plot": parse_plot(spec.get("plot"), f"{where}.figures.{name}.plot")
+        }
+    return result
 
 
 def _parse_section(value: Any, where: str) -> tuple[int, int] | None:

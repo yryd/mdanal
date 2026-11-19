@@ -184,6 +184,7 @@ def run_replot(
     out_dir: str | Path,
     *,
     analyses: Sequence[str] = (),
+    figures: Sequence[str] = (),
     config: str | Path | None = None,
     lang: str | None = None,
     dpi: int | None = None,
@@ -281,14 +282,22 @@ def run_replot(
             )
             tables = read_tables(snapshot, analysis_dir)
             target = temp / directory
-            figures = render(
-                module,
-                plot_ctx,
-                tables,
-                target,
-                fmt=chosen_fmt,
-                settings=plot,
-            )
+            render_options = {
+                "fmt": chosen_fmt,
+                "settings": plot,
+            }
+            selected_figures = dict(snapshot["context"].get("figures") or {})
+            if figures:
+                unknown_figures = [name for name in figures if name not in selected_figures]
+                if unknown_figures:
+                    raise ValidationError(
+                        f"{directory} 中没有 figure {unknown_figures}；"
+                        f"可用 {sorted(selected_figures)}"
+                    )
+                selected_figures = {name: selected_figures[name] for name in figures}
+            if selected_figures:
+                render_options["figures"] = selected_figures
+            figure_paths = render(module, plot_ctx, tables, target, **render_options)
             warnings.extend(plot_ctx.warnings)
             records.append(
                 {
@@ -300,7 +309,7 @@ def run_replot(
                     "plugin_sha256": current_hash,
                     "plugin_changed": current_hash
                     != snapshot["analysis"].get("implementation_sha256"),
-                    "figures": [_safe_relative(path, temp) for path in figures],
+                    "figures": [_safe_relative(path, temp) for path in figure_paths],
                     "warnings": list(plot_ctx.warnings),
                     "lang": chosen_lang,
                     "dpi": chosen_dpi,

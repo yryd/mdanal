@@ -43,10 +43,19 @@ def json_safe(value: Any) -> Any:
 
 
 def module_sha256(module: Any) -> str:
-    path = getattr(module, "__file__", None)
-    if not path:
+    path = Path(getattr(module, "__file__", "") or "")
+    if not path.is_file():
         raise ValidationError(f"无法定位模块 {module!r} 的源文件")
-    return sha256(path)
+    if path.name != "__init__.py":
+        return sha256(path)
+    # 包插件的源码不只 __init__.py；把包内 .py/.md 一起纳入指纹。
+    digest = hashlib.sha256()
+    files = sorted(list(path.parent.rglob("*.py")) + list(path.parent.rglob("*.md")))
+    for item in files:
+        digest.update(item.relative_to(path.parent).as_posix().encode("utf-8"))
+        digest.update(b"\0")
+        digest.update(item.read_bytes())
+    return digest.hexdigest()
 
 
 def build_snapshot(
@@ -101,6 +110,8 @@ def build_snapshot(
             "meta": json_safe(meta),
             "extras": json_safe(dict(ctx.extras)),
             "annotations": json_safe(list(item.annotations)),
+            "figures": json_safe(dict(getattr(item, "figures", {}) or {})),
+            "derive": json_safe(dict(getattr(item, "derive", {}) or {})),
             "defaults": {
                 "lang": str(lang),
                 "dpi": int(dpi),

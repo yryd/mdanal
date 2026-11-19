@@ -14,7 +14,10 @@
 | 竖线、横线、阴影、文字 | `annotate` | 不用 | 用实际图轴数据坐标；当前四个字段 |
 | 标注单独颜色/字号/线宽 | 当前 YAML 不支持 | — | 用 Python 读表画，见 [Python](#python) |
 | 密度色标/色标范围 | 当前 YAML 不支持 | — | `palette` 不是密度 colormap |
-| 单条曲线线型/标记/复杂排版 | 插件 `figures` 或 Python | 可复用已保存表 | 现有插件常显式指定线型 |
+| 单条曲线线型/标记/复杂排版 | 插件 figure recipe 或 Python | 可复用已保存表 | 现有插件常显式指定线型 |
+| 一次分析出多张图 | `figures: {raw, fit, rdc}` | 不重算基础表 | 需插件声明 `FIGURES`；MSD 已支持 |
+| 改拟合窗口/D/RDC | `derive:` | **要派生，不重算轨迹** | 只对声明 derive 的插件；首版 MSD |
+| 只重绘某张图 | `replot --figure NAME` | 不重算 | 需快照包含 figures |
 | PNG/SVG/PDF | `replot --format` | 不用 | `run` 和 `compare` 没有同样的格式选项 |
 | 选择组、帧窗口、分箱、截断、参数 | `system.yaml` | **要** | 不能塞进 `plot.yaml` |
 | 单位换算（Å→nm 等） | 当前没有通用 YAML 换算 | 可读表用 Python 换算 | 必须同时换算数据、范围和标注 |

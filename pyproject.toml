@@ -28,7 +28,7 @@ mdanal = "mdanal.cli:main"
 where = ["src"]
 
 [tool.setuptools.package-data]
-mdanal = ["config/*.yaml"]
+mdanal = ["config/*.yaml", "analyses/*.md", "analyses/**/*.md"]
 
 
 [tool.pytest.ini_options]

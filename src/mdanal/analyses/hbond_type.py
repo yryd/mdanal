@@ -62,26 +62,12 @@ def _selection(group) -> str:
     return "bynum " + " ".join(str(index) for index in indices)
 
 
-def _build(ctx) -> HydrogenBondAnalysis:
-    """按三个槽位与两个判据构造分析。
+def _build(ctx):
+    """兼容旧测试/调用；实际构建委托给共享 kernel。"""
+    from ._hbond import build
 
-    判据与 hbond.py / hbond_lifetime.py 必须一致；改动需三处同步
-    （由 tests/analyses 的一致性测试守护）。
-    """
-    return HydrogenBondAnalysis(
-        ctx.universe,
-        donors_sel=_selection(ctx.groups["donor"]),
-        hydrogens_sel=_selection(ctx.groups["hydrogen"]),
-        acceptors_sel=_selection(ctx.groups["acceptor"]),
-        d_a_cutoff=float(ctx.params["d_a_cutoff"]),
-        d_h_a_angle_cutoff=float(ctx.params["d_h_a_angle_cutoff"]),
-        update_selections=False,
-    )
+    return build(ctx)
 
-
-COORDINATES = "in_box"
-
-GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:
@@ -90,8 +76,9 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             "hbond_type 需要分子名与元素；请先在 system.yaml 配置 naming"
         )
 
-    analysis = _build(ctx)
-    analysis.run(start=ctx.start, stop=ctx.stop)
+    from ._hbond import analysis as _analysis
+
+    analysis = _analysis(ctx)
 
     # 单位：count_by_type() 返回 (供体类型, 受体类型, 次数)，次数为整数计数
     counts = np.asarray(analysis.count_by_time(), dtype=int)
