@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ._geometry import geometry_meta
 from ..plot import annotations, chart, plotutil
 from ..plot.panels import Panel
 from ..plot.specs import Bars, PanelRequest, Series
@@ -107,6 +108,7 @@ def meta(ctx, tables) -> dict:
     return {
         "total": int(ctx.extras.get("hbond_type_total", 0)),
         "types": int(len(table)),
+        **geometry_meta(ctx),
     }
 
 

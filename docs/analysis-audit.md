@@ -25,11 +25,11 @@
 |---|---|---|---|---|
 | density | `{a}_angstrom`、`{b}_angstrom`、`number_density_A3` | 键集合一致 | 无（二维图不参与对比） | 公式修正后复核 |
 | lineardensity | `{axis}_angstrom`、`mass_density_g_cm3`、`charge_density_e_A3` | 一致 | 有 | 已改电荷单位 |
-| rdf | `r_angstrom`、`g_r` | 一致 | 有 | 待核对归一化 |
+| rdf | `r_angstrom`、`g_r` | 一致 | 有 | 已核对：真实索引排除自配对 |
 | hbond | `frame`、`time_ps`、`hbond_count`；`n_frames`、`mean_hbonds`、`std_hbonds`、`per_donor_atom`、`per_donor_residue`；`donor`、`hydrogen`、`acceptor`、`frames_present`、`occupancy` | 一致 | 有 | 已改归一化列名 |
 | hbond_type | `donor`、`acceptor`、`count`、`per_frame`、`share` | 一致 | 无 | 待交叉核对 |
 | hbond_lifetime | `lag_ps`、`continuous`、`intermittent`；`criterion`、`tau_1e_ps`、`tolerance_frames`、`note` | 一致 | 有 | 已改 `tau_1e_ps` |
-| msd | `dt_ns`、`msd_A2` | 一致 | 有 | 待解析核对 |
+| msd | `dt_ns`、`msd_A2` | 一致 | 有 | 已核对：质心/MSD 时间轴 |
 | velocity | `{axis}_angstrom`、`v{vdim}_A_per_ps`、`error_A_per_ps` | 一致 | 有 | 误差列确认是标准误 |
 
 结论：8 个分析的 `LABELS` 中英键集合一致；表头与 `COMPARE`/`COLUMN_LABELS` 对齐；
@@ -64,10 +64,10 @@
 
 | 输出 | 公式 | 单位 | 依据 | 状态 |
 |---|---|---|---|---|
-| `r_angstrom` | `InterRDF` 的 bin 中心 | Å | `results.edges` | **已核对** |
-| `g_r` | `InterRDF.results.rdf` | 无量纲 | MDAnalysis 文档 | **已核对**：理想气体 g(r)≈1（实测 1.05）；`exclusion_block=(1,1)` 排除自配对 |
+| `r_angstrom` | 直方图 bin 中心 | Å | 自实现 | **已改** |
+| `g_r` | 交叉配对直方图 / (有效配对数 × 球壳体积 / 盒子体积) | 无量纲 | 自实现 | **已修**：按真实原子索引排除自配对；覆盖不重叠/同组/部分重叠/单原子组 |
 
-半盒检查已有；新增理想气体解析测试。
+半盒检查已有；不再使用 `InterRDF.exclusion_block=(1,1)` 处理任意两组。
 
 ### hbond
 
@@ -132,7 +132,7 @@
 | hbond | 归一化 | `per_molecule`（除供体原子数） | `per_donor_atom` + `per_donor_residue` | 含义明确 |
 | hbond_lifetime | 列名 | `lifetime_ps` | `tau_1e_ps` | 1/e 交叉不是拟合寿命 |
 | velocity | 坐标原点 | 首帧参考组质心 | 平均盒长/2（盒坐标） | `bin_pos` 是相对盒心，不是相对参考组 |
-| rdf | 归一化 | 未验证 | 理想气体 g≈1 | 解析核对 |
+| rdf | 归一化 | `exclusion_block=(1,1)` | 真实索引排除 + 有效配对数归一化 | 修复单原子/部分重叠组 |
 | msd | 时间轴 | 未验证 | 匀速 MSD=(v·Δt)² | 解析核对 |
 
 
@@ -142,11 +142,11 @@
 |---|---|---|---|
 | density | 已修（Δ³、边缘、变盒警告） | `tests/analyses/test_density.py` | 3 |
 | lineardensity | 已修（e/Å³、逐轴 bin、变盒警告） | `tests/analyses/test_lineardensity.py` | 3 |
-| rdf | 已核对（理想气体 g≈1） | `tests/analyses/test_rdf.py` | 2 |
-| hbond | 已修（选择串、归一化） | `tests/analyses/test_hbond.py` | 4 |
+| rdf | 已核对（理想气体 + 自配对边界） | `tests/analyses/test_rdf.py` | 5 |
+| hbond | 已修（选择串、归一化、几何状态） | `tests/analyses/test_hbond.py` | 5 |
 | hbond_type | 已核对（总数/份额） | `tests/analyses/test_hbond_type.py` | 2 |
 | hbond_lifetime | 已改名 + 文档（1/e 交叉） | `tests/analyses/test_hbond_lifetime.py` | 2 |
-| msd | 已修时间轴 + 已核对（匀速解析） | `tests/analyses/test_msd.py` | 5 |
+| msd | 已修时间轴 + 已核对（匀速解析、图例、平移） | `tests/analyses/test_msd.py` | 17 |
 | velocity | 已改为原盒坐标分箱 | `tests/analyses/test_velocity.py` | 7 |
 
 相对修正前基线的输出变化（9 项）：
@@ -161,7 +161,7 @@ hbond_lifetime/tables/hbond_lifetime_summary.csv
 velocity/tables/velocity.csv
 ```
 
-其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 126 + 科学 45；
+其余表与图逐字节不变。审计轮验收：`pytest` 80 条、`pytest tests/analyses` 28 条；绘图/F 轮后全套 141 条通过，色板轮后 145 条，坐标轮后默认 126 + 科学 51；
 `check-analysis --system tests/fixtures/tiny` 通过（density/lineardensity 会给出变盒警告）。
 
 剩余限制（本轮不处理）：

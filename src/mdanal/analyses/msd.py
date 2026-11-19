@@ -115,6 +115,9 @@ def _msd_from_com(com: np.ndarray, msd_type: str, fft: bool = True) -> np.ndarra
     """对质心轨迹求时间平均 MSD；fft=True 用 FFT 自相关，否则直接求和。"""
     axes = AXIS_SETS[msd_type]
     pos = com[..., axes]
+    # 固定参考位置（每个统计单元、每条坐标各一个），避免大绝对坐标下的 FFT 抵消。
+    # 不能逐帧减质心，否则会改变 MSD 的物理含义。
+    pos = pos - pos[0]
     n_frames = len(pos)
     if not fft:
         msd = np.empty(n_frames, dtype=float)
@@ -162,10 +165,19 @@ def run(ctx) -> dict[str, pd.DataFrame]:
     return {"msd": table}
 
 
+def _time_ns(table: pd.DataFrame) -> np.ndarray:
+    """兼容旧 MSD 表的 dt_ps；新表优先使用 dt_ns。"""
+    if "dt_ns" in table.columns:
+        return table["dt_ns"].to_numpy(dtype=float)
+    if "dt_ps" in table.columns:
+        return table["dt_ps"].to_numpy(dtype=float) / 1000.0
+    raise ValueError("MSD 表缺少 dt_ns 或 dt_ps 时间列")
+
+
 def build_series(ctx, tables) -> list[Series]:
     table = tables["msd"]
     curve = Curve(
-        x=table["dt_ns"].to_numpy(dtype=float),
+        x=_time_ns(table),
         y=table["msd_A2"].to_numpy(dtype=float),
         label=ctx.label("y"),
     )
@@ -185,6 +197,8 @@ def panel_request(ctx, tables) -> PanelRequest:
 
 def render_panel(ctx, request: PanelRequest) -> Panel:
     def draw(ax):
+        curves = [curve for series in request.series for curve in series.curves]
+        show_legend = bool(request.options.get("legend")) or len(curves) > 1
         for series in request.series:
             for curve in series.curves:
                 chart.line(
@@ -194,7 +208,10 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     lw=curve.linewidth,
                     color=curve.color,
                     ls=curve.linestyle,
+                    label=curve.label if show_legend else None,
                 )
+        if show_legend:
+            chart.legend(ax)
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

@@ -146,3 +146,13 @@ def test_hbond_type_totals_match_count(real, tmp_path):
     assert np.allclose(
         types["per_frame"], types["count"] / len(counts)
     )
+
+
+def test_geometry_meta_records_unsupported_pbc():
+    from types import SimpleNamespace
+    from mdanal.analyses._geometry import geometry_meta
+
+    ctx = SimpleNamespace(geometry=SimpleNamespace(pbc=(True, False, True)))
+    meta = geometry_meta(ctx)
+    assert meta["effective_pbc"] == [True, False, True]
+    assert meta["geometry_status"] == "unsupported_geometry"

@@ -7,6 +7,7 @@ import pandas as pd
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 from ..plot import annotations, chart, plotutil
+from ._geometry import geometry_meta
 from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
 
@@ -113,6 +114,10 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         "hbond_summary": summary_table,
         "hbond_occupancy": occupancy_table,
     }
+
+
+def meta(ctx, tables) -> dict:
+    return geometry_meta(ctx)
 
 
 def build_series(ctx, tables) -> list[Series]:

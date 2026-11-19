@@ -90,3 +90,60 @@ def test_same_group_self_pairs_are_excluded():
     table = rdf_module.run(ctx)["rdf"]
     assert table["g_r"].iloc[0] == pytest.approx(0.0, abs=1e-12)
     assert table["g_r"].iloc[1:].sum() > 0.0
+
+
+def test_distinct_single_atom_groups_are_finite():
+    """两个不同单原子组不能被 exclusion_block 误删成 NaN。"""
+    from types import SimpleNamespace
+
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import rdf as rdf_module
+
+    universe = mda.Universe.empty(2, trajectory=True)
+    universe.load_new(
+        np.array([[[0.0, 5.0, 5.0], [2.0, 5.0, 5.0]]]), format=MemoryReader
+    )
+    universe.dimensions = [10.0, 10.0, 10.0, 90, 90, 90]
+    ctx = SimpleNamespace(
+        groups={
+            "a": SimpleNamespace(atoms=universe.atoms[[0]]),
+            "b": SimpleNamespace(atoms=universe.atoms[[1]]),
+        },
+        universe=universe,
+        start=0,
+        stop=1,
+        params={"range": [0.5, 4.0], "nbins": 4},
+    )
+    table = rdf_module.run(ctx)["rdf"]
+    assert np.isfinite(table["g_r"]).all()
+    assert table["g_r"].sum() > 0.0
+
+
+def test_partial_overlap_excludes_only_true_self_pairs():
+    """部分重叠组不能把真实自配对算进 g(r)。"""
+    from types import SimpleNamespace
+
+    import MDAnalysis as mda
+    from MDAnalysis.coordinates.memory import MemoryReader
+    from mdanal.analyses import rdf as rdf_module
+
+    universe = mda.Universe.empty(3, trajectory=True)
+    universe.load_new(
+        np.array([[[0.0, 5.0, 5.0], [2.0, 5.0, 5.0], [4.0, 5.0, 5.0]]]),
+        format=MemoryReader,
+    )
+    universe.dimensions = [20.0, 20.0, 20.0, 90, 90, 90]
+    ctx = SimpleNamespace(
+        groups={
+            "a": SimpleNamespace(atoms=universe.atoms[[0, 1]]),
+            "b": SimpleNamespace(atoms=universe.atoms[[1, 2]]),
+        },
+        universe=universe,
+        start=0,
+        stop=1,
+        params={"range": [0.5, 5.0], "nbins": 10},
+    )
+    table = rdf_module.run(ctx)["rdf"]
+    assert np.isfinite(table["g_r"]).all()
+    assert table["g_r"].sum() > 0.0

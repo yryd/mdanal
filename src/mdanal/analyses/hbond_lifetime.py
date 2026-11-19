@@ -5,6 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
+from ._geometry import geometry_meta
 from ..plot import annotations, chart, plotutil
 from ..plot.panels import Panel
 from ..plot.specs import Curve, PanelRequest, Series
@@ -184,7 +185,10 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
 
 def meta(ctx, tables) -> dict:
-    return dict(ctx.extras.get("hbond_lifetime", {}))
+    return {
+        **dict(ctx.extras.get("hbond_lifetime", {})),
+        **geometry_meta(ctx),
+    }
 
 
 def build_series(ctx, tables) -> list[Series]:

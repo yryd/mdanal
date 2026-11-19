@@ -486,3 +486,60 @@ def test_msd_fft_matches_direct_on_random_com():
         direct = msd_module._msd_from_com(com, msd_type, fft=False)
         fast = msd_module._msd_from_com(com, msd_type, fft=True)
         assert np.allclose(fast, direct, rtol=1e-10, atol=1e-10)
+
+
+def test_msd_old_dt_ps_table_is_converted_to_ns():
+    """旧 MSD 快照的 dt_ps 表仍可用于当前 ns 绘图。"""
+    from types import SimpleNamespace
+    from mdanal.analyses import msd as msd_module
+
+    table = pd.DataFrame({"dt_ps": [0.0, 5.0, 10.0], "msd_A2": [0.0, 1.0, 4.0]})
+    series = msd_module.build_series(SimpleNamespace(label=lambda key: key), {"msd": table})
+    x = series[0].curves[0].x
+    assert np.allclose(x, [0.0, 0.005, 0.01])
+
+
+def test_msd_compare_panel_shows_series_legend():
+    """compare 传入两个系列时，MSD render_panel 必须显示图例。"""
+    from types import SimpleNamespace
+    from mdanal.plot.figure import Figure
+    from mdanal.plot.specs import Curve, PanelRequest, Series
+    from mdanal.analyses import msd as msd_module
+
+    ctx = SimpleNamespace(
+        meta={},
+        annotate=False,
+        annotations=(),
+        label=lambda key: key,
+        window=lambda axis: None,
+        size=lambda name="single": (3.5, 2.6),
+        shift=(0.0, 0.0, 0.0),
+    )
+    series = [
+        Series(name="a", curves=[Curve(x=[0, 1], y=[0, 1], label="water")]),
+        Series(name="b", curves=[Curve(x=[0, 1], y=[0, 2], label="PIP")]),
+    ]
+    request = PanelRequest(
+        recipe="msd",
+        series=series,
+        title="MSD",
+        xlabel="t",
+        ylabel="msd",
+        options={"legend": True},
+    )
+    fig = Figure([msd_module.render_panel(ctx, request)], ncols=1).build()
+    legend = fig.axes[0].get_legend()
+    assert legend is not None
+    assert {text.get_text() for text in legend.get_texts()} == {"water", "PIP"}
+
+
+def test_msd_fft_is_translation_stable():
+    """整体平移不应改变 MSD（检查大绝对坐标下的 FFT 抵消）。"""
+    from mdanal.analyses import msd as msd_module
+
+    rng = np.random.default_rng(11)
+    com = rng.normal(size=(20, 3, 3))
+    offset = np.array([1.0e6, 1.0e6, 1.0e6])
+    direct = msd_module._msd_from_com(com, "xyz", fft=False)
+    shifted = msd_module._msd_from_com(com + offset, "xyz", fft=True)
+    assert np.allclose(shifted, direct, rtol=1e-6, atol=1e-6)
