@@ -50,6 +50,11 @@ THEME_COLORS: tuple[str, ...] = (
     "#8a6bb0",
 )
 
+# 图内标注的统一尺寸/字重；默认主题下标注不能比轴文字更细。
+ANNOTATION_FONTSIZE = 10.0
+ANNOTATION_WEIGHT = "bold"
+ANNOTATION_LINEWIDTH = 1.2
+
 # 密度用白→深蓝的顺序色标
 _DENSITY_COLORS = ["#ffffff", "#dcecf7", "#9ec9e4", "#4a90c2", "#1d5b8f", "#0b2d5c"]
 
@@ -217,7 +222,13 @@ def bars(
     ax.set_yticks(positions, list(labels))
     ax.invert_yaxis()
     if notes is not None:
-        ax.bar_label(drawn, labels=list(notes), padding=2, fontsize=note_fontsize)
+        ax.bar_label(
+            drawn,
+            labels=list(notes),
+            padding=2,
+            fontsize=note_fontsize,
+            fontweight=ANNOTATION_WEIGHT,
+        )
 
     # 允许零、负值与 NaN：范围按有限值计算；全零/全 NaN 退化为 (0, 1)
     finite = values[np.isfinite(values)]
@@ -250,7 +261,7 @@ def refline(
     y: float,
     *,
     ls: str = "--",
-    lw: float = 0.6,
+    lw: float = 1.0,
     color: str | None = None,
     label: str | None = None,
 ):
@@ -263,7 +274,7 @@ def vline(
     x: float,
     *,
     ls: str = ":",
-    lw: float = 0.8,
+    lw: float = ANNOTATION_LINEWIDTH,
     color: str | None = None,
     label: str | None = None,
 ):
@@ -294,7 +305,7 @@ def note(
     text: str,
     *,
     at: tuple[float, float] = (0.015, 0.985),
-    fontsize: float = 6,
+    fontsize: float = ANNOTATION_FONTSIZE,
 ):
     """左上角的说明框（图内标注，坐标按轴比例）。"""
     ax.text(
@@ -305,8 +316,9 @@ def note(
         ha="left",
         va="top",
         fontsize=fontsize,
+        fontweight=ANNOTATION_WEIGHT,
         bbox={"boxstyle": "round,pad=0.25", "facecolor": "white",
-              "edgecolor": "0.7", "alpha": 0.85},
+              "edgecolor": "0.7", "alpha": 0.85, "linewidth": 0.6},
     )
 
 
@@ -316,14 +328,21 @@ def text(
     y: float,
     label: str,
     *,
-    fontsize: float = 6,
+    fontsize: float = ANNOTATION_FONTSIZE,
     color: str | None = None,
     ha: str = "left",
     va: str = "bottom",
 ):
     """数据坐标下的一行文字。"""
     return ax.text(
-        x, y, label, fontsize=fontsize, color=color or COLORS["label"], ha=ha, va=va
+        x,
+        y,
+        label,
+        fontsize=fontsize,
+        fontweight=ANNOTATION_WEIGHT,
+        color=color or COLORS["label"],
+        ha=ha,
+        va=va,
     )
 
 
@@ -334,7 +353,7 @@ def point_label(
     label: str,
     *,
     offset: tuple[float, float] = (3, 0),
-    fontsize: float = 6,
+    fontsize: float = ANNOTATION_FONTSIZE,
     color: str | None = None,
 ):
     """数据点旁的偏移文字（像素偏移）。"""
@@ -344,6 +363,7 @@ def point_label(
         xytext=offset,
         textcoords="offset points",
         fontsize=fontsize,
+        fontweight=ANNOTATION_WEIGHT,
         color=color or COLORS["label"],
     )
 

@@ -107,7 +107,7 @@ def _draw_fit(ax, ctx, tables):
         transform=ax.transAxes,
         ha="left",
         va="top",
-        fontsize=8,
+        fontsize=chart.ANNOTATION_FONTSIZE, fontweight=chart.ANNOTATION_WEIGHT,
     )
     chart.legend(ax, loc="upper right")
 

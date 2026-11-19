@@ -140,7 +140,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     notes=list(bars.notes),
                     height=0.7,
                     color=bars.color or chart.COLORS["primary"],
-                    note_fontsize=6,
+                    note_fontsize=9,
                     headroom=1.35,
                 )
         annotations.draw(ax, ctx)
@@ -228,7 +228,7 @@ def _bars(ctx, table: pd.DataFrame, column: str, suffix: str):
         notes=[f"{_number(v)} ({_percent(s)})" for v, s in zip(values, shares)],
         height=0.7,
         color=chart.COLORS["primary"],
-        note_fontsize=6,
+        note_fontsize=9,
         headroom=1.35,
     )
     ax.set_xlabel(ctx.label(suffix))

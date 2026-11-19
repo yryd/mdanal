@@ -247,7 +247,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     label=curve.label if show_legend else None,
                 )
         if native and lag is not None and len(lag):
-            chart.refline(ax, LEVEL, ls=":", lw=0.8, color=chart.COLORS["guide"])
+            chart.refline(ax, LEVEL, ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=chart.COLORS["guide"])
             chart.text(
                 ax,
                 lag[0] + 0.02 * (lag[-1] - lag[0]),
@@ -255,7 +255,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 "1/e",
                 va="bottom",
                 ha="left",
-                fontsize=6,
+                fontsize=chart.ANNOTATION_FONTSIZE,
                 color=chart.COLORS["label"],
             )
             for key, color, height in (
@@ -265,10 +265,10 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 value = info.get(key)
                 if value is None or not np.isfinite(value):
                     continue
-                chart.vline(ax, value, ls=":", lw=0.8, color=color)
+                chart.vline(ax, value, ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=color)
                 chart.point_label(
                     ax, value, height, f"{value:.2f} ps",
-                    offset=(3, 0), fontsize=6, color=color,
+                    offset=(3, 0), fontsize=chart.ANNOTATION_FONTSIZE, color=color,
                 )
         if show_legend:
             chart.legend(ax)

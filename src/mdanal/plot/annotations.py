@@ -86,13 +86,13 @@ def draw(ax, ctx, *, x_axis: str | None = None) -> None:
                     f"标注的物理轴 {axis!r} 不是本图横轴；跳过",
                 )
         elif kind == "hline":
-            chart.refline(ax, item["at"], ls=":", lw=0.8, color=chart.COLORS["guide"])
+            chart.refline(ax, item["at"], ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=chart.COLORS["guide"])
             if text:
                 ax.text(
                     0.98, item["at"], text,
                     transform=ax.get_yaxis_transform(),
-                    ha="right", va="bottom", fontsize=6,
-                    color=chart.COLORS["guide"],
+                    ha="right", va="bottom", fontsize=chart.ANNOTATION_FONTSIZE,
+                    fontweight=chart.ANNOTATION_WEIGHT, color=chart.COLORS["guide"],
                 )
         elif kind == "span":
             low, high = item["at"]
@@ -100,10 +100,10 @@ def draw(ax, ctx, *, x_axis: str | None = None) -> None:
                 chart.span(ax, low, high, axis="x")
                 if text:
                     ax.text(
-                        (low + high) / 2, 0.97, text,
+                        (low + high) / 2, 0.90, text,
                         transform=ax.get_xaxis_transform(),
-                        ha="center", va="top", fontsize=6,
-                        color=chart.COLORS["guide"],
+                        ha="center", va="top", fontsize=chart.ANNOTATION_FONTSIZE,
+                        fontweight=chart.ANNOTATION_WEIGHT, color=chart.COLORS["guide"],
                     )
             elif axis == "vertical":
                 chart.span(ax, low, high, axis="y")
@@ -111,8 +111,8 @@ def draw(ax, ctx, *, x_axis: str | None = None) -> None:
                     ax.text(
                         0.98, (low + high) / 2, text,
                         transform=ax.get_yaxis_transform(),
-                        ha="right", va="center", fontsize=6,
-                        color=chart.COLORS["guide"],
+                        ha="right", va="center", fontsize=chart.ANNOTATION_FONTSIZE,
+                        fontweight=chart.ANNOTATION_WEIGHT, color=chart.COLORS["guide"],
                     )
             else:
                 _warn_once(
@@ -125,12 +125,13 @@ def draw(ax, ctx, *, x_axis: str | None = None) -> None:
 
 
 def _vline(ax, at: float, text: str | None) -> None:
-    chart.vline(ax, at, ls=":", lw=0.8, color=chart.COLORS["guide"])
+    chart.vline(ax, at, ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=chart.COLORS["guide"])
     if text:
         ax.text(
             at, 0.97, text,
             transform=ax.get_xaxis_transform(),
-            ha="center", va="top", fontsize=6, color=chart.COLORS["guide"],
+            ha="center", va="top", fontsize=chart.ANNOTATION_FONTSIZE,
+            fontweight=chart.ANNOTATION_WEIGHT, color=chart.COLORS["guide"],
         )
 
 
