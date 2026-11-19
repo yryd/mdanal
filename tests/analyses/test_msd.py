@@ -577,3 +577,18 @@ def test_msd_package_derives_and_multiple_figures(tmp_path):
     assert (base / "tables" / "msd_fit.csv").is_file()
     assert (base / "tables" / "msd_fit_summary.csv").is_file()
     assert (base / "tables" / "msd_rdc.csv").is_file()
+
+
+def test_msd_derive_formula_and_rdc():
+    """三维 MSD 的 D/RDC 公式和 ns→ps 换算。"""
+    from types import SimpleNamespace
+    from mdanal.analyses.msd import derive
+
+    table = pd.DataFrame({"dt_ns": [0.0, 1.0, 2.0], "msd_A2": [0.0, 6.0, 12.0]})
+    ctx = SimpleNamespace(params={"msd_type": "xyz"})
+    out = derive.run(ctx, {"msd": table}, {"fit": {"window_ns": [0.0, 2.0]}, "rdc": {}})
+    summary = out["msd_fit_summary"].iloc[0]
+    assert summary["D_A2_per_ps"] == pytest.approx(0.001)
+    rdc = out["msd_rdc"]["rdc_A2_per_ps"].to_numpy()
+    assert np.isnan(rdc[0])
+    assert np.allclose(rdc[1:], 0.001)

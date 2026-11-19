@@ -4,8 +4,8 @@
 
 - [density](../src/mdanal/analyses/density/note.md)
 - [hbond](../src/mdanal/analyses/hbond/note.md)
-- [hbond_lifetime](../src/mdanal/analyses/hbond_lifetime.note.md)
-- [hbond_type](../src/mdanal/analyses/hbond_type.note.md)
+- [hbond_lifetime](../src/mdanal/analyses/hbond_lifetime/note.md)
+- [hbond_type](../src/mdanal/analyses/hbond_type/note.md)
 - [lineardensity](../src/mdanal/analyses/lineardensity.note.md)
 - [msd](../src/mdanal/analyses/msd/note.md)
 - [rdf](../src/mdanal/analyses/rdf.note.md)

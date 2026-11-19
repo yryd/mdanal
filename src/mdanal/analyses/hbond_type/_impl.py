@@ -5,11 +5,11 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ._geometry import geometry_meta
-from ..plot import annotations, chart, plotutil
-from ..plot.panels import Panel
-from ..plot.specs import Bars, PanelRequest, Series
-from ..errors import ValidationError
+from .._geometry import geometry_meta
+from ...plot import annotations, chart, plotutil
+from ...plot.panels import Panel
+from ...plot.specs import Bars, PanelRequest, Series
+from ...errors import ValidationError
 from MDAnalysis.analysis.hydrogenbonds import HydrogenBondAnalysis
 
 
@@ -64,7 +64,7 @@ def _selection(group) -> str:
 
 def _build(ctx):
     """兼容旧测试/调用；实际构建委托给共享 kernel。"""
-    from ._hbond import build
+    from .._hbond import build
 
     return build(ctx)
 
@@ -76,7 +76,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             "hbond_type 需要分子名与元素；请先在 system.yaml 配置 naming"
         )
 
-    from ._hbond import analysis as _analysis
+    from .._hbond import analysis as _analysis
 
     analysis = _analysis(ctx)
 
