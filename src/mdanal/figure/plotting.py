@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import contextmanager
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any, Mapping, Sequence
 
 import matplotlib
 import yaml
@@ -53,6 +53,9 @@ def make_context(
         for axis, bounds in (settings.get("window") or {}).items()
     }
     size = settings.get("size")
+    shift = getattr(compute_ctx, "shift", None)
+    if shift is None:
+        shift = compute_ctx.system.view.shift
     return PlotContext(
         params=dict(compute_ctx.params),
         meta={},
@@ -61,7 +64,7 @@ def make_context(
         stop=int(compute_ctx.stop),
         frame_dt_ps=float(compute_ctx.frame_dt_ps),
         selection_frame=int(compute_ctx.selection_frame),
-        shift=tuple(compute_ctx.system.view.shift),
+        shift=tuple(shift),
         lang=lang,
         dpi=dpi,
         annotate=annotate,
@@ -72,6 +75,17 @@ def make_context(
         size_override=(float(size[0]), float(size[1])) if size else None,
         plot=settings,
     )
+
+
+def select_style(items: Sequence[Any]) -> Mapping[str, Any]:
+    """整图共用 palette/rc：取第一个显式设置的 Panel，否则第一个 Panel。"""
+    for item in items:
+        plot = getattr(item, "plot", None)
+        if plot and (plot.get("palette") or plot.get("rc")):
+            return plot
+    if items:
+        return getattr(items[0], "plot", {}) or {}
+    return {}
 
 
 @contextmanager

@@ -32,14 +32,19 @@ def cmd_render(args: argparse.Namespace) -> int:
     )
     out = render_project(project, args.out, force=args.force)
     print(f"输出：{out}")
+    payload = json.loads((out / "project.json").read_text(encoding="utf-8"))
+    for warning in payload.get("warnings") or []:
+        print(f"提示：{warning}", file=sys.stderr)
     return EXIT_OK
 
 
 def cmd_check(args: argparse.Namespace) -> int:
     from .figure.config import read_project
-    from .figure.engine import check_project
+    from .figure.engine import check_project, check_warnings, source_warnings
 
     project = read_project(args.config)
+    for warning in [*source_warnings(project), *check_warnings(project)]:
+        print(f"提示：{warning}", file=sys.stderr)
     problems = check_project(project)
     if problems:
         print("\n发现的问题：", file=sys.stderr)
@@ -90,8 +95,9 @@ def cmd_replot(args: argparse.Namespace) -> int:
                 args.from_dir,
                 args.out,
                 name=name,
-                lang=args.lang or "zh",
-                dpi=args.dpi or 300,
+                lang=args.lang,
+                dpi=args.dpi,
+                force=args.force,
             )
         )
     print(f"输出：{args.out}（{len(written)} 张图）")
@@ -140,6 +146,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="只重绘指定最终图（可重复）")
     replot.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
     replot.add_argument("--dpi", type=int, help="覆盖分辨率")
+    replot.add_argument("--force", action="store_true", help="覆盖目标目录中的同名图片")
     replot.set_defaults(func=cmd_replot)
 
     help_cmd = subparsers.add_parser("help", help="显示帮助")

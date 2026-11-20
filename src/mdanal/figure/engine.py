@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import shutil
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping
 
@@ -15,11 +15,11 @@ from ..errors import MdanalError, ValidationError
 from ..plot import chart, plotutil
 from ..plot.figure import Figure
 from ..run.writers import sha256, write_tables
-from .catalog import discover_packs
+from .catalog import load_pack
 from .config import FigureProject
 from .model import CompareSpec, FigureSpec, PanelRef, PanelSource
-from .plotting import apply_panel_plot, make_context, plot_style
-from .runtime import ComputeContext, SourceRuntime, compute_context
+from .plotting import apply_panel_plot, make_context, plot_style, select_style
+from .runtime import ComputeContext, SourceRuntime, compute_context, normalize_compute
 
 
 @dataclass
@@ -32,27 +32,33 @@ class _Job:
     runtime: SourceRuntime
 
 
-@dataclass
-class _Result:
-    figures: list[Path] = field(default_factory=list)
-    warnings: list[str] = field(default_factory=list)
-
 
 def _json_key(values: Mapping[str, Any]) -> str:
     payload = json.dumps(values, ensure_ascii=False, sort_keys=True, default=str)
     return hashlib.sha1(payload.encode("utf-8")).hexdigest()[:10]
 
 
-def _job_key(ref: PanelRef | CompareSpec, source: str) -> str:
+def _job_key(ref: PanelRef | CompareSpec, source: str, pack) -> str:
     return _json_key(
         {
             "source": source,
             "pack": ref.pack,
-            "select": ref.select,
-            "compute": ref.compute,
+            "select": dict(ref.select),
+            "compute": normalize_compute(pack, ref.compute),
             "section": list(ref.section) if ref.section else None,
         }
     )
+
+
+def _derive_key(job_key: str, spec: Mapping[str, Any]) -> str:
+    return _json_key({"base": job_key, "derive": dict(spec)})
+
+
+def _table_record(path: Path, root: Path) -> dict[str, str]:
+    return {
+        "path": path.relative_to(root).as_posix(),
+        "sha256": sha256(path),
+    }
 
 
 def _figure_payload(spec: FigureSpec, panels: list[dict[str, Any]]) -> dict[str, Any]:
@@ -64,6 +70,36 @@ def _figure_payload(spec: FigureSpec, panels: list[dict[str, Any]]) -> dict[str,
         "title": spec.title,
         "items": panels,
     }
+
+
+def _valid_param_value(spec: Mapping[str, Any], value: Any) -> bool:
+    expected = spec.get("type")
+    if expected is bool:
+        if not isinstance(value, bool):
+            return False
+    elif expected is int:
+        if isinstance(value, bool) or not isinstance(value, int):
+            return False
+    elif expected is float:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return False
+    elif expected is str:
+        if not isinstance(value, str):
+            return False
+    elif expected is list:
+        if not isinstance(value, (list, tuple)):
+            return False
+    elif isinstance(expected, tuple):
+        if not isinstance(value, expected) or isinstance(value, bool):
+            return False
+    if "choices" in spec and value not in spec["choices"]:
+        return False
+    if isinstance(value, (int, float)) and not isinstance(value, bool):
+        if spec.get("min") is not None and float(value) < float(spec["min"]):
+            return False
+        if spec.get("max") is not None and float(value) > float(spec["max"]):
+            return False
+    return True
 
 
 def _validate_fields(pack, product, select, compute, derive, where: str) -> list[str]:
@@ -78,6 +114,15 @@ def _validate_fields(pack, product, select, compute, derive, where: str) -> list
             f"{where} 的 compute 含未知参数 {sorted(unknown_compute)}；"
             f"可用 {sorted(pack.params)}"
         )
+    for key, value in compute.items():
+        if key in pack.params and not _valid_param_value(pack.params[key], value):
+            problems.append(
+                f"{where}.compute.{key}={value!r} 不合法；"
+                f"应为 {pack.params[key].get('type')}，"
+                f"choices={pack.params[key].get('choices')}"
+            )
+    if derive and pack.derive is None:
+        problems.append(f"{where} 的图包不支持 derive，收到 {sorted(derive)}")
     for key in product.requires_derive:
         if key not in derive:
             problems.append(f"{where} 需要 derive.{key}；收到 {sorted(derive)}")
@@ -145,9 +190,78 @@ def _validate_item(item, packs, sources) -> list[str]:
     return problems
 
 
+def _iter_source_refs(project: FigureProject):
+    for figure in project.figures:
+        for item in figure.items:
+            if isinstance(item, PanelRef):
+                yield item.source, item
+            else:
+                for entry in item.sources:
+                    yield entry.source, _compare_ref(item, entry)
+
+
+def check_warnings(project: FigureProject, packs=None) -> list[str]:
+    """check 阶段不计算，但可提前报告输入几何与产品内核的明显冲突。"""
+    packs = packs or load_requested_packs(project)[0]
+    warnings: list[str] = []
+    for source, ref in _iter_source_refs(project):
+        cfg = project.sources.get(source)
+        pack = packs.get(ref.pack)
+        if cfg is None or pack is None or cfg.geometry is None:
+            continue
+        periodicity = str((pack.geometry or {}).get("periodicity") or "any").lower()
+        start = (cfg.frames[0] if cfg.frames else 0) + (
+            ref.section[0] if ref.section else 0
+        )
+        pbc = tuple(bool(value) for value in cfg.geometry.frame(start).pbc)
+        incompatible = (
+            (periodicity == "full" and not all(pbc))
+            or (periodicity == "xy" and not (pbc[0] and pbc[1]))
+        )
+        if incompatible:
+            warnings.append(
+                f"{source}/{ref.pack}/{ref.product}: 输入 PBC={list(pbc)}，"
+                f"内核 periodicity={periodicity}；结果只作定性参考"
+            )
+    return warnings
+
+
+def source_warnings(project: FigureProject) -> list[str]:
+    warnings: list[str] = []
+    for name, cfg in project.sources.items():
+        for note in (*cfg.time_notes, *cfg.seam_notes):
+            warnings.append(f"{name}: {note}")
+        if cfg.input_state == "unknown":
+            warnings.append(f"{name}: 无法从轨迹表头判断坐标是否包裹")
+    return warnings
+
+
+def requested_pack_names(project: FigureProject) -> list[str]:
+    names = []
+    for figure in project.figures:
+        for item in figure.items:
+            pack = item.pack
+            if pack not in names:
+                names.append(pack)
+    return names
+
+
+def load_requested_packs(project: FigureProject) -> tuple[dict, list[str]]:
+    packs = {}
+    problems = []
+    for name in requested_pack_names(project):
+        try:
+            packs[name] = load_pack(name)
+        except Exception as exc:
+            problems.append(f"无法加载图包 {name!r}：{exc}")
+    return packs, problems
+
+
 def check_project(project: FigureProject, packs=None) -> list[str]:
-    packs = packs or discover_packs()
-    problems: list[str] = []
+    load_problems: list[str] = []
+    if packs is None:
+        packs, load_problems = load_requested_packs(project)
+    problems: list[str] = list(load_problems)
     for figure in project.figures:
         if figure.ncols < 1:
             problems.append(f"figure {figure.name!r} 的 ncols 必须是正整数")
@@ -160,7 +274,12 @@ def _guard_out(out: Path, project: FigureProject, force: bool) -> None:
     inputs = []
     for cfg in project.sources.values():
         inputs.extend([cfg.yaml_path, cfg.topology, *cfg.all_trajectories])
-    resolved = [Path(path).resolve() for path in inputs]
+        if cfg.naming.from_data is not None:
+            inputs.append(cfg.naming.from_data)
+    resolved = [Path(path).expanduser().resolve() for path in inputs]
+    out = out.expanduser().resolve()
+    if out.is_symlink():
+        raise ValidationError(f"输出目录不能是符号链接：{out}")
     if out.exists():
         for path in resolved:
             if path.is_relative_to(out):
@@ -200,7 +319,15 @@ def _write_context(path: Path, ctx: ComputeContext) -> None:
         "selection_frame": ctx.selection_frame,
         "shift": list(ctx.system.view.shift),
         "params": dict(ctx.params),
+        "selection": {
+            slot: group.selection for slot, group in ctx.groups.items()
+        },
+        "section": [ctx.start, ctx.stop],
         "warnings": list(ctx.warnings),
+        "time_notes": list(ctx.time_notes),
+        "seam_notes": list(ctx.seam_notes),
+        "geometry_meta": dict(ctx.geometry_meta),
+        "requested_tables": sorted(ctx.requested_tables),
         "extras": ctx.extras,
         "geometry": (
             ctx.geometry_window.to_dict() if ctx.geometry_window is not None else None
@@ -209,27 +336,38 @@ def _write_context(path: Path, ctx: ComputeContext) -> None:
     path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
-def _derive_tables(pack, ctx, base, spec, cache):
+def _derive_tables(pack, job: _Job, spec: Mapping[str, Any], cache: dict[str, Any]):
+    """返回 (派生表, 派生目录, 派生 key)；基础表永不在这里改写。"""
     if not spec:
-        return base
-    key = _json_key(
-        {
-            "source": ctx.source,
-            "pack": pack.name,
-            "params": dict(ctx.params),
-            "start": ctx.start,
-            "stop": ctx.stop,
-            "derive": spec,
-        }
-    )
-    if key in cache:
-        return cache[key]
+        return {}, None, ""
+    key = _derive_key(job.key, spec)
+    cache_key = f"{job.key}:{key}"
+    if cache_key in cache:
+        derived, directory = cache[cache_key]
+        return dict(derived), directory, key
     if pack.derive is None:
         raise ValidationError(f"{pack.name} 不支持 derive")
-    derived = pack.derive(ctx, base, spec)
-    tables = {**base, **derived}
-    cache[key] = tables
-    return tables
+    derived = dict(pack.derive(job.ctx, job.tables, dict(spec)))
+    directory = job.data_dir / "derive" / key
+    write_tables(directory, derived)
+    (directory / "derive.json").write_text(
+        json.dumps(
+            {
+                "base": job.key,
+                "derive_key": key,
+                "spec": dict(spec),
+                "tables": {
+                    name: _table_record(directory / "tables" / f"{name}.csv", directory)
+                    for name in derived
+                },
+            },
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    cache[cache_key] = (derived, directory)
+    return derived, directory, key
 
 
 def _build_source(
@@ -239,12 +377,13 @@ def _build_source(
     source: str,
     jobs: dict[str, _Job],
     out: Path,
+    requested_tables: frozenset[str] | None = None,
 ) -> _Job:
-    key = _job_key(ref, source)
+    key = _job_key(ref, source, pack)
     if key in jobs:
         return jobs[key]
     runtime = SourceRuntime(source, project.sources[source])
-    ctx = compute_context(runtime, pack, ref)
+    ctx = compute_context(runtime, pack, ref, requested_tables=requested_tables)
     tables = dict(pack.compute(ctx))
     data_dir = _table_dir(out, source, pack.name, key)
     write_tables(data_dir, tables)
@@ -259,7 +398,13 @@ def _source_for(job: _Job, label: str | None = None) -> PanelSource:
         source=job.ctx.source,
         label=label or job.ctx.source,
         params=dict(job.ctx.params),
-        meta={},
+        meta={
+            "extras": dict(job.ctx.extras),
+            "warnings": list(job.ctx.warnings),
+            "geometry_meta": dict(job.ctx.geometry_meta),
+            "time_notes": list(job.ctx.time_notes),
+            "seam_notes": list(job.ctx.seam_notes),
+        },
         tables=job.tables,
         start=job.ctx.start,
         stop=job.ctx.stop,
@@ -282,6 +427,31 @@ def _compare_ref(item: CompareSpec, entry) -> PanelRef:
     )
 
 
+def _plan_requests(project: FigureProject, packs):
+    """先收集所有 job 的产品表需求，再按需求 compute；避免多请求时漏算。"""
+    planned: dict[str, dict[str, Any]] = {}
+    for figure in project.figures:
+        for item in figure.items:
+            if isinstance(item, PanelRef):
+                pairs = [(item.source, item)]
+            else:
+                pairs = [
+                    (entry.source, _compare_ref(item, entry))
+                    for entry in item.sources
+                ]
+            for source, ref in pairs:
+                pack = packs.get(ref.pack)
+                if pack is None or ref.product not in pack.products:
+                    continue
+                key = _job_key(ref, source, pack)
+                row = planned.setdefault(
+                    key,
+                    {"ref": ref, "source": source, "pack": pack, "tables": set()},
+                )
+                row["tables"].update(pack.products[ref.product].requires)
+    return planned
+
+
 def _build_item(
     project: FigureProject,
     item,
@@ -296,9 +466,12 @@ def _build_item(
     if isinstance(item, PanelRef):
         pack = packs[item.pack]
         job = _build_source(project, pack, item, item.source, jobs, out)
-        tables = _derive_tables(pack, job.ctx, job.tables, item.derive, derive_cache)
-        write_tables(job.data_dir, tables)
-        missing = [name for name in pack.products[item.product].requires if name not in tables]
+        derived, derive_dir, derive_key = _derive_tables(
+            pack, job, item.derive, derive_cache
+        )
+        tables = {**job.tables, **derived}
+        product = pack.products[item.product]
+        missing = [name for name in product.requires if name not in tables]
         if missing:
             raise ValidationError(
                 f"{item.pack}/{item.product} 缺少表 {missing}；"
@@ -321,21 +494,29 @@ def _build_item(
             pack, job.ctx, item.plot, lang=lang, dpi=dpi,
             annotate=project.annotate,
         )
-        panel = pack.products[item.product].build(ctx, source)
+        panel = product.build(ctx, source)
         apply_panel_plot(panel, item.plot, lang)
+        table_records = {}
+        for name in product.requires:
+            directory = derive_dir if name in derived else job.data_dir
+            table_records[name] = _table_record(
+                directory / "tables" / f"{name}.csv", out
+            )
         return panel, {
             "kind": "panel",
             "source": item.source,
             "pack": item.pack,
             "product": item.product,
             "plot": dict(item.plot),
-            "data": str(job.data_dir.relative_to(out)),
-            "tables": {
-                name: {
-                    "path": f"{job.data_dir.relative_to(out)}/tables/{name}.csv",
-                    "sha256": sha256(job.data_dir / "tables" / f"{name}.csv"),
-                }
-                for name in pack.products[item.product].requires
+            "base": str(job.data_dir.relative_to(out)),
+            "derive": str(derive_dir.relative_to(out)) if derive_dir else None,
+            "derive_key": derive_key or None,
+            "tables": table_records,
+            "request": {
+                "select": dict(item.select),
+                "compute": normalize_compute(pack, item.compute),
+                "derive": dict(item.derive),
+                "section": list(item.section) if item.section else None,
             },
         }
 
@@ -352,19 +533,49 @@ def _build_item(
     for entry in item.sources:
         ref = _compare_ref(item, entry)
         job = _build_source(project, pack, ref, entry.source, jobs, out)
-        tables = _derive_tables(pack, job.ctx, job.tables, ref.derive, derive_cache)
-        write_tables(job.data_dir, tables)
-        source_objs.append(_source_for(job, entry.label))
+        derived, derive_dir, derive_key = _derive_tables(
+            pack, job, ref.derive, derive_cache
+        )
+        tables = {**job.tables, **derived}
+        source_obj = _source_for(job, entry.label)
+        source_obj = PanelSource(
+            source=source_obj.source,
+            label=source_obj.label,
+            params=source_obj.params,
+            meta=source_obj.meta,
+            tables=tables,
+            start=source_obj.start,
+            stop=source_obj.stop,
+            frame_dt_ps=source_obj.frame_dt_ps,
+            selection_frame=source_obj.selection_frame,
+            shift=source_obj.shift,
+        )
+        source_objs.append(source_obj)
+        table_records = {}
+        for name in product.requires:
+            directory = derive_dir if name in derived else job.data_dir
+            table_records[name] = _table_record(
+                directory / "tables" / f"{name}.csv", out
+            )
         records.append(
             {
                 "source": entry.source,
                 "label": entry.label,
-                "data": str(job.data_dir.relative_to(out)),
+                "base": str(job.data_dir.relative_to(out)),
+                "derive": str(derive_dir.relative_to(out)) if derive_dir else None,
+                "derive_key": derive_key or None,
+                "tables": table_records,
+                "request": {
+                    "select": dict(ref.select),
+                    "compute": normalize_compute(pack, ref.compute),
+                    "derive": dict(ref.derive),
+                    "section": list(ref.section) if ref.section else None,
+                },
             }
         )
     ctx = make_context(
         pack,
-        jobs[_job_key(first_ref, first_ref.source)].ctx,
+        jobs[_job_key(first_ref, first_ref.source, pack)].ctx,
         item.plot,
         lang=lang,
         dpi=dpi,
@@ -384,11 +595,15 @@ def _build_item(
 def render_project(
     project: FigureProject, out_dir: str | Path, *, force: bool = False
 ) -> Path:
-    packs = discover_packs()
-    problems = check_project(project, packs)
+    packs, load_problems = load_requested_packs(project)
+    problems = list(load_problems)
+    problems.extend(check_project(project, packs))
     if problems:
         raise ValidationError("\n".join(problems), where=str(project.yaml_path))
-    out = Path(out_dir).expanduser().resolve()
+    raw_out = Path(out_dir).expanduser()
+    if raw_out.is_symlink():
+        raise ValidationError(f"输出目录不能是符号链接：{raw_out}")
+    out = raw_out.resolve()
     _guard_out(out, project, force)
     # 先落标记：失败的 render 也留下“本程序生成”的凭据，--force 才能安全清理。
     (out / "project.json").write_text(
@@ -398,36 +613,62 @@ def render_project(
     jobs: dict[str, _Job] = {}
     derive_cache: dict[str, Any] = {}
     rendered: list[Path] = []
+    warnings: list[str] = list(source_warnings(project))
+    for planned in _plan_requests(project, packs).values():
+        try:
+            job = _build_source(
+                project,
+                planned["pack"],
+                planned["ref"],
+                planned["source"],
+                jobs,
+                out,
+                requested_tables=frozenset(planned["tables"]),
+            )
+        except ValidationError as exc:
+            raise ValidationError(
+                f"source {planned['source']!r} / pack {planned['pack'].name!r}：{exc}"
+            ) from exc
+        except Exception as exc:
+            raise ValidationError(
+                f"source {planned['source']!r} / pack {planned['pack'].name!r} "
+                f"计算失败：{exc}"
+            ) from exc
+        warnings.extend(job.ctx.warnings)
     figure_records: list[dict[str, Any]] = []
     for spec in project.figures:
         panels = []
         panel_records = []
-        for item in spec.items:
-            panel, record = _build_item(
-                project,
-                item,
-                packs,
-                jobs,
-                out,
-                lang=project.lang,
-                dpi=project.dpi,
-                derive_cache=derive_cache,
-            )
+        for index, item in enumerate(spec.items):
+            try:
+                panel, record = _build_item(
+                    project,
+                    item,
+                    packs,
+                    jobs,
+                    out,
+                    lang=project.lang,
+                    dpi=project.dpi,
+                    derive_cache=derive_cache,
+                )
+            except ValidationError as exc:
+                raise ValidationError(
+                    f"figure {spec.name!r} panel[{index}]：{exc}"
+                ) from exc
+            except Exception as exc:
+                raise ValidationError(
+                    f"figure {spec.name!r} panel[{index}] 构建失败：{exc}"
+                ) from exc
             panels.append(panel)
             panel_records.append(record)
+        for job in jobs.values():
+            warnings.extend(job.ctx.warnings)
         title = (
             plotutil.resolve_text(spec.title, project.lang)
             if spec.title is not None
             else None
         )
-        style = next(
-            (
-                item.plot
-                for item in spec.items
-                if item.plot.get("palette") or item.plot.get("rc")
-            ),
-            spec.items[0].plot if spec.items else {},
-        )
+        style = select_style(spec.items)
         with plot_style(style):
             fig = Figure(panels, ncols=spec.ncols, title=title).build()
         path = out / "figures" / f"{spec.name}.png"
@@ -435,6 +676,12 @@ def render_project(
         chart.save(fig, path, project.dpi)
         rendered.append(path)
         payload = _figure_payload(spec, panel_records)
+        payload["render"] = {
+            "lang": project.lang,
+            "dpi": project.dpi,
+            "annotate": project.annotate,
+            "style": dict(style),
+        }
         payload["figure"] = {
             "path": path.relative_to(out).as_posix(),
             "sha256": sha256(path),
@@ -450,6 +697,7 @@ def render_project(
                 "mdanal_version": __version__,
                 "config": str(project.yaml_path),
                 "name": project.name,
+                "warnings": sorted(set(warnings)),
                 "figures": figure_records,
                 "sources": {
                     name: {

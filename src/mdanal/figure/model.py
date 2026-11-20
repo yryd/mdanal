@@ -104,6 +104,7 @@ class FigurePack:
     derive: Callable[[Any, Mapping[str, Any], Mapping[str, Any]], Mapping[str, Any]] | None = None
     validate_derive: Callable[[Mapping[str, Any]], None] | None = None
     coordinates: str = "any"
+    geometry: Mapping[str, Any] = field(default_factory=dict)
     note: str = ""
 
     @property

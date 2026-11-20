@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import SimpleNamespace
 from typing import Any, Mapping
 
 import MDAnalysis as mda
@@ -10,6 +11,7 @@ import MDAnalysis as mda
 from ..config.geometry import FrameGeometry, GeometryWindow
 from ..config.naming import NamingPlan, NamingSummary, apply_naming, build_plan
 from ..config.system import (
+    UNKNOWN_INPUT_WARNING,
     Group,
     SystemConfig,
     frame_window,
@@ -17,6 +19,7 @@ from ..config.system import (
     resolve_group,
     seek_frame,
 )
+from ..analyses._geometry import geometry_meta
 from ..errors import ValidationError
 
 
@@ -35,6 +38,10 @@ class ComputeContext:
     geometry_window: GeometryWindow | None = None
     extras: dict[str, Any] = field(default_factory=dict)
     warnings: list[str] = field(default_factory=list)
+    time_notes: tuple[str, ...] = ()
+    seam_notes: tuple[str, ...] = ()
+    geometry_meta: dict[str, Any] = field(default_factory=dict)
+    requested_tables: frozenset[str] = frozenset()
 
     @property
     def frame_dt_ps(self) -> float:
@@ -83,18 +90,22 @@ class SourceRuntime:
         return start, stop
 
 
-def _params(pack, ref) -> dict[str, Any]:
+def normalize_compute(pack, compute: Mapping[str, Any] | None) -> dict[str, Any]:
+    """先合并 PARAMS 默认值；key 和运行时必须用同一份有效参数。"""
     result = {
         key: spec.get("default")
         for key, spec in pack.params.items()
         if "default" in spec
     }
-    result.update(dict(ref.compute or {}))
+    result.update(dict(compute or {}))
     return result
 
 
 def compute_context(
-    runtime: SourceRuntime, pack, ref
+    runtime: SourceRuntime,
+    pack,
+    ref,
+    requested_tables: frozenset[str] | None = None,
 ) -> ComputeContext:
     view = "continuous" if pack.coordinates == "continuous" else "in_box"
     universe = runtime.universe(view)
@@ -114,24 +125,58 @@ def compute_context(
         raise ValidationError(
             f"select 的键必须正好是 {list(pack.slots)}，收到 {sorted(ref.select)}"
         )
+    warnings: list[str] = []
+    warnings.extend(str(note) for note in runtime.cfg.time_notes)
+    warnings.extend(str(note) for note in runtime.cfg.seam_notes)
+    if runtime.cfg.input_state == "unknown":
+        warnings.append(UNKNOWN_INPUT_WARNING)
+    input_geometry = (
+        runtime.cfg.geometry.frame(start)
+        if runtime.cfg.geometry is not None
+        else None
+    )
+    input_pbc = tuple(
+        bool(value) for value in (input_geometry.pbc if input_geometry else (True, True, True))
+    )
+    periodicity = str((pack.geometry or {}).get("periodicity") or "any").lower()
+    if periodicity == "full":
+        kernel_pbc = (True, True, True)
+        status = "supported" if all(input_pbc) else "unsupported_geometry"
+    elif periodicity == "xy":
+        kernel_pbc = (True, True, False)
+        status = "supported" if (input_pbc[0] and input_pbc[1]) else "unsupported_geometry"
+    else:
+        kernel_pbc = input_pbc
+        status = "supported"
+    meta = geometry_meta(
+        SimpleNamespace(geometry=input_geometry),
+        kernel_pbc=kernel_pbc,
+        geometry_status=status,
+    )
+    if status != "supported":
+        warnings.append(
+            f"{pack.name} 的计算内核按 periodicity={periodicity} 处理；"
+            f"输入 PBC={list(input_pbc)}，结果不能与严格同几何结果直接比较"
+        )
     return ComputeContext(
         system=runtime.cfg,
         universe=universe,
         groups=groups,
         start=start,
         stop=stop,
-        params=_params(pack, ref),
+        params=normalize_compute(pack, ref.compute),
         view=view,
         source=runtime.name,
         selection_frame=start,
-        geometry=(
-            runtime.cfg.geometry.frame(start)
-            if runtime.cfg.geometry is not None
-            else None
-        ),
+        geometry=input_geometry,
         geometry_window=(
             runtime.cfg.geometry.window(start, stop)
             if runtime.cfg.geometry is not None
             else None
         ),
+        warnings=warnings,
+        time_notes=tuple(runtime.cfg.time_notes),
+        seam_notes=tuple(runtime.cfg.seam_notes),
+        geometry_meta=meta,
+        requested_tables=frozenset(requested_tables or ()),
     )

@@ -158,11 +158,16 @@ def load_pack(name: str) -> FigurePack:
         derive=derive if callable(derive) else None,
         validate_derive=validate_derive if callable(validate_derive) else None,
         coordinates=str(getattr(module, "COORDINATES", "any")),
+        geometry=dict(getattr(module, "GEOMETRY", {}) or {}),
         note=str(getattr(module, "NOTE", "") or ""),
     )
     payload = _read_manifest(path)
-    if payload is not None:
-        _check_manifest(name, path, products, payload)
+    if payload is None:
+        raise ValidationError(
+            f"图包 {name} 缺少 pack.json；它是必需机器契约",
+            where=str(path.parent / "pack.json"),
+        )
+    _check_manifest(name, path, products, payload)
     return pack
 
 
@@ -184,6 +189,7 @@ def pack_payload(pack: FigurePack) -> dict[str, Any]:
         "name": pack.name,
         "module": pack.module,
         "coordinates": pack.coordinates,
+        "geometry": dict(pack.geometry),
         "slots": list(pack.slots),
         "params": {
             key: {

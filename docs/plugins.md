@@ -71,6 +71,27 @@ source.label       # compare 来源标签
 
 `mdanal check-pack <name>` 会检查 ID、kind、requires、default、compare 是否与代码一致。
 
+## 最小可运行配置
+
+```yaml
+# figures.yaml
+sources:
+  A:
+    topology: tests/fixtures/tiny/data.lmp
+    trajectory: tests/fixtures/tiny/run.lammpstrj
+    frames: [0, 5]
+    groups: {all: "all"}
+figures:
+  - name: demo
+    panels:
+      - source: A
+        pack: mypack
+        product: my-product
+        select: {group: all}
+```
+
+包内必须提供 `pack.json`、`PRODUCTS`、`SLOTS`、`PARAMS`、`LABELS`；`compute` 返回表，产品 `build` 返回一个 Panel。用 `mdanal check-pack mypack` 和 `mdanal check --config figures.yaml` 验证。
+
 ## 新增后
 
 ```bash

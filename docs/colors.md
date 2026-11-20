@@ -62,7 +62,7 @@ plot:
 | `hbond-lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
 | `hbond-type` | 否 | 条形图显式使用主色 |
 | `density-2d` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
-| `compare` | 是（`figure.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
+| `compare` | 是（`compare.plot.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
 | 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
 
 固定主色/对照色：
@@ -79,14 +79,23 @@ plot:
 密度图使用单独的白→砖红→蓝连续色标（`cmap: mdanal`），不受曲线 `palette` 影响。色标属分析参数，不是 `plot` 覆盖：
 
 ```yaml
-- name: density
-  sel: [water_o]
-  cmap: viridis          # 或 mdanal；也可用 colors: ["#fff", "#c05040", "#4165c0"]
-  vmin: 0.0
-  vmax: 0.8
+figures:
+  - name: density
+    panels:
+      - source: A
+        pack: density
+        product: density-2d
+        select: {group: water_o}
+        compute:
+          delta: 1.0
+          cmap: viridis          # 或 mdanal
+          colors: ["#fff", "#c05040", "#4165c0"]  # 可选，覆盖 cmap
+          vmin: 0.0
+          vmax: 0.8
+        plot: {plane: xy}
 ```
 
-这些字段改变的是计算后的色标映射，**需要重新 run**；`replot` 不能改。`density` 的多面板共享 `vmin/vmax`，每个 panel 的色标高度对齐自身纵轴。
+这些是 `density` 的 compute 参数，改变后需要重新 `render`；`replot` 只重绘已保存的场。`density` 的多面板共享 `vmin/vmax`，每个 panel 的色标高度对齐自身纵轴。
 
 ![固定主色、对照色与密度色标](assets/palette-preview.png)
 

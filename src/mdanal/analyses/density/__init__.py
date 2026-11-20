@@ -28,25 +28,33 @@ LINE_LABELS = _line.LABELS
 
 
 def compute(ctx):
-    """一次 compute：3D 网格的三个投影 + 三个线密度表。"""
-    density_params = dict(ctx.params)
-    density_params.update(
-        {
-            "directions": ["xy", "xz", "yz"],
-            "panels": [],
-            "sum_axis": str(ctx.params.get("sum_axis") or "z"),
-            "delta": float(ctx.params.get("delta", 1.0)),
-        }
+    """按请求产品计算：2D 投影和/或线密度，不无条件做全部。"""
+    needed = set(getattr(ctx, "requested_tables", frozenset()))
+    want_2d = not needed or any(name.startswith("density_") for name in needed)
+    want_line = not needed or any(
+        name.startswith("lineardensity_") for name in needed
     )
-    density_ctx = replace(ctx, params=density_params, extras={})
-    tables = dict(_density_run(density_ctx))
-    ctx.extras.update(density_ctx.extras)
-    line_params = {
-        **dict(ctx.params),
-        "binsize": float(ctx.params.get("binsize", 0.5)),
-    }
-    line_ctx = replace(ctx, params=line_params)
-    tables.update(_line.run(line_ctx))
+    tables: dict[str, object] = {}
+    if want_2d:
+        density_params = dict(ctx.params)
+        density_params.update(
+            {
+                "directions": ["xy", "xz", "yz"],
+                "panels": [],
+                "sum_axis": str(ctx.params.get("sum_axis") or "z"),
+                "delta": float(ctx.params.get("delta", 1.0)),
+            }
+        )
+        density_ctx = replace(ctx, params=density_params, extras={})
+        tables.update(_density_run(density_ctx))
+        ctx.extras.update(density_ctx.extras)
+    if want_line:
+        line_params = {
+            **dict(ctx.params),
+            "binsize": float(ctx.params.get("binsize", 0.5)),
+        }
+        line_ctx = replace(ctx, params=line_params)
+        tables.update(_line.run(line_ctx))
     return tables
 
 
@@ -91,7 +99,13 @@ def _build_density_line(ctx, source):
 
 def _compare_line(ctx, sources):
     axis = str((ctx.plot or {}).get("axis") or "z").lower()
-    local = replace(ctx, params={**dict(ctx.params), "dim": axis})
+    local = replace(
+        ctx,
+        params={**dict(ctx.params), "dim": axis},
+        labels=Labels(
+            LINE_LABELS.get(ctx.lang, {}), common_labels().get(ctx.lang, {})
+        ),
+    )
     return _compare_curves(local, sources, _line.panel_request, _line.render_panel)
 
 

@@ -168,8 +168,6 @@ def panels(ctx, tables) -> list[Panel]:
     return [render_panel(ctx, request)]
 
 
-def figure_name(ctx, tables) -> str:
-    return "hbond_count"
 
 def _occupancy(analysis, n_frames: int) -> pd.DataFrame:
     hbonds = np.asarray(analysis.results.hbonds)

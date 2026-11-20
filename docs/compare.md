@@ -18,7 +18,7 @@ figures:
 ```
 
 - 只允许 `kind: curve` 的产品；
-- 平台检查同一 pack/product、单位/轴、产品 compare 能力；
+- 平台检查同一 pack/product、产品 compare 能力和每来源参数；轴/单位兼容性目前只做基础保护，不保证所有科学语义自动判断；
 - 每个来源的 `PanelSource.label` 用作曲线标签；
 - compare 最终产出一个 Panel；
 - 同一 source 可以出现多次，用 per-source `compute`/`select` 做参数对比，`label` 必须不同。

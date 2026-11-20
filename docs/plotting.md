@@ -42,5 +42,5 @@ plot:
 python main.py replot --from OUT --out NEW --figure msd-tiny --lang en --dpi 300
 ```
 
-`replot` 只读 `OUT/figures/*.json` 和 `OUT/data/`，不读轨迹、不重算表。
-改 compute/derive 后要重新 `render`；如果基础表还在，`render` 会复用并只重派生。
+`replot` 只读 `OUT/figures/*.json` 和 `OUT/data/`，不读轨迹、不重算表；它按快照里的表路径和 sha256 读取，表被改动会报错。目标已有同名图片时默认拒绝，加 `--force` 才覆盖。
+当前同一 `render` 内相同 job 只算一次；不同命令之间暂不复用旧表，改 compute/derive 后再次 `render` 会重新计算。跨运行离线派生尚未提供。

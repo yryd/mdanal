@@ -37,7 +37,7 @@ sources:
 | `frames` | `[起, 止)` 帧窗口，默认全部 |
 | `groups` | 名字 → MDAnalysis 选择串 |
 | `naming` | 分子名/元素；`hbond-type` 必需 |
-| `view` | 可选，同旧版视图原点/平移语义 |
+| `view` | 可选；`origin` 是盒坐标原点（Å），只改变视图坐标/平移，不改变轨迹数值 |
 
 ## figures
 

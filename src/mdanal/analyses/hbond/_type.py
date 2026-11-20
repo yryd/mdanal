@@ -170,8 +170,6 @@ def panels(ctx, tables) -> list[Panel]:
     return [render_panel(ctx, request)]
 
 
-def figure_name(ctx, tables) -> str:
-    return "hbond_type"
 
 
 # --------------------------------------------------------------------------- #

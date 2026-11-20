@@ -324,8 +324,6 @@ def panels(ctx, tables) -> list[Panel]:
     return [render_panel(ctx, request)]
 
 
-def figure_name(ctx, tables) -> str:
-    return "hbond_lifetime"
 
 def _crossing(lag: np.ndarray, curve: np.ndarray, level: float = LEVEL) -> float:
     """曲线首次降到 level 的时间，线性插值；始终未降到则返回 nan。"""

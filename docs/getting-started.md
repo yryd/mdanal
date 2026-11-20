@@ -53,7 +53,7 @@ sources:
 python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-replot
 ```
 
-`replot` 不读轨迹、不重算表；改 `plot` 的标题/范围/颜色/尺寸后重新 `render` 会复用已有表。
+`replot` 不读轨迹、不重算表；它只按快照重绘。当前不同 `render` 之间不共享基础表：再次 `render` 会重新计算（同一 `render` 内才复用）。
 
 ## 只校验
 

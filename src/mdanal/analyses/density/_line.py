@@ -259,8 +259,3 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
 def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
     return [render_panel(ctx, request)]
-
-
-def figure_name(ctx, tables) -> str:
-    axis = str(ctx.params["dim"]).lower()
-    return f"lineardensity_{axis}"

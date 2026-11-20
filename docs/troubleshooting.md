@@ -58,4 +58,4 @@ python main.py render --config figures.yaml --out OUT --force
 
 ## 旧配置
 
-旧 `system.yaml`、`run`、`compare`、`derive`、`FIGURES`、`panels()`、`COMPARE` 已移除。请改成 `figures.yaml`。
+旧 `system.yaml`、`run`、`compare`、`derive`、`FIGURES`、`panels()`、`COMPARE` 已移除。请改成 `figures.yaml`。旧版本输出没有新的 `figures/*.json` 表清单，不能直接 `replot`；请用当前版本重跑。

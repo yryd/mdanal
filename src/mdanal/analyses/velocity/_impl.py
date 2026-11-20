@@ -360,8 +360,6 @@ def panels(ctx, tables) -> list[Panel]:
     return [render_panel(ctx, request)]
 
 
-def figure_name(ctx, tables) -> str:
-    return "velocity"
 
 def _axes(ctx) -> tuple[int, int, str]:
     dim = _axis_index(ctx.params["dim"], "dim")

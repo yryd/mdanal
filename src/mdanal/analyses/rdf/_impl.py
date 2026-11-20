@@ -273,7 +273,3 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
 def panels(ctx, tables) -> list[Panel]:
     request = panel_request(ctx, tables)
     return [render_panel(ctx, request)]
-
-
-def figure_name(ctx, tables) -> str:
-    return "rdf"

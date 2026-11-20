@@ -584,9 +584,3 @@ def panels(ctx, tables) -> list[Panel]:
         )
         panels.append(render_panel(ctx, request))
     return panels
-
-
-def figure_name(ctx, tables) -> str:
-    if len(tables) > 1:
-        return "density"
-    return str(next(iter(tables)))

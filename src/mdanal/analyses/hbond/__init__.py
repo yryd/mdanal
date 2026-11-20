@@ -21,11 +21,20 @@ LIFETIME_LABELS = _lifetime.LABELS
 
 
 def compute(ctx):
-    """一次 HBA 结果供三个产品使用；type 需要 naming 才可计算。"""
-    tables = dict(_count_run(ctx))
-    if not ctx.system.naming.empty:
+    """按请求产品计算；共享 HBA 缓存，但不做未请求的 lifetime/type。"""
+    needed = set(getattr(ctx, "requested_tables", frozenset()))
+    want_count = not needed or "hbond_count" in needed
+    want_type = not needed or "hbond_type" in needed
+    want_life = not needed or any(
+        name.startswith("hbond_lifetime") for name in needed
+    )
+    tables = {}
+    if want_count:
+        tables.update(_count_run(ctx))
+    if want_type and not ctx.system.naming.empty:
         tables.update(_type.run(ctx))
-    tables.update(_lifetime.run(ctx))
+    if want_life:
+        tables.update(_lifetime.run(ctx))
     return tables
 
 

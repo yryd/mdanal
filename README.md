@@ -121,7 +121,7 @@ docs/                         # 手册
 - `density` 3D 网格一次计算，三个投影都保存；切换 `plot.plane` 不重算。
 - 变盒时 density/line 只使用首帧并警告；MSD 连续视图要求相邻帧位移小于半盒。
 - `hbond` 的 type 产品需要 source 配置 `naming`。
-- 旧 `system.yaml` / `run` / `compare` / `derive` / `FIGURES` / `panels()` / `COMPARE` 接口已移除；不要按旧文档操作。
+- 旧 `system.yaml` / `run` / `compare` / `derive` / `FIGURES` / `panels()` / `COMPARE` 接口已移除；旧版输出/旧快照不能直接 `replot`，不要按旧文档操作。
 
 ## AI 入口
 
