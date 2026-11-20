@@ -16,6 +16,7 @@ from ..plot.figure import Figure
 from ..run.writers import sha256
 from .catalog import load_pack
 from .model import PanelSource
+from .overrides import PlotOverrides
 from .plotting import apply_panel_plot, make_context, plot_style, select_style
 
 
@@ -141,11 +142,19 @@ def replot_from(
     lang: str | None = None,
     dpi: int | None = None,
     force: bool = False,
+    overrides: PlotOverrides | None = None,
 ) -> list[Path]:
     root = Path(from_dir).expanduser().resolve()
     figures_dir = root / "figures"
     if not figures_dir.is_dir():
         raise ValidationError(f"{root} 没有 figures/，不是 figure-first 输出")
+    all_names = {path.stem for path in figures_dir.glob("*.json")}
+    if overrides is not None:
+        unknown = set(overrides.figures) - all_names
+        if unknown:
+            raise ValidationError(
+                f"plot 覆盖配置引用了不存在的图：{sorted(unknown)}"
+            )
     selected = sorted(figures_dir.glob("*.json"))
     if name:
         selected = [path for path in selected if path.stem == name]
@@ -172,10 +181,39 @@ def replot_from(
         records = list(payload.get("items") or [])
         if not records:
             raise ValidationError(f"图快照没有 Panel：{path}")
+        override = overrides.figures.get(path.stem) if overrides else None
+        if override is not None:
+            if max(override.panels, default=-1) >= len(records):
+                raise ValidationError(
+                    f"{path.stem}: plot.panels 索引超出 {len(records)} 个 Panel"
+                )
+            records = [
+                {
+                    **record,
+                    "plot": {
+                        **dict(record.get("plot") or {}),
+                        **dict(override.panels.get(index) or {}),
+                    },
+                }
+                for index, record in enumerate(records)
+            ]
         render = payload.get("render") or {}
-        effective_lang = lang or str(render.get("lang") or "zh")
-        effective_dpi = int(dpi or render.get("dpi") or 300)
-        annotate = bool(render.get("annotate", False))
+        effective_lang = (
+            lang
+            or (override.lang if override and override.lang else None)
+            or str(render.get("lang") or "zh")
+        )
+        effective_dpi = int(
+            dpi
+            or (override.dpi if override and override.dpi else None)
+            or render.get("dpi")
+            or 300
+        )
+        annotate = bool(
+            override.annotate
+            if override and override.annotate is not None
+            else render.get("annotate", False)
+        )
         panels = [
             _build_item(
                 root,
@@ -186,12 +224,26 @@ def replot_from(
             )
             for record in records
         ]
-        style = render.get("style") or _record_style(records)
+        style = (
+            override.style
+            if override and override.style
+            else (render.get("style") or _record_style(records))
+        )
+        title_value = (
+            override.title
+            if override and override.title is not None
+            else payload.get("title")
+        )
+        ncols = (
+            override.ncols
+            if override and override.ncols is not None
+            else int(payload.get("ncols", 1))
+        )
         with plot_style(style):
             fig = Figure(
                 panels,
-                ncols=int(payload.get("ncols", 1)),
-                title=_resolve_name(payload.get("title"), effective_lang),
+                ncols=int(ncols),
+                title=_resolve_name(title_value, effective_lang),
             ).build()
         target = targets[path]
         chart.save(fig, target, effective_dpi)

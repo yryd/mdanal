@@ -83,7 +83,7 @@ figures:
 ```text
 mdanal render    --config figures.yaml --out OUT [--force]
 mdanal check     --config figures.yaml
-mdanal replot    --from OUT --out FIG [--figure NAME]
+mdanal replot    --from OUT --out FIG [--figure NAME] [--config plot.yaml]
 mdanal packs     [--json]
 mdanal check-pack NAME
 ```

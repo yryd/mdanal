@@ -31,22 +31,6 @@ PARAMS = {
         "min": 0.01,
         "help": "投影网格的目标边长；越小越细，代价按立方增长",
     },
-    "sum_axis": {
-        "type": str,
-        "default": "y",
-        "choices": AXES,
-        "help": "单个投影时沿哪个轴求和；设置 directions/panels 后作为默认方向",
-    },
-    "directions": {
-        "type": list,
-        "default": [],
-        "help": "同一窗口内的方向列表，如 [xy, xz, yz]；为空时用 sum_axis",
-    },
-    "panels": {
-        "type": list,
-        "default": [],
-        "help": "任意单图列表；每项 {section, directions, label}，每个方向生成一个 panel",
-    },
     "cmap": {
         "type": str,
         "default": "mdanal",

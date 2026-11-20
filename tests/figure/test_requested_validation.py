@@ -117,3 +117,20 @@ def test_only_requested_packs_are_loaded(tmp_path, monkeypatch):
 
     monkeypatch.setattr(engine, "load_pack", guarded)
     assert check_project(project) == []
+
+
+def test_removed_density_control_params_are_rejected(tmp_path):
+    path = _base(
+        tmp_path,
+        """  - name: density
+    panels:
+      - source: A
+        pack: density
+        product: density-2d
+        select: {group: all}
+        compute: {delta: 2.0, directions: [xy], sum_axis: y}
+""",
+    )
+    text = "\n".join(check_project(read_project(path)))
+    assert "directions" in text
+    assert "sum_axis" in text

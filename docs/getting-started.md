@@ -51,6 +51,7 @@ sources:
 
 ```bash
 python main.py replot --from /tmp/mdanal-demo --out /tmp/mdanal-demo-replot
+# 改标题/范围/颜色：加 --config plot.yaml
 ```
 
 `replot` 不读轨迹、不重算表；它只按快照重绘。当前不同 `render` 之间不共享基础表：再次 `render` 会重新计算（同一 `render` 内才复用）。

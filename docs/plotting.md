@@ -38,9 +38,42 @@ plot:
 
 ## replot
 
+只换语言/分辨率：
+
 ```bash
 python main.py replot --from OUT --out NEW --figure msd-tiny --lang en --dpi 300
 ```
 
-`replot` 只读 `OUT/figures/*.json` 和 `OUT/data/`，不读轨迹、不重算表；它按快照里的表路径和 sha256 读取，表被改动会报错。目标已有同名图片时默认拒绝，加 `--force` 才覆盖。
+改标题、范围、颜色、尺寸、Panel 布局，用 plot 覆盖配置：
+
+```yaml
+# plot.yaml
+schema_version: 1
+figures:
+  msd-tiny:
+    title: {zh: 中文标题, en: English title}
+    lang: en
+    dpi: 300
+    annotate: true
+    ncols: 1
+    style:
+      palette: ["#00aa00"]
+      rc: {lines.linewidth: 7}
+    panels:
+      - title: {zh: 水, en: Water}
+        xlabel: tau
+        xlim: [0.0, 0.02]
+```
+
+```bash
+python main.py replot --from OUT --out NEW --config plot.yaml
+```
+
+- `panels` 按快照中的 Panel 顺序覆盖；
+- `panels[].plane` / `axis` 可切换 density 的查看投影；
+- CLI `--lang/--dpi` 优先于 plot 配置；
+- 只改呈现，不读轨迹、不重算；
+- 目标已有同名图片时默认拒绝，加 `--force` 才覆盖。
+
+`replot` 按快照里的表路径和 sha256 读取，表被改动会报错。
 当前同一 `render` 内相同 job 只算一次；不同命令之间暂不复用已有表，改 compute/derive 后再次 `render` 会重新计算。跨运行离线派生尚未提供。

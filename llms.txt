@@ -7,7 +7,7 @@ mdanal 是 figure-first 的 LAMMPS 轨迹分析工具。输入格式是 `figures
 ```bash
 mdanal check  --config figures.yaml
 mdanal render --config figures.yaml --out OUT --force
-mdanal replot --from OUT --out FIG
+mdanal replot --from OUT --out FIG [--config plot.yaml]
 mdanal packs --json
 mdanal check-pack NAME
 ```

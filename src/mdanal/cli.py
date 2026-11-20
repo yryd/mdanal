@@ -85,8 +85,10 @@ def cmd_check_pack(args: argparse.Namespace) -> int:
 
 
 def cmd_replot(args: argparse.Namespace) -> int:
+    from .figure.overrides import read_overrides
     from .figure.replot import replot_from
 
+    overrides = read_overrides(args.config) if args.config else None
     names = args.figure or [None]
     written = []
     for name in names:
@@ -98,6 +100,7 @@ def cmd_replot(args: argparse.Namespace) -> int:
                 lang=args.lang,
                 dpi=args.dpi,
                 force=args.force,
+                overrides=overrides,
             )
         )
     print(f"输出：{args.out}（{len(written)} 张图）")
@@ -146,6 +149,7 @@ def build_parser() -> argparse.ArgumentParser:
                         help="只重绘指定最终图（可重复）")
     replot.add_argument("--lang", choices=("zh", "en"), help="覆盖语言")
     replot.add_argument("--dpi", type=int, help="覆盖分辨率")
+    replot.add_argument("--config", metavar="FILE", help="plot 覆盖配置")
     replot.add_argument("--force", action="store_true", help="覆盖目标目录中的同名图片")
     replot.set_defaults(func=cmd_replot)
 
