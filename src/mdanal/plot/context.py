@@ -2,12 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import Any, Mapping
 
 from ..plot import plotutil
-
-PLOT_API_VERSION = 1
 
 
 @dataclass
@@ -36,10 +34,6 @@ class PlotContext:
     def label(self, key: str, **fmt: Any) -> str:
         return self.labels(key, **fmt)
 
-    @property
-    def size_is_explicit(self) -> bool:
-        return self.size_override is not None
-
     def size(self, name: str = "single") -> tuple[float, float]:
         if self.size_override is not None:
             return self.size_override
@@ -50,18 +44,6 @@ class PlotContext:
 
     def warn(self, message: str) -> None:
         self.warnings.append(message)
-
-    def with_plot(self, settings: Mapping[str, Any]) -> "PlotContext":
-        """返回应用了一层 plot 覆盖的副本；Panel 构建前用，size/window 才会生效。"""
-        windows = dict(self.windows)
-        windows.update(dict(settings.get("window") or {}))
-        size = settings.get("size")
-        size_override = (
-            (float(size[0]), float(size[1]))
-            if size is not None
-            else self.size_override
-        )
-        return replace(self, windows=windows, size_override=size_override)
 
     def annotation(self) -> str:
         """帧窗口与关键参数，供自动说明使用；不读取轨迹。"""

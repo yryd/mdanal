@@ -11,40 +11,10 @@ from .contract import LABELS
 
 
 def _time(table):
-    """返回表内自带的物理时间；旧表是 ps，新表是 ns。
-
-    旧快照的坐标标签、窗口和标注都以 ps 写入，不能在重绘时只把数组除以
-    1000，否则横轴数值与标签会差 1000 倍。
-    """
-    if "dt_ns" in table.columns:
-        return table["dt_ns"].to_numpy(dtype=float)
-    if "dt_ps" in table.columns:
-        return table["dt_ps"].to_numpy(dtype=float)
-    raise ValueError("MSD 表缺少 dt_ns 或 dt_ps 时间列")
-
-
-def _time_label(ctx, table):
-    """保持标签与数据同单位；旧快照的 ps 标签原样保留。"""
-    label = ctx.label("x")
-    if "dt_ps" in table.columns and "ps" not in label:
-        return label.replace("ns", "ps")
-    if "dt_ns" in table.columns and "ns" not in label:
-        return label.replace("ps", "ns")
-    return label
-
-
-def _summary_time(summary, stem: str, table) -> float:
-    """优先按表的时间单位取拟合窗口；兼容旧 summary 的 _ps/_ns 列。"""
-    unit = "ps" if "dt_ps" in table.columns else "ns"
-    for key in (f"{stem}_{unit}", f"{stem}_ps", f"{stem}_ns"):
-        if key in summary:
-            value = float(summary[key])
-            if key.endswith("_ns") and unit == "ps":
-                return value * 1000.0
-            if key.endswith("_ps") and unit == "ns":
-                return value / 1000.0
-            return value
-    raise ValueError(f"MSD 拟合摘要缺少 {stem}_ps/{stem}_ns")
+    """返回表内的物理时间（ns）；当前表只有这一种时间单位。"""
+    if "dt_ns" not in table.columns:
+        raise ValueError("MSD 表缺少 dt_ns 时间列")
+    return table["dt_ns"].to_numpy(dtype=float)
 
 
 def build_series(ctx, tables) -> list[Series]:
@@ -63,7 +33,7 @@ def panel_request(ctx, tables) -> PanelRequest:
         recipe="msd",
         series=build_series(ctx, tables),
         title=ctx.label("title"),
-        xlabel=_time_label(ctx, table),
+        xlabel=ctx.label("x"),
         ylabel=ctx.label("y"),
         options={"legend": False},
     )
@@ -124,10 +94,10 @@ def _draw_fit(ax, ctx, tables):
         label=ctx.label("fit"),
     )
     ax.axvline(
-        _summary_time(summary, "fit_start", raw), color=chart.COLORS["guide"], ls=":"
+        float(summary["fit_start_ns"]), color=chart.COLORS["guide"], ls=":"
     )
     ax.axvline(
-        _summary_time(summary, "fit_end", raw), color=chart.COLORS["guide"], ls=":"
+        float(summary["fit_end_ns"]), color=chart.COLORS["guide"], ls=":"
     )
     ax.text(
         0.03,
@@ -151,7 +121,7 @@ def panels_fit(ctx, tables):
         name="msd-fit",
         draw=lambda ax: _draw_fit(ax, ctx, tables),
         title=ctx.label("title"),
-        xlabel=_time_label(ctx, table),
+        xlabel=ctx.label("x"),
         ylabel=ctx.label("y"),
         aspect="auto",
         xlim=ctx.window("x"),
@@ -163,7 +133,6 @@ def panels_fit(ctx, tables):
 
 def panels_rdc(ctx, tables):
     table = tables["msd_rdc"]
-    raw = tables.get("msd", table)
     t = _time(table)
     y = table["rdc_A2_per_ps"].to_numpy(dtype=float)
 
@@ -174,8 +143,8 @@ def panels_rdc(ctx, tables):
             ax.axhline(d, color=chart.COLORS["secondary"], ls="--", label=ctx.label("d"))
             s = tables["msd_fit_summary"].iloc[0]
             ax.axvspan(
-                _summary_time(s, "fit_start", raw),
-                _summary_time(s, "fit_end", raw),
+                float(s["fit_start_ns"]),
+                float(s["fit_end_ns"]),
                 color=chart.COLORS["primary"],
                 alpha=0.10,
                 lw=0,
@@ -190,7 +159,7 @@ def panels_rdc(ctx, tables):
             name="msd-rdc",
             draw=draw,
             title=ctx.label("rdc"),
-            xlabel=_time_label(ctx, table),
+            xlabel=ctx.label("x"),
             ylabel=ctx.label("rdc_y"),
             aspect="auto",
             xlim=ctx.window("x"),

@@ -92,12 +92,9 @@ def _window(spec: dict, t_ns: np.ndarray) -> tuple[float, float]:
 
 def run(ctx, tables: dict[str, pd.DataFrame], spec: dict) -> dict[str, pd.DataFrame]:
     table = tables["msd"]
-    if "dt_ns" in table.columns:
-        t_ns = table["dt_ns"].to_numpy(dtype=float)
-    elif "dt_ps" in table.columns:
-        t_ns = table["dt_ps"].to_numpy(dtype=float) / 1000.0
-    else:
-        raise ValueError("MSD 表缺少 dt_ns 或 dt_ps 时间列")
+    if "dt_ns" not in table.columns:
+        raise ValueError("MSD 表缺少 dt_ns 时间列")
+    t_ns = table["dt_ns"].to_numpy(dtype=float)
     msd = table["msd_A2"].to_numpy(dtype=float)
     out: dict[str, pd.DataFrame] = {}
 

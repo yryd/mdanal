@@ -1,6 +1,6 @@
 # mdanal AI 快速入口
 
-mdanal 是 figure-first 的 LAMMPS 轨迹分析工具。不要按旧 `system.yaml` / `run` / `compare` / `derive` / `FIGURES` / `panels()` / `COMPARE` 操作。
+mdanal 是 figure-first 的 LAMMPS 轨迹分析工具。输入格式是 `figures.yaml`。
 
 ## 命令
 

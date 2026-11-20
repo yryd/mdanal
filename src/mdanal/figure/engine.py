@@ -54,6 +54,14 @@ def _derive_key(job_key: str, spec: Mapping[str, Any]) -> str:
     return _json_key({"base": job_key, "derive": dict(spec)})
 
 
+def _display_path(path: Path, base: Path) -> str:
+    """结果文件不写绝对路径；配置目录下能相对表示就相对表示。"""
+    try:
+        return path.resolve().relative_to(base.resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
 def _table_record(path: Path, root: Path) -> dict[str, str]:
     return {
         "path": path.relative_to(root).as_posix(),
@@ -695,14 +703,25 @@ def render_project(
             {
                 "schema_version": 1,
                 "mdanal_version": __version__,
-                "config": str(project.yaml_path),
+                "config": {
+                    "name": project.yaml_path.name,
+                    "sha256": sha256(project.yaml_path),
+                },
                 "name": project.name,
                 "warnings": sorted(set(warnings)),
                 "figures": figure_records,
                 "sources": {
                     name: {
-                        "topology": str(cfg.topology),
-                        "trajectory": str(cfg.trajectory),
+                        "topology": _display_path(
+                            cfg.topology, project.yaml_path.parent
+                        ),
+                        "trajectory": _display_path(
+                            cfg.trajectory, project.yaml_path.parent
+                        ),
+                        "trajectories": [
+                            _display_path(path, project.yaml_path.parent)
+                            for path in cfg.all_trajectories
+                        ],
                         "frames": list(cfg.frames) if cfg.frames else None,
                     }
                     for name, cfg in project.sources.items()

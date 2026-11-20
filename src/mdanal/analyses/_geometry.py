@@ -14,8 +14,7 @@ def geometry_meta(
     """记录输入边界与距离内核实际假设，二者不一致时明确标出。
 
     `input_pbc` 是 dump 的 BOX BOUNDS 声明；`kernel_pbc` 是本插件真正
-    使用的周期方向。旧字段 `effective_pbc` 保留为 kernel 的别名，避免
-    已有快照/下游脚本失效。
+    使用的周期方向。
     """
     geometry = getattr(ctx, "geometry", None)
     input_pbc = tuple(
@@ -32,7 +31,6 @@ def geometry_meta(
     return {
         "input_pbc": list(input_pbc),
         "kernel_pbc": list(actual),
-        "effective_pbc": list(actual),
         "pbc_match": bool(matches),
         "geometry_status": str(geometry_status),
     }

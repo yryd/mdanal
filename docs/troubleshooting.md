@@ -55,7 +55,3 @@ python main.py render --config figures.yaml --out OUT --force
 - hbond 当前只支持全周期盒；
 - RDF 非周期正交方向结果仅定性；
 - 速度剖面在首帧参考盒中平均。
-
-## 旧配置
-
-旧 `system.yaml`、`run`、`compare`、`derive`、`FIGURES`、`panels()`、`COMPARE` 已移除。请改成 `figures.yaml`。旧版本输出没有新的 `figures/*.json` 表清单，不能直接 `replot`；请用当前版本重跑。

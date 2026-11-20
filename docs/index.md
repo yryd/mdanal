@@ -24,4 +24,3 @@ sources → figures[] → PanelRef → FigurePack/Product → Panel → Figure
 - 一个产品恰好一个 Panel；
 - compare 只对曲线产品开放，最终产出一个 Panel；
 - 2D 密度用多个 Panel 并排；
-- 旧 `system.yaml`/`run`/`compare`/`derive`/`FIGURES`/`panels()`/`COMPARE` 已移除。

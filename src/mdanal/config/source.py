@@ -45,7 +45,7 @@ def parse_source(
     base_dir: Path,
     yaml_path: Path,
 ) -> SystemConfig:
-    """把 `sources.<name>` 解析成与旧 SystemConfig 同形的对象。"""
+    """把 `sources.<name>` 解析成来源配置。"""
     if not isinstance(data, Mapping):
         raise ValidationError(
             f"sources.{name} 必须是映射", where=f"{yaml_path}:sources.{name}"

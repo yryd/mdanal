@@ -65,14 +65,6 @@ def _selection(group) -> str:
     return "bynum " + " ".join(str(index) for index in indices)
 
 
-def _build(ctx):
-    """兼容旧测试/调用；实际构建委托给共享 kernel。"""
-    from .._hbond import build
-
-    return build(ctx)
-
-
-
 def run(ctx) -> dict[str, pd.DataFrame]:
     if not hasattr(ctx.universe.atoms, "resnames"):
         raise ValidationError(

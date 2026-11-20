@@ -64,5 +64,5 @@ def test_geometry_meta_marks_nonperiodic_unsupported():
         system=None,
     )
     meta = geometry_meta(ctx)
-    assert meta["effective_pbc"] == [True, False, True]
+    assert meta["kernel_pbc"] == [True, False, True]
     assert meta["geometry_status"] == "unsupported_geometry"

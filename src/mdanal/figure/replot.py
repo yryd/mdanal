@@ -33,7 +33,7 @@ class _Replay:
 
 def _load_tables(root: Path, records: Mapping[str, Any]) -> dict[str, pd.DataFrame]:
     if not records:
-        raise ValidationError("图快照没有表清单；旧快照不能直接 replot")
+        raise ValidationError("图快照没有表清单；请用当前版本重新生成")
     result: dict[str, pd.DataFrame] = {}
     for name, record in records.items():
         path = root / str(record["path"])
