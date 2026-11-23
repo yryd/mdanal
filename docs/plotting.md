@@ -28,12 +28,15 @@ plot:
   size: [4, 3]
   palette: bright
   rc: {font.size: 9}
-  plane: xy       # density-2d 查看参数
-  axis: z         # density-line 查看参数
+  cbar_width: "9%"   # density-2d 色条宽度；默认 6%
+  cbar_frame: false  # density-2d 不画色条外框；默认 false
+  plane: xy          # density-2d 查看参数
+  axis: z            # density-line 查看参数
 ```
 
 - `plot` 不改变已保存的表；
 - `density-2d` 的 `plane` 切换使用已保存的投影表，不重算；
+- `cbar_width` 是色条宽度（相对主图宽度的百分比字符串），`cbar_frame` 控制是否显示色条外框；色条刻度线始终隐藏，刻度数字加粗，`number density (Å⁻³)` 标签保留；
 - `palette/rc` 在整张 Figure 级别生效；同一图多个 Panel 的 palette 以第一个显式设置为准。
 
 ## replot

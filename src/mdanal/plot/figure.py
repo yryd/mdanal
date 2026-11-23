@@ -77,9 +77,14 @@ class Figure:
 
             if mappable is not None and panel.colorbar_label is not None:
                 cax = make_axes_locatable(ax).append_axes(
-                    "right", size="3.5%", pad=0.03
+                    "right", size=panel.colorbar_width, pad=0.03
                 )
                 bar = fig.colorbar(mappable, cax=cax)
+                bar.outline.set_visible(panel.colorbar_frame)
+                # 只去掉色条的刻线，保留刻度数字；数字跟随主题加粗。
+                bar.ax.tick_params(axis="y", which="both", length=0, width=0)
+                for label in bar.ax.get_yticklabels():
+                    label.set_fontweight("bold")
                 if panel.colorbar_label:
                     bar.set_label(panel.colorbar_label)
 

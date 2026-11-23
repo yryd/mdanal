@@ -10,7 +10,10 @@ from matplotlib.colors import is_color_like
 
 from ..errors import ValidationError
 
-PLOT_KEYS = {"window", "size", "xlim", "ylim", "title", "xlabel", "ylabel", "rc", "palette", "layout"}
+PLOT_KEYS = {
+    "window", "size", "xlim", "ylim", "title", "xlabel", "ylabel",
+    "rc", "palette", "layout", "cbar_width", "cbar_frame",
+}
 TEXT_KEYS = {"title", "xlabel", "ylabel"}
 
 
@@ -139,6 +142,24 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
             result["layout"] = {"ncols": ncols}
     if "palette" in value:
         result["palette"] = list(resolve_palette(value["palette"], f"{where}.palette"))
+    if "cbar_width" in value:
+        width = value["cbar_width"]
+        if (
+            not isinstance(width, str)
+            or not width.endswith("%")
+            or not width[:-1].replace(".", "", 1).isdigit()
+            or float(width[:-1]) <= 0
+        ):
+            raise ValidationError(
+                f"{where}.cbar_width 必须是正百分比字符串，如 '6%'",
+                where=where,
+            )
+        result["cbar_width"] = width
+    if "cbar_frame" in value:
+        frame = value["cbar_frame"]
+        if not isinstance(frame, bool):
+            raise ValidationError(f"{where}.cbar_frame 必须是布尔值", where=where)
+        result["cbar_frame"] = frame
     if "size" in value:
         result["size"] = _finite_pair(value["size"], f"{where}.size", positive=True)
     for key in ("xlim", "ylim"):

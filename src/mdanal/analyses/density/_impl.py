@@ -469,6 +469,8 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
         xlim=x_range,
         ylim=y_range,
         colorbar_label=options.get("colorbar_label"),
+        colorbar_width=options.get("colorbar_width", "6%"),
+        colorbar_frame=bool(options.get("colorbar_frame", False)),
         panel_size=ctx.size("map"),
     )
 
@@ -563,6 +565,12 @@ def panels(ctx, tables) -> list[Panel]:
                 "ylim": y_range,
                 "colorbar_label": (
                     ctx.label("cbar") if index == len(infos) - 1 else ""
+                ),
+                "colorbar_width": str(
+                    (getattr(ctx, "plot", {}) or {}).get("cbar_width") or "6%"
+                ),
+                "colorbar_frame": bool(
+                    (getattr(ctx, "plot", {}) or {}).get("cbar_frame", False)
                 ),
             },
         )

@@ -95,7 +95,7 @@ figures:
         plot: {plane: xy}
 ```
 
-这些是 `density` 的 compute 参数，改变后需要重新 `render`；`replot` 只重绘已保存的场。`density` 的多面板共享 `vmin/vmax`，每个 panel 的色标高度对齐自身纵轴。
+这些是 `density` 的 compute 参数，改变后需要重新 `render`；色条样式则用 `plot.cbar_width`（默认 `"6%"`）和 `plot.cbar_frame`（默认 `false`）控制，`replot` 可以覆盖。色条刻度线隐藏、刻度数字加粗，`number density (Å⁻³)` 标签保留。`density` 的多面板共享 `vmin/vmax`，每个 panel 的色标高度对齐自身纵轴。
 
 ![固定主色、对照色与密度色标](assets/palette-preview.png)
 

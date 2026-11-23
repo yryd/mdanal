@@ -22,4 +22,6 @@ class Panel:
     xlim: tuple[float, float] | None = None
     ylim: tuple[float, float] | None = None
     colorbar_label: str | None = None
+    colorbar_width: str = "3.5%"
+    colorbar_frame: bool = True
     panel_size: tuple[float, float] = (4.2, 3.0)
