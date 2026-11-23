@@ -12,7 +12,13 @@ from ..errors import ValidationError
 
 PLOT_KEYS = {
     "window", "size", "xlim", "ylim", "title", "xlabel", "ylabel",
-    "rc", "palette", "layout", "cbar_width", "cbar_frame",
+    "rc", "palette", "layout", "cbar_width", "cbar_frame", "legend_loc",
+}
+
+LEGEND_LOCS = {
+    "best", "upper right", "upper left", "lower left", "lower right",
+    "right", "center left", "center right", "lower center",
+    "upper center", "center",
 }
 TEXT_KEYS = {"title", "xlabel", "ylabel"}
 
@@ -160,6 +166,14 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
         if not isinstance(frame, bool):
             raise ValidationError(f"{where}.cbar_frame 必须是布尔值", where=where)
         result["cbar_frame"] = frame
+    if "legend_loc" in value:
+        loc = value["legend_loc"]
+        if not isinstance(loc, str) or loc not in LEGEND_LOCS:
+            raise ValidationError(
+                f"{where}.legend_loc 必须是 {sorted(LEGEND_LOCS)} 之一",
+                where=where,
+            )
+        result["legend_loc"] = loc
     if "size" in value:
         result["size"] = _finite_pair(value["size"], f"{where}.size", positive=True)
     for key in ("xlim", "ylim"):

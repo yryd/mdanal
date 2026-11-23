@@ -7,7 +7,7 @@ import pandas as pd
 from MDAnalysis.lib.distances import capped_distance
 
 from .._geometry import geometry_meta
-from ...plot import annotations, chart
+from ...plot import annotations, chart, plotutil
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 from ...errors import ValidationError
@@ -251,7 +251,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 )
         chart.refline(ax, 1.0, ls="--", lw=0.6, color="0.6")
         if show_legend:
-            chart.legend(ax)
+            chart.legend(ax, loc=plotutil.legend_loc(ctx))
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

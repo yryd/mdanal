@@ -21,6 +21,12 @@ def save(fig, path, dpi: int):
     return chart.save(fig, path, dpi)
 
 
+def legend_loc(ctx, default: str = "upper right") -> str:
+    """产品可通过 plot.legend_loc 覆盖图例位置。"""
+    plot = getattr(ctx, "plot", {}) or {}
+    return str(plot.get("legend_loc") or default)
+
+
 def resolve_text(value, lang: str):
     """字符串或含完整 zh/en 的映射；返回当前语言文本。"""
     if isinstance(value, str):

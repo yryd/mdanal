@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from .._geometry import full_periodic_meta
-from ...plot import annotations, chart
+from ...plot import annotations, chart, plotutil
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 from ...errors import ValidationError
@@ -286,7 +286,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     offset=(3, 0), fontsize=chart.ANNOTATION_FONTSIZE, color=color,
                 )
         if show_legend:
-            chart.legend(ax)
+            chart.legend(ax, loc=plotutil.legend_loc(ctx))
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

@@ -5,7 +5,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ...plot import annotations, chart
+from ...plot import annotations, chart, plotutil
 from .._geometry import full_periodic_meta
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
@@ -136,7 +136,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
             mean = float(np.mean([curve.y.mean() for curve in curves]))
             chart.refline(ax, mean, ls="--", lw=0.7, color="0.5")
         if show_legend:
-            chart.legend(ax)
+            chart.legend(ax, loc=plotutil.legend_loc(ctx))
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

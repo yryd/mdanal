@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from ...plot import annotations, chart
+from ...plot import annotations, chart, plotutil
 from ...plot.panels import Panel
 from ...plot.specs import Curve, PanelRequest, Series
 from .contract import LABELS
@@ -55,7 +55,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                     label=curve.label if show_legend else None,
                 )
         if show_legend:
-            chart.legend(ax)
+            chart.legend(ax, loc=plotutil.legend_loc(ctx))
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())
@@ -109,7 +109,7 @@ def _draw_fit(ax, ctx, tables):
         va="top",
         fontsize=8.0, fontweight=chart.ANNOTATION_WEIGHT,
     )
-    chart.legend(ax, loc="upper right")
+    chart.legend(ax, loc=plotutil.legend_loc(ctx, "upper right"))
     annotations.draw(ax, ctx)
     if ctx.annotate:
         chart.note(ax, ctx.annotation())
@@ -149,7 +149,7 @@ def panels_rdc(ctx, tables):
                 alpha=0.10,
                 lw=0,
             )
-        chart.legend(ax, loc="upper left")
+        chart.legend(ax, loc=plotutil.legend_loc(ctx, "upper left"))
         annotations.draw(ax, ctx)
         if ctx.annotate:
             chart.note(ax, ctx.annotation())

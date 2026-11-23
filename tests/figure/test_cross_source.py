@@ -134,3 +134,34 @@ def test_compare_velocity_uses_each_source_params(tmp_path):
     )
     out = render_project(read_project(path), tmp_path / "out")
     assert (out / "figures" / "v.png").is_file()
+
+
+def test_compare_legend_location(tmp_path, monkeypatch):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        "schema_version: 1\nname: legend\nsources:\n"
+        + _source("A")
+        + _source("B")
+        + """figures:
+  - name: cmp
+    panels:
+      - compare:
+          pack: msd
+          product: msd-raw
+          select: {group: all}
+          sources: [{source: A, label: A}, {source: B, label: B}]
+          plot: {legend_loc: lower left}
+""",
+        encoding="utf-8",
+    )
+    from mdanal.plot import chart
+    seen = []
+    original = chart.legend
+
+    def legend(ax, **kwargs):
+        seen.append(kwargs.get("loc"))
+        return original(ax, **kwargs)
+
+    monkeypatch.setattr(chart, "legend", legend)
+    render_project(read_project(path), tmp_path / "out")
+    assert "lower left" in seen

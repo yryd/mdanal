@@ -30,6 +30,7 @@ plot:
   rc: {font.size: 9}
   cbar_width: "9%"   # density-2d 色条宽度；默认 6%
   cbar_frame: false  # density-2d 不画色条外框；默认 false
+  legend_loc: lower left  # 图例位置
   plane: xy          # density-2d 查看参数
   axis: z            # density-line 查看参数
 ```
