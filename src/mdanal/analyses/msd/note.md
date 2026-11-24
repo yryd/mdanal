@@ -37,9 +37,9 @@ RDC 与 D_fit 在有限窗口、存在截距时不必相等；不强制过原点
 
 ## Figures
 
-- `raw`：只有 MSD，文件名 `msd.png`；默认输出。
-- `fit`：MSD + 拟合线 + 拟合起止线 + D，文件名 `msd-fit.png`。
-- `rdc`：RDC + D 水平线 + 拟合窗口阴影，文件名 `msd-rdc.png`。
+- `msd-raw`：只有 MSD，默认输出。
+- `msd-fit`：MSD + 拟合线 + 拟合起止线 + D；必须显式给 `derive.fit.window_ns`。
+- `msd-rdc`：RDC + D 水平线 + 拟合窗口阴影；拟合窗口来自可选的 `derive.fit`。
 
 ## 配置
 
@@ -55,7 +55,7 @@ panels:
 
 ## 注意
 
-- `window_ns` 改变数值结果，属于派生参数；不能用 `plot.xlim` 偷偷改变拟合窗口。
+- `window_ns` 是 `msd-fit` 的必需派生参数；它改变数值结果，不能用 `plot.xlim` 偷偷改变拟合窗口。
 - RDC 在 τ=0 为 NaN；不填成零。
 - `D_stderr` 只是回归斜率换算出的标准误，不是含时间相关的完整不确定度；自由截距少于 3 点时没有残差自由度，`D_stderr` 为 NaN。
 - 没有自动平台检测，也没有“自动采用后段窗口”；由用户显式给 `window_ns`。

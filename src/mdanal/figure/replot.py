@@ -12,6 +12,7 @@ import pandas as pd
 
 from ..errors import ValidationError
 from ..plot import chart, plotutil
+from ..plot.settings import merge_plot
 from ..plot.figure import Figure
 from ..run.writers import sha256
 from .catalog import load_pack
@@ -96,10 +97,16 @@ def _build_item(
     lang: str,
     dpi: int,
     annotate: bool,
+    style: Mapping[str, Any] | None = None,
 ):
     pack = load_pack(str(record["pack"]))
     product = pack.products[str(record["product"])]
     plot = dict(record.get("plot") or {})
+    if style:
+        plot = merge_plot(
+            plot,
+            {key: value for key, value in style.items() if key in ("palette", "rc")},
+        )
     if record["kind"] == "panel":
         source, replay = _source(root, record, str(record.get("source", "")))
         ctx = make_context(
@@ -198,10 +205,10 @@ def replot_from(
             records = [
                 {
                     **record,
-                    "plot": {
-                        **dict(record.get("plot") or {}),
-                        **dict(override.panels.get(index) or {}),
-                    },
+                    "plot": merge_plot(
+                        dict(record.get("plot") or {}),
+                        dict(override.panels.get(index) or {}),
+                    ),
                 }
                 for index, record in enumerate(records)
             ]
@@ -222,6 +229,11 @@ def replot_from(
             if override and override.annotate is not None
             else render.get("annotate", False)
         )
+        style = {
+            **dict(_record_style(records) or {}),
+            **dict(render.get("style") or {}),
+            **dict(override.style if override and override.style else {}),
+        }
         panels = [
             _build_item(
                 root,
@@ -229,14 +241,10 @@ def replot_from(
                 lang=effective_lang,
                 dpi=effective_dpi,
                 annotate=annotate,
+                style=style,
             )
             for record in records
         ]
-        style = (
-            override.style
-            if override and override.style
-            else (render.get("style") or _record_style(records))
-        )
         title_value = (
             override.title
             if override and override.title is not None

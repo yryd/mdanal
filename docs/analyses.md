@@ -5,7 +5,7 @@
 | 图包 | 产品 | 槽位 | 主要参数 |
 |---|---|---|---|
 | `density` | `density-2d`, `density-line` | group | `delta`、`binsize`、`plane`/`axis` |
-| `hbond` | `hbond-count`, `hbond-type`, `hbond-lifetime` | donor, hydrogen, acceptor | 距离/角度、`tau_max_ps`、`figure_axis` |
+| `hbond` | `hbond-count`, `hbond-type`, `hbond-lifetime-continuous`, `hbond-lifetime-intermittent` | donor, hydrogen, acceptor | 距离/角度、`tau_max_ps`、`figure_axis` |
 | `msd` | `msd-raw`, `msd-fit`, `msd-rdc` | group | `msd_type`、`grouping`、`derive` |
 | `rdf` | `rdf` | a, b | `range`、`nbins` |
 | `velocity` | `velocity` | group, ref | `dim`、`vdim`、`bin_width`、`grouping`、`sym` |
@@ -19,9 +19,9 @@
 
 ## hbond
 
-- 一个 HBA analysis 供 `hbond-count`/`hbond-type`/`hbond-lifetime` 共享；
+- 一个 HBA analysis 供 hbond 四个产品共享；
 - `hbond-type` 需要 source `naming`；
-- `hbond-count`/`hbond-lifetime` 可 compare；`hbond-type` 是 bars，不可 compare；
+- `hbond-count` 和两个 `hbond-lifetime-*` 单曲线产品可 compare；`hbond-type` 是 bars，不可 compare；
 - 当前只支持全周期盒；非周期结果不能当严格物理量。
 
 ## msd

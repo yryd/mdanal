@@ -9,6 +9,7 @@ import pytest
 from mdanal.figure.config import read_project
 from mdanal.figure.engine import render_project
 from mdanal.figure.replot import replot_from
+from mdanal.figure.overrides import read_overrides
 import mdanal.figure.engine as engine
 
 TINY = Path(__file__).resolve().parents[1] / "fixtures" / "tiny"
@@ -63,8 +64,8 @@ def test_contact_count_and_coordination_share_blocked_table(tmp_path):
     tables = list((out / "data" / "T" / "contact").glob("*/tables/contact.csv"))
     assert len(tables) == 1
     frame = pd.read_csv(tables[0])
-    assert frame["time_ps"].iloc[0] == 0.0
-    assert frame["time_ps"].iloc[-1] == 4.0
+    assert frame["time_ps"].iloc[0] == 0.5
+    assert frame["time_ps"].iloc[-1] == 2.5
     assert frame["block_frames"].iloc[0] == 2
     assert (out / "figures" / "fig.png").is_file()
 
@@ -158,3 +159,93 @@ def test_stack_rejects_product_without_curve_request(tmp_path):
     from mdanal.errors import ValidationError
     with pytest.raises(ValidationError, match="不是可 stack"):
         render_project(read_project(path), tmp_path / "out")
+
+
+def test_compare_x_range_uses_union_not_first_source(tmp_path, monkeypatch):
+    body = """  - name: cmp
+    panels:
+      - compare:
+          pack: contact
+          product: contact-count
+          sources:
+            - {source: T, label: short, section: [0, 2], select: {first: all, second: all}}
+            - {source: T, label: long, section: [0, 4], select: {first: all, second: all}}
+"""
+    captured = {}
+    original = engine.chart.save
+
+    def save(fig, target, dpi):
+        captured["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(engine.chart, "save", save)
+    out = render_project(read_project(_config(tmp_path / "one", body)), tmp_path / "one-out")
+    xmax_one = captured["fig"].axes[0].get_xlim()[1]
+
+    body_rev = body.replace(
+        "            - {source: T, label: short, section: [0, 2], select: {first: all, second: all}}\n"
+        "            - {source: T, label: long, section: [0, 4], select: {first: all, second: all}}\n",
+        "            - {source: T, label: long, section: [0, 4], select: {first: all, second: all}}\n"
+        "            - {source: T, label: short, section: [0, 2], select: {first: all, second: all}}\n",
+    )
+    render_project(read_project(_config(tmp_path / "two", body_rev)), tmp_path / "two-out")
+    xmax_rev = captured["fig"].axes[0].get_xlim()[1]
+    assert xmax_one == pytest.approx(xmax_rev)
+    assert xmax_one >= 0.0039
+    assert (out / "figures" / "cmp.png").is_file()
+
+
+def test_contact_table_is_pure_but_plot_keeps_window_endpoints(tmp_path, monkeypatch):
+    path = _config(tmp_path, _panel("contact-count", block_ps="1.5"))
+    captured = {}
+    original = engine.chart.save
+
+    def save(fig, target, dpi):
+        captured["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(engine.chart, "save", save)
+    out = render_project(read_project(path), tmp_path / "out")
+    table = pd.read_csv(next((out / "data" / "T" / "contact").glob("*/tables/contact.csv")))
+    assert table["time_ps"].tolist() == [0.5, 2.5]
+    ax = captured["fig"].axes[0]
+    curve_x = [line.get_xdata() for line in ax.lines if len(line.get_xdata()) > 2][0]
+    assert curve_x[0] == 0.0
+    assert curve_x[-1] == 0.004
+
+
+def test_replot_stack_style_palette_takes_effect(tmp_path, monkeypatch):
+    stack = _config(
+        tmp_path / "stack",
+        """  - name: stack
+    panels:
+      - stack:
+          pack: contact
+          product: contact-count
+          sources:
+            - {source: T, label: a, select: {first: all, second: all}, compute: {block_ps: 1.5}}
+            - {source: T, label: b, select: {first: all, second: all}, compute: {block_ps: 1.5}}
+""",
+    )
+    out = render_project(read_project(stack), tmp_path / "out")
+    override = tmp_path / "plot.yaml"
+    override.write_text(
+        """schema_version: 1
+figures:
+  stack:
+    style:
+      palette: ["#0000ff", "#ffff00"]
+""",
+        encoding="utf-8",
+    )
+    captured = {}
+    original = engine.chart.save
+
+    def save(fig, target, dpi):
+        captured["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(engine.chart, "save", save)
+    replot_from(out, tmp_path / "replot", overrides=read_overrides(override))
+    colors = captured["fig"].axes[0].collections[0].get_facecolor()
+    assert tuple(round(float(v), 3) for v in colors[0][:3]) == (0.0, 0.0, 1.0)

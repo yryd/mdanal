@@ -52,6 +52,7 @@ COLUMN_LABELS = {
 
 COORDINATES = "in_box"
 
+KERNEL_PBC = "per_frame"
 GEOMETRY = {"cell": "orthorhombic", "periodicity": "full"}
 
 

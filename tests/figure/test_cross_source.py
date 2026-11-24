@@ -2,8 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from mdanal.figure.config import read_project
 from mdanal.figure.engine import render_project
+from mdanal.errors import ValidationError
 
 TINY = Path(__file__).resolve().parents[1] / "fixtures" / "tiny"
 
@@ -113,7 +116,7 @@ def test_compare_density_line_labels(tmp_path):
     assert (out / "figures" / "line.png").is_file()
 
 
-def test_compare_velocity_uses_each_source_params(tmp_path):
+def test_compare_velocity_uses_each_source_params_when_components_match(tmp_path):
     path = tmp_path / "figures.yaml"
     path.write_text(
         "schema_version: 1\nname: vcmp\nsources:\n"
@@ -127,13 +130,36 @@ def test_compare_velocity_uses_each_source_params(tmp_path):
           product: velocity
           select: {group: all, ref: all}
           sources:
-            - {source: A, label: x, compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}}
-            - {source: B, label: y, compute: {dim: z, vdim: y, bin_width: 2.0, grouping: atoms, sym: false}}
+            - {source: A, label: A, compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}}
+            - {source: B, label: B, compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}}
 """,
         encoding="utf-8",
     )
     out = render_project(read_project(path), tmp_path / "out")
     assert (out / "figures" / "v.png").is_file()
+
+
+def test_compare_velocity_rejects_mixed_components(tmp_path):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        "schema_version: 1\nname: vbad\nsources:\n"
+        + _source("A")
+        + _source("B")
+        + """figures:
+  - name: v
+    panels:
+      - compare:
+          pack: velocity
+          product: velocity
+          select: {group: all, ref: all}
+          sources:
+            - {source: A, label: A, compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}}
+            - {source: B, label: B, compute: {dim: z, vdim: y, bin_width: 2.0, grouping: atoms, sym: false}}
+""",
+        encoding="utf-8",
+    )
+    with pytest.raises(ValidationError, match="dim/vdim"):
+        render_project(read_project(path), tmp_path / "out")
 
 
 def test_compare_legend_location(tmp_path, monkeypatch):
@@ -165,3 +191,25 @@ def test_compare_legend_location(tmp_path, monkeypatch):
     monkeypatch.setattr(chart, "legend", legend)
     render_project(read_project(path), tmp_path / "out")
     assert "lower left" in seen
+
+
+def test_compare_source_context_keeps_frame_dt():
+    from types import SimpleNamespace
+    from mdanal.figure.curves import _source_context
+    from mdanal.figure.model import PanelSource
+
+    from mdanal.plot.context import PlotContext
+    from mdanal.plot.plotutil import Labels
+
+    ctx = PlotContext(
+        params={}, meta={}, extras={}, start=0, stop=8, frame_dt_ps=0.001,
+        selection_frame=0, shift=(0.0, 0.0, 0.0), lang="en", dpi=60,
+        annotate=False, annotations=(), labels=Labels({}, {}),
+        figure_sizes={}, windows={},
+    )
+    source = PanelSource(
+        source="A", label="A", params={}, meta={}, tables={},
+        start=0, stop=8, frame_dt_ps=0.002, selection_frame=0,
+        shift=(0.0, 0.0, 0.0),
+    )
+    assert _source_context(ctx, source).frame_dt_ps == 0.002

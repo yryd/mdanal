@@ -1,8 +1,9 @@
-"""hbond 图包：一次 HBA，三个产品（count/type/lifetime）。"""
+"""hbond 图包：一次 HBA，四个产品（count/type/两个单曲线 lifetime）。"""
 
 from __future__ import annotations
 
 from dataclasses import replace
+from functools import partial
 
 from ...figure.curves import compare_curves as _compare_curves
 from ...figure.model import PanelProduct
@@ -10,9 +11,18 @@ from ...plot.plotutil import Labels
 from ...figure.plotting import common_labels
 from . import _lifetime
 from . import _type
-from ._impl import *  # noqa: F401,F403
-from ._impl import LABELS, PARAMS as _COUNT_PARAMS, SLOTS, run as _count_run
-from ._impl import panel_request as _count_request, panels as _count_panels, render_panel as _count_render
+from ._impl import (
+    COORDINATES,
+    GEOMETRY,
+    KERNEL_PBC,
+    LABELS,
+    SLOTS,
+    PARAMS as _COUNT_PARAMS,
+    run as _count_run,
+    panel_request as _count_request,
+    panels as _count_panels,
+    render_panel as _count_render,
+)
 from ._lifetime import panel_request as _life_request, render_panel as _life_render
 
 PARAMS = {**_COUNT_PARAMS, **_type.PARAMS, **_lifetime.PARAMS}
@@ -55,18 +65,39 @@ def _build_type(ctx, source):
     return _one(_type.panels(local, source.tables), "hbond-type")
 
 
-def _build_lifetime(ctx, source):
-    local = replace(ctx, labels=Labels(LIFETIME_LABELS.get(ctx.lang, {}), common_labels().get(ctx.lang, {})))
-    return _one(_lifetime.panels(local, source.tables), "hbond-lifetime")
+def _lifetime_ctx(ctx):
+    return replace(
+        ctx,
+        labels=Labels(LIFETIME_LABELS.get(ctx.lang, {}), common_labels().get(ctx.lang, {})),
+    )
+
+
+def _build_lifetime(criterion: str):
+    def build(ctx, source):
+        local = _lifetime_ctx(ctx)
+        return _one(
+            _lifetime.panels(local, source.tables, criterion),
+            f"hbond-lifetime-{criterion}",
+        )
+
+    return build
 
 
 def _compare_count(ctx, sources):
     return _compare_curves(ctx, sources, _count_request, _count_render)
 
 
-def _compare_lifetime(ctx, sources):
-    local = replace(ctx, labels=Labels(LIFETIME_LABELS.get(ctx.lang, {}), common_labels().get(ctx.lang, {})))
-    return _compare_curves(local, sources, _life_request, _life_render)
+def _compare_lifetime(criterion: str):
+    def compare(ctx, sources):
+        local = _lifetime_ctx(ctx)
+        return _compare_curves(
+            local,
+            sources,
+            partial(_life_request, criterion=criterion),
+            _life_render,
+        )
+
+    return compare
 
 
 PRODUCTS = {
@@ -86,12 +117,20 @@ PRODUCTS = {
         build=_build_type,
         help="按供体/受体类型统计；需要 naming",
     ),
-    "hbond-lifetime": PanelProduct(
-        id="hbond-lifetime",
+    "hbond-lifetime-continuous": PanelProduct(
+        id="hbond-lifetime-continuous",
         kind="curve",
-        requires=("hbond_lifetime", "hbond_lifetime_summary"),
-        build=_build_lifetime,
-        compare=_compare_lifetime,
-        help="连续/间歇寿命曲线",
+        requires=("hbond_lifetime",),
+        build=_build_lifetime("continuous"),
+        compare=_compare_lifetime("continuous"),
+        help="连续型氢键寿命曲线",
+    ),
+    "hbond-lifetime-intermittent": PanelProduct(
+        id="hbond-lifetime-intermittent",
+        kind="curve",
+        requires=("hbond_lifetime",),
+        build=_build_lifetime("intermittent"),
+        compare=_compare_lifetime("intermittent"),
+        help="间歇型氢键寿命曲线",
     ),
 }

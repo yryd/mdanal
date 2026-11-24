@@ -120,6 +120,7 @@ class FigurePack:
     validate_derive: Callable[[Mapping[str, Any]], None] | None = None
     coordinates: str = "any"
     geometry: Mapping[str, Any] = field(default_factory=dict)
+    kernel_pbc: tuple[bool, bool, bool] | str = "per_frame"
     note: str = ""
 
     @property

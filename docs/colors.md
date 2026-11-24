@@ -59,7 +59,8 @@ plot:
 |---|---|---|
 | `rdf` / `msd-raw` / `density-line` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
 | `hbond-count` | 否 | 曲线显式使用固定主色 |
-| `hbond-lifetime` | 否 | 两条曲线和标记显式使用主色/对照色 |
+| `hbond-lifetime-continuous` | 否 | 单曲线和标记显式使用主色 |
+| `hbond-lifetime-intermittent` | 否 | 单曲线和标记显式使用对照色 |
 | `hbond-type` | 否 | 条形图显式使用主色 |
 | `density-2d` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
 | `compare` | 是（`compare.plot.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
@@ -69,10 +70,10 @@ plot:
 
 | 名称 | 值 | 用在哪 |
 |---|---|---|
-| primary | `#4165c0` | hbond-count、hbond-lifetime、hbond-type、部分标记 |
-| secondary | `#c05040` | `hbond-lifetime` 的第二条曲线 |
+| primary | `#4165c0` | hbond-count、hbond-lifetime-continuous、hbond-type、部分标记 |
+| secondary | `#c05040` | `hbond-lifetime-intermittent` |
 
-`hbond-lifetime` 的第二色是 `#c05040`，**不是** `retro` 的第二色 `#e770a2`；这是当前实现的固定色，`palette` 不会改它。
+两个 lifetime 单曲线产品固定使用 primary/secondary，**不**跟随 `palette`。
 
 ## 4. 密度色标
 

@@ -58,6 +58,7 @@ LABELS = {
 }
 
 COORDINATES = "in_box"
+KERNEL_PBC = (True, True, True)
 GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 
@@ -122,7 +123,6 @@ def _blocked(
     coordination: np.ndarray,
     block_ps: float,
     frame_dt_ps: float,
-    window_end_ps: float | None = None,
 ) -> pd.DataFrame:
     n = len(frames)
     if n == 0:
@@ -155,7 +155,6 @@ def _blocked(
             )
         )
     rows = []
-    # 中间块中心
     for (start, stop), center, (c, q) in zip(blocks, centers, means):
         rows.append(
             (
@@ -168,33 +167,6 @@ def _blocked(
                 int(stop - start),
             )
         )
-    # 首尾：直接取第一块/最后一块的均值，平延到窗口端点
-    first = (
-        int(frames[0]),
-        float(time_ps[0]),
-        means[0][0],
-        means[0][1],
-        float(time_ps[0]),
-        float(time_ps[blocks[0][1] - 1]),
-        int(blocks[0][1] - blocks[0][0]),
-    )
-    end_ps = float(time_ps[-1]) if window_end_ps is None else float(window_end_ps)
-    last = (
-        int(frames[-1]),
-        end_ps,
-        means[-1][0],
-        means[-1][1],
-        float(time_ps[blocks[-1][0]]),
-        end_ps,
-        int(blocks[-1][1] - blocks[-1][0]),
-    )
-    if n == 1:
-        rows = [first]
-    else:
-        if not np.isclose(centers[0], time_ps[0]):
-            rows.insert(0, first)
-        if not np.isclose(centers[-1], end_ps):
-            rows.append(last)
     return pd.DataFrame(
         rows,
         columns=[
@@ -246,11 +218,6 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             coords.append(2.0 * count / len(first) if len(first) > 1 else 0.0)
         else:
             coords.append(count / len(first))
-    window_end_ps = (
-        float(ctx.stop - ctx.start) * float(ctx.frame_dt_ps)
-        if origin == "window"
-        else None
-    )
     table = _blocked(
         frames,
         time_ps,
@@ -258,18 +225,34 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         np.asarray(coords, dtype=float),
         block_ps,
         float(ctx.frame_dt_ps),
-        window_end_ps=window_end_ps,
     )
     return {"contact": table}
 
 
 def _series(ctx, table, metric: str) -> Series:
+    x = table["time_ps"].to_numpy(dtype=float) / 1000.0
+    y = table[metric].to_numpy(dtype=float)
+    if len(x):
+        origin = str(ctx.params.get("time_origin", "window"))
+        frame_dt = float(ctx.frame_dt_ps)
+        if origin == "window":
+            start_ns = 0.0
+            end_ns = float(ctx.stop - ctx.start) * frame_dt / 1000.0
+        else:
+            start_ns = float(ctx.start) * frame_dt / 1000.0
+            end_ns = float(ctx.stop) * frame_dt / 1000.0
+        if x[0] > start_ns:
+            x = np.concatenate(([start_ns], x))
+            y = np.concatenate(([y[0]], y))
+        if x[-1] < end_ns:
+            x = np.concatenate((x, [end_ns]))
+            y = np.concatenate((y, [y[-1]]))
     return Series(
         name=metric,
         curves=[
             Curve(
-                x=table["time_ps"].to_numpy(dtype=float) / 1000.0,
-                y=table[metric].to_numpy(dtype=float),
+                x=x,
+                y=y,
                 label=ctx.label(metric),
             )
         ],
@@ -295,9 +278,12 @@ def _curve_xlim(ctx, request: PanelRequest):
     xs = [curve.x for series in request.series for curve in series.curves]
     if not xs:
         return None
+    values = np.concatenate(xs)
+    if (request.metadata or {}).get("compare"):
+        # compare 的各来源长度/采样可以不同；默认范围必须覆盖全部曲线。
+        return (float(values.min()), float(values.max()))
     if str(ctx.params.get("time_origin", "window")) == "window":
         return (0.0, float(ctx.stop - ctx.start) * float(ctx.frame_dt_ps) / 1000.0)
-    values = np.concatenate(xs)
     return (float(values.min()), float(values.max()))
 
 
@@ -313,6 +299,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 curve.y,
                 lw=curve.linewidth,
                 color=curve.color,
+                ls=curve.linestyle,
                 label=curve.label if show_legend else None,
             )
         if show_legend:

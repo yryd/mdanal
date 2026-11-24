@@ -66,3 +66,29 @@ def test_geometry_meta_marks_nonperiodic_unsupported():
     meta = geometry_meta(ctx)
     assert meta["kernel_pbc"] == [True, False, True]
     assert meta["geometry_status"] == "unsupported_geometry"
+
+
+def test_geometry_meta_uses_window_pbc_and_actual_kernel():
+    from types import SimpleNamespace
+
+    window = SimpleNamespace(
+        pbc_all=(True, False, True),
+        pbc_changed=True,
+        cell_changed=False,
+        origin_changed=False,
+        full_periodic=False,
+    )
+    ctx = SimpleNamespace(
+        geometry=SimpleNamespace(pbc=(True, True, True)),
+        geometry_window=window,
+    )
+    meta = geometry_meta(
+        ctx,
+        kernel_pbc="per_frame",
+        geometry_status="unsupported_geometry",
+    )
+    assert meta["input_pbc"] == [True, False, True]
+    assert meta["input_pbc_reference"] == [True, True, True]
+    assert meta["kernel_pbc"] == "per_frame"
+    assert meta["pbc_changed"] is True
+    assert meta["geometry_status"] == "unsupported_geometry"

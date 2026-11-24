@@ -135,27 +135,39 @@ def compute_context(
         if runtime.cfg.geometry is not None
         else None
     )
+    geometry_window = (
+        runtime.cfg.geometry.window(start, stop)
+        if runtime.cfg.geometry is not None
+        else None
+    )
     input_pbc = tuple(
-        bool(value) for value in (input_geometry.pbc if input_geometry else (True, True, True))
+        bool(value)
+        for value in (
+            geometry_window.pbc_all
+            if geometry_window is not None
+            else (input_geometry.pbc if input_geometry else (True, True, True))
+        )
     )
     periodicity = str((pack.geometry or {}).get("periodicity") or "any").lower()
     if periodicity == "full":
-        kernel_pbc = (True, True, True)
         status = "supported" if all(input_pbc) else "unsupported_geometry"
     elif periodicity == "xy":
-        kernel_pbc = (True, True, False)
         status = "supported" if (input_pbc[0] and input_pbc[1]) else "unsupported_geometry"
     else:
-        kernel_pbc = input_pbc
         status = "supported"
+    if geometry_window is not None and geometry_window.pbc_changed:
+        status = "unsupported_geometry"
+        warnings.append(
+            "分析窗口内边界类型发生变化；结果不能与固定 PBC 的同几何结果直接比较"
+        )
     meta = geometry_meta(
-        SimpleNamespace(geometry=input_geometry),
-        kernel_pbc=kernel_pbc,
+        SimpleNamespace(geometry=input_geometry, geometry_window=geometry_window),
+        kernel_pbc=getattr(pack, "kernel_pbc", "per_frame"),
         geometry_status=status,
     )
     if status != "supported":
         warnings.append(
-            f"{pack.name} 的计算内核按 periodicity={periodicity} 处理；"
+            f"{pack.name} 的计算内核 kernel_pbc={pack.kernel_pbc!r}；"
             f"输入 PBC={list(input_pbc)}，结果不能与严格同几何结果直接比较"
         )
     return ComputeContext(
@@ -169,11 +181,7 @@ def compute_context(
         source=runtime.name,
         selection_frame=start,
         geometry=input_geometry,
-        geometry_window=(
-            runtime.cfg.geometry.window(start, stop)
-            if runtime.cfg.geometry is not None
-            else None
-        ),
+        geometry_window=geometry_window,
         warnings=warnings,
         time_notes=tuple(runtime.cfg.time_notes),
         seam_notes=tuple(runtime.cfg.seam_notes),

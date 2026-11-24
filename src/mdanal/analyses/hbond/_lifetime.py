@@ -87,12 +87,6 @@ COORDINATES = "in_box"
 GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 
-def _selection(group) -> str:
-    """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
-    indices = np.asarray(group.atoms.indices, dtype=int) + 1
-    return "bynum " + " ".join(str(index) for index in indices)
-
-
 def run(ctx) -> dict[str, pd.DataFrame]:
     tau_max_ps = float(ctx.params["tau_max_ps"])
     intermittency = int(ctx.params["intermittency"])
@@ -194,75 +188,86 @@ def meta(ctx, tables) -> dict:
     }
 
 
-def build_series(ctx, tables) -> list[Series]:
+def _criterion(value: str) -> tuple[str, str, str]:
+    """返回 (列名, 标签键, 元数据 tau 键)。"""
+    if value == "continuous":
+        return "continuous", "cont", "tau_cont"
+    if value == "intermittent":
+        return "intermittent", "inter", "tau_inter"
+    raise ValidationError(
+        f"hbond lifetime criterion={value!r} 不是 continuous/intermittent"
+    )
+
+
+def build_curve(ctx, tables, criterion: str = "continuous") -> Curve:
+    """一个 criterion 恰好一条单曲线。"""
+    column, _, _ = _criterion(criterion)
     table = tables["hbond_lifetime"]
     info = ctx.extras.get("hbond_lifetime", {})
     intermittency = int(info.get("intermittency", 0))
     lag = table["lag_ps"].to_numpy(dtype=float)
-    return [
-        Series(
-            name="continuous",
-            curves=[
-                Curve(
-                    x=lag,
-                    y=table["continuous"].to_numpy(dtype=float),
-                    label=ctx.label("cont"),
-                    color=chart.COLORS["primary"],
-                    linewidth=1.3,
-                )
-            ],
-            label=ctx.label("cont"),
-        ),
-        Series(
-            name="intermittent",
-            curves=[
-                Curve(
-                    x=lag,
-                    y=table["intermittent"].to_numpy(dtype=float),
-                    label=ctx.label("inter", n=intermittency),
-                    color=chart.COLORS["secondary"],
-                    linestyle="--",
-                    linewidth=1.3,
-                )
-            ],
-            label=ctx.label("inter", n=intermittency),
-        ),
-    ]
+    color = chart.COLORS["primary"] if criterion == "continuous" else chart.COLORS["secondary"]
+    linestyle = "-" if criterion == "continuous" else "--"
+    label = (
+        ctx.label("cont")
+        if criterion == "continuous"
+        else ctx.label("inter", n=intermittency)
+    )
+    return Curve(
+        x=lag,
+        y=table[column].to_numpy(dtype=float),
+        label=label,
+        color=color,
+        linestyle=linestyle,
+        linewidth=1.3,
+    )
 
 
-def panel_request(ctx, tables) -> PanelRequest:
+def build_series(ctx, tables, criterion: str = "continuous") -> list[Series]:
+    curve = build_curve(ctx, tables, criterion)
+    return [Series(name=criterion, curves=[curve], label=curve.label)]
+
+
+def panel_request(ctx, tables, criterion: str = "continuous") -> PanelRequest:
     return PanelRequest(
-        recipe="hbond_lifetime",
-        series=build_series(ctx, tables),
+        recipe=f"hbond_lifetime_{criterion}",
+        series=build_series(ctx, tables, criterion),
         title=ctx.label("title"),
         xlabel=ctx.label("x"),
         ylabel=ctx.label("y"),
-        options={"legend": True, "native": True},
+        options={"legend": False, "native": True},
     )
 
 
 def render_panel(ctx, request: PanelRequest) -> Panel:
     info = ctx.extras.get("hbond_lifetime", {})
     native = bool(request.options.get("native"))
+    curves = [curve for series in request.series for curve in series.curves]
+    criterion = request.series[0].name
+    _, _, tau_key = _criterion(criterion)
+    color = curves[0].color
+    show_legend = bool(request.options.get("legend")) or len(curves) > 1
 
     def draw(ax):
-        curves = [curve for series in request.series for curve in series.curves]
-        show_legend = bool(request.options.get("legend")) or len(curves) > 1
-        lag = None
-        for series in request.series:
-            for curve in series.curves:
-                lag = curve.x
-                chart.line(
-                    ax,
-                    curve.x,
-                    curve.y,
-                    lw=curve.linewidth,
-                    color=curve.color,
-                    ls=curve.linestyle,
-                    label=curve.label if show_legend else None,
-                )
-        if native and lag is not None and len(lag):
-            chart.refline(ax, LEVEL, ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=chart.COLORS["guide"])
+        for curve in curves:
+            chart.line(
+                ax,
+                curve.x,
+                curve.y,
+                lw=curve.linewidth,
+                color=curve.color,
+                ls=curve.linestyle,
+                label=curve.label if show_legend else None,
+            )
+        if native and len(curves[0].x):
+            lag = curves[0].x
+            chart.refline(
+                ax,
+                LEVEL,
+                ls=":",
+                lw=chart.ANNOTATION_LINEWIDTH,
+                color=chart.COLORS["guide"],
+            )
             chart.text(
                 ax,
                 lag[0] + 0.02 * (lag[-1] - lag[0]),
@@ -273,17 +278,23 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 fontsize=chart.ANNOTATION_FONTSIZE,
                 color=chart.COLORS["label"],
             )
-            for key, color, height in (
-                ("tau_cont", chart.COLORS["primary"], 0.66),
-                ("tau_inter", chart.COLORS["secondary"], 0.46),
-            ):
-                value = info.get(key)
-                if value is None or not np.isfinite(value):
-                    continue
-                chart.vline(ax, value, ls=":", lw=chart.ANNOTATION_LINEWIDTH, color=color)
+            value = info.get(tau_key)
+            if value is not None and np.isfinite(value):
+                chart.vline(
+                    ax,
+                    value,
+                    ls=":",
+                    lw=chart.ANNOTATION_LINEWIDTH,
+                    color=color,
+                )
                 chart.point_label(
-                    ax, value, height, f"{value:.2f} ps",
-                    offset=(3, 0), fontsize=chart.ANNOTATION_FONTSIZE, color=color,
+                    ax,
+                    value,
+                    0.66 if criterion == "continuous" else 0.46,
+                    f"{value:.2f} ps",
+                    offset=(3, 0),
+                    fontsize=chart.ANNOTATION_FONTSIZE,
+                    color=color,
                 )
         if show_legend:
             chart.legend(ax, loc=plotutil.legend_loc(ctx))
@@ -294,10 +305,8 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
 
     xlim = None
     ylim = (0.0, 1.02) if native else None
-    if native and request.series:
-        first_curve = request.series[0].curves[0]
-        if len(first_curve.x):
-            xlim = (0.0, float(first_curve.x[-1]))
+    if native and len(curves[0].x):
+        xlim = (0.0, float(curves[0].x[-1]))
     return Panel(
         name="hbond_lifetime",
         draw=draw,
@@ -311,10 +320,9 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     )
 
 
-def panels(ctx, tables) -> list[Panel]:
-    request = panel_request(ctx, tables)
+def panels(ctx, tables, criterion: str = "continuous") -> list[Panel]:
+    request = panel_request(ctx, tables, criterion)
     return [render_panel(ctx, request)]
-
 
 
 def _crossing(lag: np.ndarray, curve: np.ndarray, level: float = LEVEL) -> float:

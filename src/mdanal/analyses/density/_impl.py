@@ -305,6 +305,7 @@ def _panel_label(ctx, info: dict, n_frames: int, n_directions: int) -> str:
     return title
 
 
+KERNEL_PBC = "reference_frame"
 GEOMETRY = {"cell": "orthorhombic", "periodicity": "xy"}
 
 

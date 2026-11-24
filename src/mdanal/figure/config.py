@@ -126,10 +126,6 @@ def _panel_plot(value: Any, where: str) -> dict[str, Any]:
     return parsed
 
 
-def parse_panel_plot(value: Any, where: str) -> dict[str, Any]:
-    return _panel_plot(value, where)
-
-
 def _panel(
     value: Any, where: str, sources: Mapping[str, Any]
 ) -> PanelRef:

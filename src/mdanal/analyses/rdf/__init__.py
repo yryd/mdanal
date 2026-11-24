@@ -4,8 +4,10 @@ from __future__ import annotations
 
 from ...figure.curves import compare_curves as _compare_curves
 from ...figure.model import PanelProduct
-from ._impl import *  # noqa: F401,F403
 from ._impl import (
+    COORDINATES,
+    GEOMETRY,
+    KERNEL_PBC,
     LABELS,
     PARAMS,
     SLOTS,

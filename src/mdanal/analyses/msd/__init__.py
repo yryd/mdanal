@@ -23,6 +23,9 @@ from ...figure.curves import compare_curves as _compare_curves
 from ...figure.model import PanelProduct
 
 
+KERNEL_PBC = "per_frame"
+
+
 def derive_tables(ctx, tables, spec):
     """从已有 MSD 基础表重算派生表；不读轨迹。"""
     validate_derive_spec(dict(spec))
@@ -40,7 +43,7 @@ def _one_panel(builder):
 
 
 def compute(ctx):
-    """新 figure-first compute：只算基础 MSD 表。"""
+    """只算基础 MSD 表。"""
     return _compute_run(ctx)
 
 
@@ -48,7 +51,7 @@ validate_derive = validate_derive_spec
 
 
 def derive(ctx, tables, spec):
-    """新 figure-first derive：由 product 的 derive 配置调用。"""
+    """由 product 的 derive 配置调用。"""
     return derive_tables(ctx, tables, spec)
 
 

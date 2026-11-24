@@ -92,9 +92,17 @@ def test_two_point_free_fit_has_no_stderr():
     out = derive_run(
         SimpleNamespace(params={"msd_type": "xyz"}),
         {"msd": table},
-        {"fit": {"intercept": "free"}},
+        {"fit": {"window_ns": [0.0, 1.0], "intercept": "free"}},
     )
     summary = out["msd_fit_summary"].iloc[0]
     assert summary["n_points"] == 2
     assert summary["dof"] == 0
     assert np.isnan(summary["D_stderr_A2_per_ps"])
+
+
+def test_fit_requires_explicit_window():
+    from mdanal.analyses.msd.derive import validate_spec
+    import pytest
+
+    with pytest.raises(ValueError, match="window_ns"):
+        validate_spec({"fit": {}})

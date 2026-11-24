@@ -51,15 +51,10 @@ COLUMN_LABELS = {
 
 COORDINATES = "in_box"
 
+KERNEL_PBC = (True, True, True)
 GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 OCCUPANCY_COLUMNS = ("donor", "hydrogen", "acceptor", "frames_present", "occupancy")
-
-
-def _selection(group) -> str:
-    """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
-    indices = np.asarray(group.atoms.indices, dtype=int) + 1
-    return "bynum " + " ".join(str(index) for index in indices)
 
 
 def run(ctx) -> dict[str, pd.DataFrame]:

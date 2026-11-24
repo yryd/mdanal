@@ -58,7 +58,7 @@ figures:
   - name: hbond_lifetime
     layout: {{ncols: 1}}
     panels:
-      - {{source: tiny, pack: hbond, product: hbond-lifetime, select: {{donor: o13, hydrogen: oh, acceptor: o13}}, compute: {{d_a_cutoff: 3.5, d_h_a_angle_cutoff: 150, tau_max_ps: 20, intermittency: 1, window_step: 1}}}}
+      - {{source: tiny, pack: hbond, product: hbond-lifetime-continuous, select: {{donor: o13, hydrogen: oh, acceptor: o13}}, compute: {{d_a_cutoff: 3.5, d_h_a_angle_cutoff: 150, tau_max_ps: 20, intermittency: 1, window_step: 1}}}}
   - name: msd
     layout: {{ncols: 1}}
     panels:

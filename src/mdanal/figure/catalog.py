@@ -169,6 +169,7 @@ def load_pack(name: str) -> FigurePack:
         validate_derive=validate_derive if callable(validate_derive) else None,
         coordinates=str(getattr(module, "COORDINATES", "any")),
         geometry=dict(getattr(module, "GEOMETRY", {}) or {}),
+        kernel_pbc=getattr(module, "KERNEL_PBC", "per_frame"),
         note=str(getattr(module, "NOTE", "") or ""),
     )
     payload = _read_manifest(path)
@@ -200,6 +201,7 @@ def pack_payload(pack: FigurePack) -> dict[str, Any]:
         "module": pack.module,
         "coordinates": pack.coordinates,
         "geometry": dict(pack.geometry),
+        "kernel_pbc": pack.kernel_pbc,
         "slots": list(pack.slots),
         "params": {
             key: {

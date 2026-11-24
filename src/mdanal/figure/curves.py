@@ -17,6 +17,7 @@ def _source_context(ctx, source):
         extras=extras,
         start=int(source.start),
         stop=int(source.stop),
+        frame_dt_ps=float(source.frame_dt_ps),
         selection_frame=int(source.selection_frame),
         shift=tuple(source.shift),
     )
@@ -32,11 +33,12 @@ def compare_curves(
     merged = []
     for source_index, source in enumerate(sources):
         request = panel_request(_source_context(ctx, source), source.tables)
+        source_curve_count = sum(len(series.curves) for series in request.series)
         for series in request.series:
             curves = []
             for curve in series.curves:
                 label = source.label
-                if curve.label and len(series.curves) > 1:
+                if curve.label and source_curve_count > 1:
                     label = f"{source.label} · {curve.label}"
                 linestyle = curve.linestyle
                 if len(sources) > 1 and source_index > 0 and curve.linestyle == "-":

@@ -149,6 +149,7 @@ def _unit_vectors(
 
 COORDINATES = "in_box"
 
+KERNEL_PBC = "reference_frame"
 GEOMETRY = {"cell": "orthorhombic", "periodicity": "xy"}
 
 

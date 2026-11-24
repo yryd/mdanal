@@ -76,7 +76,9 @@ source.label       # compare 来源标签
 ## 最小可运行配置
 
 ```yaml
-# figures.yaml
+# figures.yaml（先用内置 density 验证运行链；换自定义包时替换 pack/product）
+schema_version: 1
+name: demo
 sources:
   A:
     topology: tests/fixtures/tiny/data.lmp
@@ -87,9 +89,11 @@ figures:
   - name: demo
     panels:
       - source: A
-        pack: mypack
-        product: my-product
+        pack: density
+        product: density-line
         select: {group: all}
+        compute: {delta: 1.0, binsize: 0.5}
+        plot: {axis: z}
 ```
 
 包内必须提供 `pack.json`、`PRODUCTS`、`SLOTS`、`PARAMS`、`LABELS`；`compute` 返回表，产品 `build` 返回一个 Panel。用 `mdanal check-pack mypack` 和 `mdanal check --config figures.yaml` 验证。

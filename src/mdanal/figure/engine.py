@@ -70,6 +70,23 @@ def _table_record(path: Path, root: Path) -> dict[str, str]:
     }
 
 
+def _table_records(
+    tables: dict[str, Any],
+    job: _Job,
+    derived: dict[str, Any],
+    derive_dir: Path | None,
+    out: Path,
+) -> dict[str, dict[str, str]]:
+    """记录实际传给视图的全部表；requires 只是最低计算需求。"""
+    records: dict[str, dict[str, str]] = {}
+    for name in tables:
+        directory = derive_dir if name in derived and derive_dir is not None else job.data_dir
+        path = directory / "tables" / f"{name}.csv"
+        if path.is_file():
+            records[str(name)] = _table_record(path, out)
+    return records
+
+
 def _figure_payload(spec: FigureSpec, panels: list[dict[str, Any]]) -> dict[str, Any]:
     return {
         "schema_version": 1,
@@ -182,7 +199,7 @@ def _validate_item(item, packs, sources) -> list[str]:
         if product.kind != "curve" or product.curve_request is None:
             problems.append(
                 f"{item.pack}/{item.product} 不是可 stack 的曲线产品；"
-                "请改用 contact-curve 或其他提供 curve_request 的产品"
+                "请改用提供 curve_request 的曲线产品（例如 contact-count/contact-coordination）"
             )
     elif product.kind != "curve" or product.compare is None:
         problems.append(
@@ -227,18 +244,29 @@ def check_warnings(project: FigureProject, packs=None) -> list[str]:
         if cfg is None or pack is None or cfg.geometry is None:
             continue
         periodicity = str((pack.geometry or {}).get("periodicity") or "any").lower()
-        start = (cfg.frames[0] if cfg.frames else 0) + (
-            ref.section[0] if ref.section else 0
+        base_start = cfg.frames[0] if cfg.frames else 0
+        base_stop = cfg.frames[1] if cfg.frames else len(cfg.geometry)
+        start = base_start + (ref.section[0] if ref.section else 0)
+        stop = (
+            base_start + ref.section[1]
+            if ref.section
+            else base_stop
         )
-        pbc = tuple(bool(value) for value in cfg.geometry.frame(start).pbc)
+        try:
+            window = cfg.geometry.window(start, stop)
+        except Exception:
+            continue
+        pbc = tuple(bool(value) for value in window.pbc_all)
         incompatible = (
             (periodicity == "full" and not all(pbc))
             or (periodicity == "xy" and not (pbc[0] and pbc[1]))
+            or window.pbc_changed
         )
         if incompatible:
             warnings.append(
-                f"{source}/{ref.pack}/{ref.product}: 输入 PBC={list(pbc)}，"
-                f"内核 periodicity={periodicity}；结果只作定性参考"
+                f"{source}/{ref.pack}/{ref.product}: 窗口 PBC={list(pbc)}，"
+                f"kernel={pack.kernel_pbc!r}，periodicity={periodicity}；"
+                "结果只作定性参考"
             )
     return warnings
 
@@ -503,12 +531,7 @@ def _build_curve_sources(
             shift=source_obj.shift,
         )
         source_objs.append(source_obj)
-        table_records = {}
-        for name in product.requires:
-            directory = derive_dir if name in derived else job.data_dir
-            table_records[name] = _table_record(
-                directory / "tables" / f"{name}.csv", out
-            )
+        table_records = _table_records(tables, job, derived, derive_dir, out)
         records.append(
             {
                 "source": entry.source,
@@ -573,12 +596,7 @@ def _build_item(
         )
         panel = product.build(ctx, source)
         apply_panel_plot(panel, item.plot, lang)
-        table_records = {}
-        for name in product.requires:
-            directory = derive_dir if name in derived else job.data_dir
-            table_records[name] = _table_record(
-                directory / "tables" / f"{name}.csv", out
-            )
+        table_records = _table_records(tables, job, derived, derive_dir, out)
         return panel, {
             "kind": "panel",
             "source": item.source,

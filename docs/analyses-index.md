@@ -2,8 +2,9 @@
 
 | 图包 | 产品 | 说明 |
 |---|---|---|
+| [contact](../src/mdanal/analyses/contact/note.md) | `contact-count`, `contact-coordination` | 分子接触数/配位数 |
 | [density](../src/mdanal/analyses/density/note.md) | `density-2d`, `density-line` | 2D 数密度投影 + 质量/电荷线密度 |
-| [hbond](../src/mdanal/analyses/hbond/note.md) | `hbond-count`, `hbond-type`, `hbond-lifetime` | 一次 HBA，三个产品 |
+| [hbond](../src/mdanal/analyses/hbond/note.md) | `hbond-count`, `hbond-type`, `hbond-lifetime-continuous`, `hbond-lifetime-intermittent` | 一次 HBA，四个产品 |
 | [msd](../src/mdanal/analyses/msd/note.md) | `msd-raw`, `msd-fit`, `msd-rdc` | MSD 与派生 |
 | [rdf](../src/mdanal/analyses/rdf/note.md) | `rdf` | 径向分布 |
 | [velocity](../src/mdanal/analyses/velocity/note.md) | `velocity` | 速度剖面 |

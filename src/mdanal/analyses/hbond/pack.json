@@ -24,11 +24,18 @@
       "compare": false
     },
     {
-      "id": "hbond-lifetime",
+      "id": "hbond-lifetime-continuous",
       "kind": "curve",
       "requires": [
-        "hbond_lifetime",
-        "hbond_lifetime_summary"
+        "hbond_lifetime"
+      ],
+      "compare": true
+    },
+    {
+      "id": "hbond-lifetime-intermittent",
+      "kind": "curve",
+      "requires": [
+        "hbond_lifetime"
       ],
       "compare": true
     }

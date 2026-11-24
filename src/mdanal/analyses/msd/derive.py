@@ -52,7 +52,9 @@ def validate_spec(spec: dict) -> None:
                 "允许 ['window_ns', 'intercept']"
             )
         value = fit.get("window_ns")
-        if value is not None and (
+        if value is None:
+            raise ValueError("derive.fit.window_ns 是必需的，必须显式给 [起, 止]")
+        if (
             not isinstance(value, (list, tuple))
             or len(value) != 2
             or any(
@@ -75,7 +77,7 @@ def validate_spec(spec: dict) -> None:
 def _window(spec: dict, t_ns: np.ndarray) -> tuple[float, float]:
     value = spec.get("window_ns")
     if value is None:
-        return float(t_ns[0]), float(t_ns[-1])
+        raise ValueError("derive.fit.window_ns 是必需的，必须显式给 [起, 止]")
     if (
         not isinstance(value, (list, tuple))
         or len(value) != 2

@@ -7,6 +7,7 @@ import pytest
 from mdanal.figure.config import read_project
 from mdanal.figure.engine import render_project
 from mdanal.figure.replot import replot_from
+from mdanal.figure.overrides import read_overrides
 import mdanal.figure.replot as replot_module
 
 TINY = Path(__file__).resolve().parents[1] / "fixtures" / "tiny"
@@ -107,7 +108,6 @@ figures:
 """,
         encoding="utf-8",
     )
-    from mdanal.figure.overrides import read_overrides
     captured = {}
     original = replot_module.chart.save
 
@@ -132,3 +132,92 @@ figures:
     assert ax.lines[0].get_linewidth() == pytest.approx(7.0)
     assert ax.lines[0].get_color() == "#00aa00"
     assert ax.texts
+
+
+def test_rdc_replot_keeps_optional_fit_summary(tmp_path, monkeypatch):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        f"""schema_version: 1
+name: rdc
+sources:
+  A:
+    topology: {TINY / 'data.lmp'}
+    trajectory: {TINY / 'run.lammpstrj'}
+    timestep_fs: 1.0
+    dump_every: 5000
+    frames: [0, 8]
+    groups: {{all: all}}
+figures:
+  - name: rdc
+    panels:
+      - source: A
+        pack: msd
+        product: msd-rdc
+        select: {{group: all}}
+        compute: {{msd_type: xyz, grouping: residues}}
+        derive: {{fit: {{window_ns: [0.0, 0.01]}}, rdc: {{}}}}
+""",
+        encoding="utf-8",
+    )
+    out = render_project(read_project(path), tmp_path / "out")
+    seen = {}
+
+    def save(fig, target, dpi):
+        seen["fig"] = fig
+        return original(fig, target, dpi)
+
+    original = replot_module.chart.save
+    monkeypatch.setattr(replot_module.chart, "save", save)
+    replot_from(out, tmp_path / "replot")
+    ax = seen["fig"].axes[0]
+    labels = {line.get_label() for line in ax.lines}
+    assert "D" in labels
+    assert len(ax.lines) >= 2
+    assert len(ax.patches) >= 1
+
+
+def test_replot_window_override_keeps_other_axes(tmp_path, monkeypatch):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        f"""schema_version: 1
+name: window
+sources:
+  A:
+    topology: {TINY / 'data.lmp'}
+    trajectory: {TINY / 'run.lammpstrj'}
+    frames: [0, 8]
+    groups: {{all: all}}
+figures:
+  - name: f
+    panels:
+      - source: A
+        pack: msd
+        product: msd-raw
+        select: {{group: all}}
+        plot: {{window: {{y: [0, 20]}}}}
+""",
+        encoding="utf-8",
+    )
+    out = render_project(read_project(path), tmp_path / "out")
+    override = tmp_path / "plot.yaml"
+    override.write_text(
+        """schema_version: 1
+figures:
+  f:
+    panels:
+      - window: {x: [0.0, 0.01]}
+""",
+        encoding="utf-8",
+    )
+    seen = {}
+    original = replot_module.chart.save
+
+    def save(fig, target, dpi):
+        seen["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(replot_module.chart, "save", save)
+    replot_from(out, tmp_path / "replot", overrides=read_overrides(override))
+    ax = seen["fig"].axes[0]
+    assert ax.get_xlim()[1] == pytest.approx(0.01)
+    assert ax.get_ylim() == pytest.approx((0.0, 20.0))

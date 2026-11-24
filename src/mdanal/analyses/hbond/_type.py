@@ -59,12 +59,6 @@ COORDINATES = "in_box"
 GEOMETRY = {"cell": "any", "periodicity": "full"}
 
 
-def _selection(group) -> str:
-    """把已解析的原子组变成固定的 bynum 选择串，避免按库自己的坐标系重选。"""
-    indices = np.asarray(group.atoms.indices, dtype=int) + 1
-    return "bynum " + " ".join(str(index) for index in indices)
-
-
 def run(ctx) -> dict[str, pd.DataFrame]:
     if not hasattr(ctx.universe.atoms, "resnames"):
         raise ValidationError(

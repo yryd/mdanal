@@ -9,16 +9,16 @@
 
 ## 输入与前提
 
-槽位 `group`；`delta` 为 3D 网格目标边长，`binsize` 为线密度直方图宽度。固定正交盒；变盒时只用首帧并警告。
+槽位 `group`；`delta` 为 3D 网格目标边长，`binsize` 为线密度直方图宽度。固定正交盒；变盒/PBC 变化按整窗检查并警告。
 
 ## 一次计算
 
-`density` 的 compute 一次产出：
+`density` 的 compute 按请求产出：
 
-- `density_xy`、`density_xz`、`density_yz`（三个投影）；
-- `lineardensity_x/y/z`（三条线密度）。
+- 请求 `density-2d` 时计算三个投影：`density_xy`、`density_xz`、`density_yz`；
+- 请求 `density-line` 时计算三条线密度：`lineardensity_x/y/z`。
 
-切换 `plot.plane`/`plot.axis` 不重算 3D 网格。
+切换 `plot.plane`/`plot.axis` 在已有表上不重算；同一张图同时请求两类产品时共享一次计算。
 
 ## 输出
 

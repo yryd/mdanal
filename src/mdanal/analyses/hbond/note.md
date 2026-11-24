@@ -2,11 +2,12 @@
 
 ## 图包目的
 
-一个 `hbond` 图包，三个产品共享同一次 HBA 计算：
+一个 `hbond` 图包，四个产品共享同一次 HBA 计算：
 
 - `hbond-count`：每帧氢键数与汇总/占有率；
 - `hbond-type`：按供体/受体类型统计，需要 `naming`；
-- `hbond-lifetime`：连续/间歇寿命曲线。
+- `hbond-lifetime-continuous`：连续型寿命曲线；
+- `hbond-lifetime-intermittent`：间歇型寿命曲线。
 
 ## 输入与前提
 
@@ -20,4 +21,4 @@
 
 ## 注意
 
-一次 compute 只构造一次 HBA analysis；三个产品共享缓存。`hbond-type` 需要 source 配置 `naming`。`hbond-count` 和 `hbond-lifetime` 是曲线产品，可 compare；`hbond-type` 是 bars，不可 compare。
+一次 compute 只构造一次 HBA analysis；四个产品共享缓存。`hbond-type` 需要 source 配置 `naming`。`hbond-count`、两个 lifetime 单曲线产品都可 compare；`hbond-type` 是 bars，不可 compare。两个 lifetime 产品不提供 `stack`。

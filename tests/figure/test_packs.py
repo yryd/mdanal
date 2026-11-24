@@ -8,7 +8,7 @@ def test_builtin_packs_and_products():
     assert set(packs) == {"contact", "density", "hbond", "msd", "rdf", "velocity"}
     assert set(packs["contact"].products) == {"contact-count", "contact-coordination"}
     assert set(packs["density"].products) == {"density-2d", "density-line"}
-    assert set(packs["hbond"].products) == {"hbond-count", "hbond-type", "hbond-lifetime"}
+    assert set(packs["hbond"].products) == {"hbond-count", "hbond-type", "hbond-lifetime-continuous", "hbond-lifetime-intermittent"}
     assert set(packs["msd"].products) == {"msd-raw", "msd-fit", "msd-rdc"}
 
 

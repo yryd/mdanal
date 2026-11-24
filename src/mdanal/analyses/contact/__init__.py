@@ -7,6 +7,7 @@ from ...figure.model import PanelProduct
 from ._impl import (
     COORDINATES,
     GEOMETRY,
+    KERNEL_PBC,
     LABELS,
     PARAMS,
     SLOTS,

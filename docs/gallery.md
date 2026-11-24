@@ -16,11 +16,11 @@
 |---|---|
 | ![](assets/gallery/hbond-count.png) | ![](assets/gallery/hbond-type.png) |
 
-| 寿命 |
-|---|
-| ![](assets/gallery/hbond-lifetime.png) |
+| 连续型寿命 | 间歇型寿命 |
+|---|---|
+| ![](assets/gallery/hbond-lifetime-continuous.png) | ![](assets/gallery/hbond-lifetime-intermittent.png) |
 
-三个产品共享一次 HBA；`hbond-type` 需要 `naming`。
+四个产品共享一次 HBA；两个 lifetime 产品各自单曲线，可分别 compare；`hbond-type` 需要 `naming`。
 
 ## MSD
 

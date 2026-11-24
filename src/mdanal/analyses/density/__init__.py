@@ -9,8 +9,10 @@ from ...figure.model import PanelProduct
 from . import _line
 from ...plot.plotutil import Labels
 from ...figure.plotting import common_labels
-from ._impl import *  # noqa: F401,F403
 from ._impl import (
+    COORDINATES,
+    GEOMETRY,
+    KERNEL_PBC,
     LABELS,
     PARAMS as _DENSITY_PARAMS,
     SLOTS,
@@ -18,7 +20,7 @@ from ._impl import (
     run as _density_run,
 )
 
-# 合并原 lineardensity 的参数；line 产品用 binsize。
+# density-line 复用 binsize 参数。
 PARAMS = {
     **_DENSITY_PARAMS,
     "binsize": _line.PARAMS["binsize"],
@@ -137,4 +139,5 @@ __all__ = [
     "compute",
     "COORDINATES",
     "GEOMETRY",
+    "KERNEL_PBC",
 ]
