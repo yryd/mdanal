@@ -95,7 +95,6 @@ def test_contact_compare_and_stack(tmp_path):
           sources:
             - {source: T, label: cut8, select: {first: all, second: all}, compute: {cutoff: 8.0, block_ps: 1.5}}
             - {source: T, label: cut10, select: {first: all, second: all}, compute: {cutoff: 10.0, block_ps: 1.5}}
-          plot: {stack_total: true}
 """,
     )
     # _config uses tmp_path/figures.yaml; stack path parent exists
@@ -118,7 +117,7 @@ def test_contact_compare_and_stack(tmp_path):
     assert len(ax.collections) == 2
     labels = [text.get_text() for text in ax.get_legend().get_texts()]
     assert labels[:2] == ["cut8", "cut10"]
-    assert "total" in labels
+    assert "total" not in labels
     assert (out / "figures" / "stack.png").is_file()
 
     # replot stack from snapshot

@@ -16,7 +16,6 @@ def stack(
     *,
     labels: Sequence[str] | None = None,
     colors: Sequence[str] | None = None,
-    total: bool = False,
     alpha: float = 0.8,
 ):
     """把同 x 的非负曲线按输入顺序累积绘制。"""
@@ -49,6 +48,4 @@ def stack(
             x, bottom, top, color=color, alpha=alpha, label=label, linewidth=0
         )
         bottom = top
-    if total:
-        ax.plot(x, bottom, color="black", lw=1.6, label="total")
     return bottom

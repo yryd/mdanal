@@ -86,7 +86,7 @@ python main.py replot --from OUT --out NEW --config plot.yaml
 - `compare`：多个 source 的单曲线叠加；
 - `stack`：多个 source 的单曲线按输入顺序累积堆叠。
 
-两者输入结构相同，最终都是一个 Panel；`stack` 可选 `plot.stack_total: true`（contact 示例不启用 total）。`stack` 要求所有曲线 x 完全一致，不做插值；跨体系比较优先用 `compare` 或多 Panel。
+两者输入结构相同，最终都是一个 Panel；`stack` 只画分量，不额外画 total。`stack` 要求所有曲线 x 完全一致，不做插值；跨体系比较优先用 `compare` 或多 Panel。
 
 `contact` 的 `compute.block_ps` 做分块平均；横轴为 ns；首尾点会强制落在窗口起止时间，值取第一块/最后一块均值。`compare` 仍允许各来源 x 不同；`stack` 要求 x 完全一致。
 当前同一 `render` 内相同 job 只算一次；不同命令之间暂不复用已有表，改 compute/derive 后再次 `render` 会重新计算。跨运行离线派生尚未提供。

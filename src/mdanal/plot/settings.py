@@ -13,7 +13,6 @@ from ..errors import ValidationError
 PLOT_KEYS = {
     "window", "size", "xlim", "ylim", "title", "xlabel", "ylabel",
     "rc", "palette", "layout", "cbar_width", "cbar_frame", "legend_loc",
-    "stack_total",
 }
 
 LEGEND_LOCS = {
@@ -167,13 +166,6 @@ def parse_plot(value: Any, where: str) -> dict[str, Any]:
         if not isinstance(frame, bool):
             raise ValidationError(f"{where}.cbar_frame 必须是布尔值", where=where)
         result["cbar_frame"] = frame
-    if "stack_total" in value:
-        total = value["stack_total"]
-        if not isinstance(total, bool):
-            raise ValidationError(
-                f"{where}.stack_total 必须是布尔值", where=where
-            )
-        result["stack_total"] = total
     if "legend_loc" in value:
         loc = value["legend_loc"]
         if not isinstance(loc, str) or loc not in LEGEND_LOCS:

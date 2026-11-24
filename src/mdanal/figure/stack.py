@@ -51,8 +51,6 @@ def stack_curves(
     first = requests[0]
     palette = (getattr(ctx, "plot", {}) or {}).get("palette")
     colors = list(palette) if palette else list(chart.THEME_COLORS)
-    total = bool((getattr(ctx, "plot", {}) or {}).get("stack_total", False))
-
     def draw(ax):
         chart.stack(
             ax,
@@ -60,7 +58,6 @@ def stack_curves(
             curves,
             labels=labels,
             colors=colors,
-            total=total,
         )
         chart.legend(ax, loc=plotutil.legend_loc(ctx))
         annotations.draw(ax, ctx)
