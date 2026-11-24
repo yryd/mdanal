@@ -125,3 +125,13 @@ def test_block_average_values_and_endpoints_with_motion():
     table = contact_run(_ctx(u, u.atoms[[0]], u.atoms[[1]], frames=5, block_ps=2.0))["contact"]
     assert table["time_ps"].tolist() == [0.0, 0.5, 2.5, 4.0]
     assert table["count"].tolist() == [0.5, 0.5, 0.5, 1.0]
+
+
+def test_window_time_origin_starts_at_zero():
+    u = _universe(frames=5)
+    ctx = _ctx(u, u.atoms[:2], u.atoms[2:], frames=5)
+    ctx.start = 2
+    ctx.stop = 5
+    ctx.params = {"mode": "com", "cutoff": 2.5, "block_ps": 0.0, "time_origin": "window"}
+    table = contact_run(ctx)["contact"]
+    assert table["time_ps"].tolist() == [0.0, 1.0, 2.0]

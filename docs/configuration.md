@@ -135,9 +135,10 @@ compute:
   mode: com
   cutoff: 10.0
   block_ps: 250.0
+  time_origin: window
 ```
 
-`block_ps: 0` 逐帧；`> 0` 分块平均。首尾点强制落在窗口起止时间，值取第一块/最后一块均值。
+`time_origin`：`window`（默认）让横轴从当前帧窗口起点 0 开始，`absolute` 用绝对帧时间。`block_ps: 0` 逐帧；`> 0` 分块平均。首尾点强制落在窗口起止时间，值取第一块/最后一块均值。
 
 ## 输出
 

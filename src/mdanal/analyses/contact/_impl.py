@@ -34,6 +34,12 @@ PARAMS = {
         "min": 0.0,
         "help": "分块平均块宽；0 表示逐帧不平滑",
     },
+    "time_origin": {
+        "type": str,
+        "default": "window",
+        "choices": ("window", "absolute"),
+        "help": "时间轴原点；window 从当前帧窗口起点开始，absolute 用绝对帧时间",
+    },
 }
 
 LABELS = {
@@ -223,7 +229,11 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         )
 
     frames = np.arange(ctx.start, ctx.stop, dtype=int)
-    time_ps = frames.astype(float) * float(ctx.frame_dt_ps)
+    origin = str(ctx.params.get("time_origin", "window"))
+    if origin not in ("window", "absolute"):
+        raise ValidationError(f"contact.time_origin={origin!r} 不是 window/absolute")
+    time_origin = ctx.start if origin == "window" else 0
+    time_ps = (frames - time_origin).astype(float) * float(ctx.frame_dt_ps)
     counts = []
     coords = []
     for frame in frames:
@@ -273,10 +283,12 @@ def panel_request(ctx, tables, metric: str = "count") -> PanelRequest:
     )
 
 
-def _curve_xlim(request: PanelRequest):
+def _curve_xlim(ctx, request: PanelRequest):
     xs = [curve.x for series in request.series for curve in series.curves]
     if not xs:
         return None
+    if str(ctx.params.get("time_origin", "window")) == "window":
+        return (0.0, float(ctx.stop - ctx.start) * float(ctx.frame_dt_ps) / 1000.0)
     values = np.concatenate(xs)
     return (float(values.min()), float(values.max()))
 
@@ -309,7 +321,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
         xlabel=request.xlabel or ctx.label("time"),
         ylabel=request.ylabel or ctx.label("count"),
         aspect="auto",
-        xlim=ctx.window("x") or _curve_xlim(request),
+        xlim=ctx.window("x") or _curve_xlim(ctx, request),
         ylim=ctx.window("y"),
         panel_size=ctx.size("single"),
     )
