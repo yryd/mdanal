@@ -120,4 +120,4 @@ python main.py check-pack mypack
   compute: {mode: com, cutoff: 10.0, block_ps: 250.0}
 ```
 
-`block_ps` 分块平均；首尾点覆盖窗口起止时间。`contact` 只提供单曲线，`compare`/`stack` 都由平台组合。
+`block_ps` 分块平均；contact 图横轴为 ns；首尾点覆盖窗口起止时间。`contact` 只提供单曲线，`compare`/`stack` 都由平台组合。

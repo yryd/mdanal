@@ -39,13 +39,13 @@ PARAMS = {
 LABELS = {
     "zh": {
         "title": "接触统计",
-        "time": "时间 (ps)",
+        "time": "时间 (ns)",
         "count": "接触数",
         "coordination": "配位数",
     },
     "en": {
         "title": "Contact statistics",
-        "time": "time (ps)",
+        "time": "time (ns)",
         "count": "contact count",
         "coordination": "coordination number",
     },
@@ -250,7 +250,7 @@ def _series(ctx, table, metric: str) -> Series:
         name=metric,
         curves=[
             Curve(
-                x=table["time_ps"].to_numpy(dtype=float),
+                x=table["time_ps"].to_numpy(dtype=float) / 1000.0,
                 y=table[metric].to_numpy(dtype=float),
                 label=ctx.label(metric),
             )
@@ -271,6 +271,14 @@ def panel_request(ctx, tables, metric: str = "count") -> PanelRequest:
         ylabel=ctx.label(metric),
         options={},
     )
+
+
+def _curve_xlim(request: PanelRequest):
+    xs = [curve.x for series in request.series for curve in series.curves]
+    if not xs:
+        return None
+    values = np.concatenate(xs)
+    return (float(values.min()), float(values.max()))
 
 
 def render_panel(ctx, request: PanelRequest) -> Panel:
@@ -301,7 +309,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
         xlabel=request.xlabel or ctx.label("time"),
         ylabel=request.ylabel or ctx.label("count"),
         aspect="auto",
-        xlim=ctx.window("x"),
+        xlim=ctx.window("x") or _curve_xlim(request),
         ylim=ctx.window("y"),
         panel_size=ctx.size("single"),
     )

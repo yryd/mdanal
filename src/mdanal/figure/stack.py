@@ -75,7 +75,7 @@ def stack_curves(
         xlabel=first.xlabel,
         ylabel=first.ylabel,
         aspect="auto",
-        xlim=ctx.window("x"),
+        xlim=ctx.window("x") or (float(x_ref[0]), float(x_ref[-1])),
         ylim=ctx.window("y"),
         panel_size=ctx.size("single"),
     )

@@ -124,7 +124,6 @@ panels:
       sources:
         - {source: A, label: "TMA⁻–TMA⁻", select: {first: TMA_anion, second: TMA_anion}}
         - {source: A, label: "TMA⁻–TMA⁰", select: {first: TMA_anion, second: TMA_neutral}}
-      plot: {stack_total: true}
 ```
 
 `stack` 和 `compare` 一样输入多个单曲线 source；区别是累积堆叠。顺序就是 `sources` 顺序；所有曲线必须共享同一 x，不做插值。
