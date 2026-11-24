@@ -33,6 +33,7 @@ PRODUCTS = {
         build=build_density_2d,       # (PlotContext, PanelSource) -> Panel
         default=True,
         compare=None,                 # field 不可 compare
+        curve_request=None,           # 可选：单曲线 → 平台 stack
         help="2D density projection",
     ),
 }
@@ -40,6 +41,7 @@ PRODUCTS = {
 
 `build` **必须恰好返回一个 Panel**，不能返回列表。
 `compare` 仅对 `kind="curve"` 允许，返回一个合并后的 Panel。
+`curve_request` 可选，仅用于单曲线产品；平台 `stack` 会按 source 顺序堆叠。
 
 ## PanelSource
 
@@ -64,12 +66,12 @@ source.label       # compare 来源标签
   "pack": "msd",
   "title": {"zh": "均方位移", "en": "MSD"},
   "products": [
-    {"id": "msd-raw", "kind": "curve", "requires": ["msd"], "default": true, "compare": true}
+    {"id": "msd-raw", "kind": "curve", "requires": ["msd"], "default": true, "compare": true, "curve": false}
   ]
 }
 ```
 
-`mdanal check-pack <name>` 会检查 ID、kind、requires、default、compare 是否与代码一致。
+`mdanal check-pack <name>` 会检查 ID、kind、requires、default、compare、curve 是否与代码一致。
 
 ## 最小可运行配置
 
@@ -100,3 +102,22 @@ python main.py check-pack mypack
 ```
 
 如果产品不可用，检查 `pack.json` 是否与 `PRODUCTS` 漂移。
+
+## contact
+
+`contact` 提供两个单曲线产品：
+
+- `contact-count`：分子对接触数；
+- `contact-coordination`：按 `first` 组每个分子的平均接触数。
+
+槽位：`first`、`second`。所有组必须是完整分子；第一版 `mode` 只支持 `com`。
+
+```yaml
+- source: TMA10
+  pack: contact
+  product: contact-count
+  select: {first: TMA_anion, second: PIP}
+  compute: {mode: com, cutoff: 10.0, block_ps: 250.0}
+```
+
+`block_ps` 分块平均；首尾点覆盖窗口起止时间。`contact` 只提供单曲线，`compare`/`stack` 都由平台组合。

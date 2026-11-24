@@ -18,6 +18,7 @@ class PanelProduct:
     requires: tuple[str, ...]
     build: Callable[[Any, "PanelSource"], Any]
     compare: Callable[[Any, Sequence["PanelSource"]], Any] | None = None
+    curve_request: Callable[[Any, "PanelSource"], Any] | None = None
     default: bool = False
     help: str = ""
     requires_derive: tuple[str, ...] = ()
@@ -54,7 +55,7 @@ class PanelRef:
 
 
 @dataclass(frozen=True)
-class CompareSource:
+class CurveSource:
     source: str
     label: str
     select: Mapping[str, str] = field(default_factory=dict)
@@ -69,7 +70,7 @@ class CompareSpec:
 
     pack: str
     product: str
-    sources: tuple[CompareSource, ...]
+    sources: tuple[CurveSource, ...]
     select: Mapping[str, str] = field(default_factory=dict)
     compute: Mapping[str, Any] = field(default_factory=dict)
     derive: Mapping[str, Any] = field(default_factory=dict)
@@ -77,7 +78,21 @@ class CompareSpec:
     plot: Mapping[str, Any] = field(default_factory=dict)
 
 
-FigureItem = PanelRef | CompareSpec
+@dataclass(frozen=True)
+class StackSpec:
+    """同一曲线产品在多个来源上堆叠；最终产出一个 Panel。"""
+
+    pack: str
+    product: str
+    sources: tuple[CurveSource, ...]
+    select: Mapping[str, str] = field(default_factory=dict)
+    compute: Mapping[str, Any] = field(default_factory=dict)
+    derive: Mapping[str, Any] = field(default_factory=dict)
+    section: tuple[int, int] | None = None
+    plot: Mapping[str, Any] = field(default_factory=dict)
+
+
+FigureItem = PanelRef | CompareSpec | StackSpec
 
 
 @dataclass(frozen=True)

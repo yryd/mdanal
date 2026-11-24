@@ -44,6 +44,8 @@ figures:
 - 一个产品恰好一个 Panel；不要把多 Panel 产品塞进一项。
 - `density-2d` 是产品，`plot.plane: xy/xz/yz` 是参数；3D 网格只算一次。
 - `density-line` 与 `density-2d` 同属 `density`。
+- `contact-count` / `contact-coordination` 是单曲线；`compute.block_ps` 分块平均，首尾覆盖窗口端点。
+- `stack` 与 `compare` 都是多个单曲线的平台组合，区别只是叠加 vs 堆叠；stack 顺序就是 sources 顺序。
 - `compare` 只用于 `kind: curve`，产出一个 Panel；2D 密度用多个 panel 并排。
 - `hbond-type` 需要 source `naming`。
 - `check` 在计算前校验 pack/product/slots/compute/derive/compare。
@@ -51,6 +53,6 @@ figures:
 
 ## 内置能力
 
-运行 `mdanal packs --json`。当前：`density`、`hbond`、`msd`、`rdf`、`velocity`。
+运行 `mdanal packs --json`。当前：`contact`、`density`、`hbond`、`msd`、`rdf`、`velocity`。
 
 详细说明见 `README.md`、`docs/configuration.md`、`docs/plugins.md`。

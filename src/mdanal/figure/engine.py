@@ -17,8 +17,9 @@ from ..plot.figure import Figure
 from ..run.writers import sha256, write_tables
 from .catalog import load_pack
 from .config import FigureProject
-from .model import CompareSpec, FigureSpec, PanelRef, PanelSource
+from .model import CompareSpec, FigureSpec, PanelRef, PanelSource, StackSpec
 from .plotting import apply_panel_plot, make_context, plot_style, select_style
+from .stack import stack_curves
 from .runtime import ComputeContext, SourceRuntime, compute_context, normalize_compute
 
 
@@ -176,14 +177,22 @@ def _validate_item(item, packs, sources) -> list[str]:
             problems.append(f"panel 引用了不存在的 source {item.source!r}")
         return problems
 
-    if product.kind != "curve" or product.compare is None:
+    is_stack = isinstance(item, StackSpec)
+    if is_stack:
+        if product.kind != "curve" or product.curve_request is None:
+            problems.append(
+                f"{item.pack}/{item.product} 不是可 stack 的曲线产品；"
+                "请改用 contact-curve 或其他提供 curve_request 的产品"
+            )
+    elif product.kind != "curve" or product.compare is None:
         problems.append(
             f"{item.pack}/{item.product} 不是可 compare 的曲线产品；"
             "请改用多个 Panel 并排"
         )
     for entry in item.sources:
         if entry.source not in sources:
-            problems.append(f"compare 引用了不存在的 source {entry.source!r}")
+            kind = "stack" if is_stack else "compare"
+            problems.append(f"{kind} 引用了不存在的 source {entry.source!r}")
             continue
         problems.extend(
             _validate_fields(
@@ -192,7 +201,7 @@ def _validate_item(item, packs, sources) -> list[str]:
                 entry.select or item.select,
                 entry.compute or item.compute,
                 entry.derive or item.derive,
-                f"compare[{entry.label}]",
+                f"{'stack' if is_stack else 'compare'}[{entry.label}]",
             )
         )
     return problems
@@ -205,7 +214,7 @@ def _iter_source_refs(project: FigureProject):
                 yield item.source, item
             else:
                 for entry in item.sources:
-                    yield entry.source, _compare_ref(item, entry)
+                    yield entry.source, _curve_ref(item, entry)
 
 
 def check_warnings(project: FigureProject, packs=None) -> list[str]:
@@ -422,7 +431,7 @@ def _source_for(job: _Job, label: str | None = None) -> PanelSource:
     )
 
 
-def _compare_ref(item: CompareSpec, entry) -> PanelRef:
+def _curve_ref(item, entry) -> PanelRef:
     return PanelRef(
         source=entry.source,
         pack=item.pack,
@@ -444,7 +453,7 @@ def _plan_requests(project: FigureProject, packs):
                 pairs = [(item.source, item)]
             else:
                 pairs = [
-                    (entry.source, _compare_ref(item, entry))
+                    (entry.source, _curve_ref(item, entry))
                     for entry in item.sources
                 ]
             for source, ref in pairs:
@@ -458,6 +467,66 @@ def _plan_requests(project: FigureProject, packs):
                 )
                 row["tables"].update(pack.products[ref.product].requires)
     return planned
+
+
+def _build_curve_sources(
+    project: FigureProject,
+    item,
+    packs,
+    jobs: dict[str, _Job],
+    out: Path,
+    derive_cache: dict[str, Any],
+):
+    pack = packs[item.pack]
+    product = pack.products[item.product]
+    source_objs: list[PanelSource] = []
+    records = []
+    first_ref = _curve_ref(item, item.sources[0])
+    for entry in item.sources:
+        ref = _curve_ref(item, entry)
+        job = _build_source(project, pack, ref, entry.source, jobs, out)
+        derived, derive_dir, derive_key = _derive_tables(
+            pack, job, ref.derive, derive_cache
+        )
+        tables = {**job.tables, **derived}
+        source_obj = _source_for(job, entry.label)
+        source_obj = PanelSource(
+            source=source_obj.source,
+            label=source_obj.label,
+            params=source_obj.params,
+            meta=source_obj.meta,
+            tables=tables,
+            start=source_obj.start,
+            stop=source_obj.stop,
+            frame_dt_ps=source_obj.frame_dt_ps,
+            selection_frame=source_obj.selection_frame,
+            shift=source_obj.shift,
+        )
+        source_objs.append(source_obj)
+        table_records = {}
+        for name in product.requires:
+            directory = derive_dir if name in derived else job.data_dir
+            table_records[name] = _table_record(
+                directory / "tables" / f"{name}.csv", out
+            )
+        records.append(
+            {
+                "source": entry.source,
+                "label": entry.label,
+                "base": str(job.data_dir.relative_to(out)),
+                "derive": str(derive_dir.relative_to(out)) if derive_dir else None,
+                "derive_key": derive_key or None,
+                "tables": table_records,
+                "request": {
+                    "select": dict(ref.select),
+                    "compute": normalize_compute(pack, ref.compute),
+                    "derive": dict(ref.derive),
+                    "section": list(ref.section) if ref.section else None,
+                },
+            }
+        )
+    first_ctx = jobs[_job_key(first_ref, first_ref.source, pack)].ctx
+    return source_objs, records, first_ctx
 
 
 def _build_item(
@@ -528,6 +597,34 @@ def _build_item(
             },
         }
 
+    if isinstance(item, StackSpec):
+        pack = packs[item.pack]
+        product = pack.products[item.product]
+        if product.kind != "curve" or product.curve_request is None:
+            raise ValidationError(
+                f"{item.pack}/{item.product} 不能 stack；请使用提供 curve_request 的曲线产品"
+            )
+        source_objs, records, first_ctx = _build_curve_sources(
+            project, item, packs, jobs, out, derive_cache
+        )
+        ctx = make_context(
+            pack,
+            first_ctx,
+            item.plot,
+            lang=lang,
+            dpi=dpi,
+            annotate=project.annotate,
+        )
+        panel = stack_curves(ctx, source_objs, product.curve_request)
+        apply_panel_plot(panel, item.plot, lang)
+        return panel, {
+            "kind": "stack",
+            "pack": item.pack,
+            "product": item.product,
+            "plot": dict(item.plot),
+            "sources": records,
+        }
+
     assert isinstance(item, CompareSpec)
     pack = packs[item.pack]
     product = pack.products[item.product]
@@ -535,55 +632,12 @@ def _build_item(
         raise ValidationError(
             f"{item.pack}/{item.product} 不能 compare；请用多个 Panel 并排"
         )
-    source_objs: list[PanelSource] = []
-    records = []
-    first_ref = _compare_ref(item, item.sources[0])
-    for entry in item.sources:
-        ref = _compare_ref(item, entry)
-        job = _build_source(project, pack, ref, entry.source, jobs, out)
-        derived, derive_dir, derive_key = _derive_tables(
-            pack, job, ref.derive, derive_cache
-        )
-        tables = {**job.tables, **derived}
-        source_obj = _source_for(job, entry.label)
-        source_obj = PanelSource(
-            source=source_obj.source,
-            label=source_obj.label,
-            params=source_obj.params,
-            meta=source_obj.meta,
-            tables=tables,
-            start=source_obj.start,
-            stop=source_obj.stop,
-            frame_dt_ps=source_obj.frame_dt_ps,
-            selection_frame=source_obj.selection_frame,
-            shift=source_obj.shift,
-        )
-        source_objs.append(source_obj)
-        table_records = {}
-        for name in product.requires:
-            directory = derive_dir if name in derived else job.data_dir
-            table_records[name] = _table_record(
-                directory / "tables" / f"{name}.csv", out
-            )
-        records.append(
-            {
-                "source": entry.source,
-                "label": entry.label,
-                "base": str(job.data_dir.relative_to(out)),
-                "derive": str(derive_dir.relative_to(out)) if derive_dir else None,
-                "derive_key": derive_key or None,
-                "tables": table_records,
-                "request": {
-                    "select": dict(ref.select),
-                    "compute": normalize_compute(pack, ref.compute),
-                    "derive": dict(ref.derive),
-                    "section": list(ref.section) if ref.section else None,
-                },
-            }
-        )
+    source_objs, records, first_ctx = _build_curve_sources(
+        project, item, packs, jobs, out, derive_cache
+    )
     ctx = make_context(
         pack,
-        jobs[_job_key(first_ref, first_ref.source, pack)].ctx,
+        first_ctx,
         item.plot,
         lang=lang,
         dpi=dpi,

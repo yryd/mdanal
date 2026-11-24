@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "pack": "contact",
+  "title": {
+    "zh": "接触统计",
+    "en": "Contact statistics"
+  },
+  "products": [
+    {
+      "id": "contact-count",
+      "kind": "curve",
+      "requires": ["contact"],
+      "default": true,
+      "compare": true,
+      "curve": true
+    },
+    {
+      "id": "contact-coordination",
+      "kind": "curve",
+      "requires": ["contact"],
+      "default": false,
+      "compare": true,
+      "curve": true
+    }
+  ]
+}

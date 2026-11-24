@@ -97,6 +97,7 @@ mdanal check-pack NAME
 
 | 包 | 产品 | 说明 |
 |---|---|---|
+| `contact` | `contact-count`, `contact-coordination` | 分子级接触数、配位数；支持分块平均 |
 | `density` | `density-2d`, `density-line` | 3D 数密度投影 + 质量/电荷线密度 |
 | `hbond` | `hbond-count`, `hbond-type`, `hbond-lifetime` | 一次 HBA，三个产品 |
 | `msd` | `msd-raw`, `msd-fit`, `msd-rdc` | 原始 MSD、拟合、RDC |

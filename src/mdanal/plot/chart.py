@@ -20,6 +20,7 @@ from matplotlib.colors import LinearSegmentedColormap  # noqa: E402
 from matplotlib.figure import Figure  # noqa: E402
 
 from ..errors import MdanalError  # noqa: E402
+from .stack import stack  # noqa: E402
 
 STYLE = ("science", "no-latex", "retro")
 CJK_FONT = "Noto Serif CJK SC"

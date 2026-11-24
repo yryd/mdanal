@@ -68,7 +68,7 @@ figures:
 | `compute` | 算法参数；键必须在图包 `PARAMS` 内 |
 | `derive` | 派生参数；产品需要的键必须提供 |
 | `section` | 相对 source `frames` 的 `[起, 止)` |
-| `plot` | 标题、范围、窗口、颜色、尺寸、`plane/axis`、`cbar_width/cbar_frame/legend_loc` 等呈现/查看参数 |
+| `plot` | 标题、范围、窗口、颜色、尺寸、`plane/axis`、`cbar_width/cbar_frame/legend_loc` 等呈现/查看参数；stack 可加 `stack_total` |
 
 ### 一张图 vs 多张图
 
@@ -113,6 +113,32 @@ panels:
 ```
 
 只允许曲线产品；2D density 不能 compare，写成两个普通 `panels[]` 并排。
+
+### stack
+
+```yaml
+panels:
+  - stack:
+      pack: contact
+      product: contact-count
+      sources:
+        - {source: A, label: "TMA⁻–TMA⁻", select: {first: TMA_anion, second: TMA_anion}}
+        - {source: A, label: "TMA⁻–TMA⁰", select: {first: TMA_anion, second: TMA_neutral}}
+      plot: {stack_total: true}
+```
+
+`stack` 和 `compare` 一样输入多个单曲线 source；区别是累积堆叠。顺序就是 `sources` 顺序；所有曲线必须共享同一 x，不做插值。
+
+### contact 分块平均
+
+```yaml
+compute:
+  mode: com
+  cutoff: 10.0
+  block_ps: 250.0
+```
+
+`block_ps: 0` 逐帧；`> 0` 分块平均。首尾点强制落在窗口起止时间，值取第一块/最后一块均值。
 
 ## 输出
 

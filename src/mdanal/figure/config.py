@@ -12,7 +12,7 @@ from ..config.source import read_sources
 from ..config.system import SystemConfig
 from ..errors import ValidationError
 from ..plot.settings import parse_plot
-from .model import CompareSource, CompareSpec, FigureSpec, PanelRef
+from .model import CompareSpec, CurveSource, FigureSpec, PanelRef, StackSpec
 
 CONFIG_KEYS = {"schema_version", "name", "render", "sources", "figures"}
 RENDER_KEYS = {"lang", "dpi", "annotate"}
@@ -37,6 +37,7 @@ COMPARE_KEYS = {
     "plot",
     "sources",
 }
+STACK_KEYS = set(COMPARE_KEYS)
 VIEW_KEYS = {"plane", "axis"}
 
 
@@ -155,10 +156,10 @@ def _panel(
     )
 
 
-def _compare(
-    data: Mapping[str, Any], where: str, sources: Mapping[str, Any]
-) -> CompareSpec:
-    _unknown(data, COMPARE_KEYS, where)
+def _curve_spec(
+    data: Mapping[str, Any], where: str, sources: Mapping[str, Any], spec_cls
+):
+    _unknown(data, STACK_KEYS if spec_cls is StackSpec else COMPARE_KEYS, where)
     for key in ("pack", "product"):
         if not isinstance(data.get(key), str) or not data[key]:
             raise ValidationError(f"{where}.{key} 必须是非空字符串", where=where)
@@ -167,7 +168,7 @@ def _compare(
         raise ValidationError(
             f"{where}.sources 必须是至少两个来源的列表", where=where
         )
-    entries: list[CompareSource] = []
+    entries: list[CurveSource] = []
     for index, item in enumerate(raw_sources):
         entry_where = f"{where}.sources[{index}]"
         if isinstance(item, str):
@@ -212,7 +213,7 @@ def _compare(
             f"{entry_where}.section",
         )
         entries.append(
-            CompareSource(
+            CurveSource(
                 source=source,
                 label=label,
                 select=override_select,
@@ -223,7 +224,7 @@ def _compare(
         )
     if len({entry.label for entry in entries}) != len(entries):
         raise ValidationError(f"{where}.sources 的 label 不能重复", where=where)
-    return CompareSpec(
+    return spec_cls(
         pack=str(data["pack"]),
         product=str(data["product"]),
         sources=tuple(entries),
@@ -233,6 +234,18 @@ def _compare(
         section=_section(data.get("section"), f"{where}.section"),
         plot=_panel_plot(data.get("plot"), f"{where}.plot"),
     )
+
+
+def _compare(
+    data: Mapping[str, Any], where: str, sources: Mapping[str, Any]
+) -> CompareSpec:
+    return _curve_spec(data, where, sources, CompareSpec)
+
+
+def _stack(
+    data: Mapping[str, Any], where: str, sources: Mapping[str, Any]
+) -> StackSpec:
+    return _curve_spec(data, where, sources, StackSpec)
 
 
 def _figure(
@@ -266,6 +279,10 @@ def _figure(
         item_where = f"{where}.panels[{index}]"
         if not isinstance(entry, Mapping):
             raise ValidationError(f"{item_where} 必须是映射", where=item_where)
+        if "compare" in entry and "stack" in entry:
+            raise ValidationError(
+                f"{item_where} 不能同时有 compare 和 stack", where=item_where
+            )
         if "compare" in entry:
             if set(entry) != {"compare"}:
                 raise ValidationError(
@@ -273,6 +290,13 @@ def _figure(
                 )
             compare = entry["compare"]
             items.append(_compare(compare, f"{item_where}.compare", sources))
+        elif "stack" in entry:
+            if set(entry) != {"stack"}:
+                raise ValidationError(
+                    f"{item_where} 有 stack 时不能再写其他字段", where=item_where
+                )
+            stack = entry["stack"]
+            items.append(_stack(stack, f"{item_where}.stack", sources))
         else:
             items.append(_panel(entry, item_where, sources))
     return FigureSpec(

@@ -1,21 +1,23 @@
 """Figure-first 核心：图包、产品、引用与组合。"""
 
 from .model import (
-    CompareSource,
+    CurveSource,
     CompareSpec,
     FigurePack,
     FigureSpec,
     PanelProduct,
+    StackSpec,
     PanelRef,
     PanelSource,
 )
 
 __all__ = [
-    "CompareSource",
+    "CurveSource",
     "CompareSpec",
     "FigurePack",
     "FigureSpec",
     "PanelProduct",
+    "StackSpec",
     "PanelRef",
     "PanelSource",
 ]

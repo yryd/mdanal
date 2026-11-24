@@ -56,6 +56,11 @@ def _validate_products(module: Any, name: str, path: Path) -> dict[str, PanelPro
                 f"PRODUCTS[{key!r}] 不是曲线产品，不能声明 compare",
                 where=str(path),
             )
+        if product.curve_request is not None and product.kind != "curve":
+            raise ValidationError(
+                f"PRODUCTS[{key!r}] 不是曲线产品，不能声明 curve_request",
+                where=str(path),
+            )
         products[key] = product
     defaults = [key for key, product in products.items() if product.default]
     if len(defaults) > 1:
@@ -116,6 +121,11 @@ def _check_manifest(
         if bool(row.get("compare", False)) != (product.compare is not None):
             raise ValidationError(
                 f"pack.json 产品 {key!r} 的 compare 与代码不一致",
+                where=str(path.parent / "pack.json"),
+            )
+        if bool(row.get("curve", False)) != (product.curve_request is not None):
+            raise ValidationError(
+                f"pack.json 产品 {key!r} 的 curve 与代码不一致",
                 where=str(path.parent / "pack.json"),
             )
         if bool(row.get("default", False)) != bool(product.default):
@@ -209,6 +219,7 @@ def pack_payload(pack: FigurePack) -> dict[str, Any]:
                 "requires_derive": list(product.requires_derive),
                 "default": product.default,
                 "compare": product.compare is not None,
+                "curve": product.curve_request is not None,
                 "help": product.help,
             }
             for product in pack.products.values()

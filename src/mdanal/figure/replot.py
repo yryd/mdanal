@@ -18,6 +18,7 @@ from .catalog import load_pack
 from .model import PanelSource
 from .overrides import PlotOverrides
 from .plotting import apply_panel_plot, make_context, plot_style, select_style
+from .stack import stack_curves
 
 
 @dataclass
@@ -114,13 +115,20 @@ def _build_item(
         sources.append(source)
         replay = replay or current
     if replay is None:
-        raise ValidationError("compare 快照没有 source")
-    if product.compare is None:
-        raise ValidationError(f"{record['pack']}/{record['product']} 不支持 compare")
+        raise ValidationError(f"{record['kind']} 快照没有 source")
     ctx = make_context(
         pack, replay, plot, lang=lang, dpi=dpi, annotate=annotate
     )
-    panel = product.compare(ctx, sources)
+    if record["kind"] == "stack":
+        if product.curve_request is None:
+            raise ValidationError(
+                f"{record['pack']}/{record['product']} 不支持 stack"
+            )
+        panel = stack_curves(ctx, sources, product.curve_request)
+    elif product.compare is None:
+        raise ValidationError(f"{record['pack']}/{record['product']} 不支持 compare")
+    else:
+        panel = product.compare(ctx, sources)
     apply_panel_plot(panel, plot, lang)
     return panel
 

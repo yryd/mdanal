@@ -5,7 +5,8 @@ from mdanal.figure.catalog import discover_packs, pack_payload
 
 def test_builtin_packs_and_products():
     packs = discover_packs()
-    assert set(packs) == {"density", "hbond", "msd", "rdf", "velocity"}
+    assert set(packs) == {"contact", "density", "hbond", "msd", "rdf", "velocity"}
+    assert set(packs["contact"].products) == {"contact-count", "contact-coordination"}
     assert set(packs["density"].products) == {"density-2d", "density-line"}
     assert set(packs["hbond"].products) == {"hbond-count", "hbond-type", "hbond-lifetime"}
     assert set(packs["msd"].products) == {"msd-raw", "msd-fit", "msd-rdc"}
