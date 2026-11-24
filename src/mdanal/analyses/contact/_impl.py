@@ -122,6 +122,7 @@ def _blocked(
     coordination: np.ndarray,
     block_ps: float,
     frame_dt_ps: float,
+    window_end_ps: float | None = None,
 ) -> pd.DataFrame:
     n = len(frames)
     if n == 0:
@@ -177,13 +178,14 @@ def _blocked(
         float(time_ps[blocks[0][1] - 1]),
         int(blocks[0][1] - blocks[0][0]),
     )
+    end_ps = float(time_ps[-1]) if window_end_ps is None else float(window_end_ps)
     last = (
         int(frames[-1]),
-        float(time_ps[-1]),
+        end_ps,
         means[-1][0],
         means[-1][1],
         float(time_ps[blocks[-1][0]]),
-        float(time_ps[-1]),
+        end_ps,
         int(blocks[-1][1] - blocks[-1][0]),
     )
     if n == 1:
@@ -191,7 +193,7 @@ def _blocked(
     else:
         if not np.isclose(centers[0], time_ps[0]):
             rows.insert(0, first)
-        if not np.isclose(centers[-1], time_ps[-1]):
+        if not np.isclose(centers[-1], end_ps):
             rows.append(last)
     return pd.DataFrame(
         rows,
@@ -244,6 +246,11 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             coords.append(2.0 * count / len(first) if len(first) > 1 else 0.0)
         else:
             coords.append(count / len(first))
+    window_end_ps = (
+        float(ctx.stop - ctx.start) * float(ctx.frame_dt_ps)
+        if origin == "window"
+        else None
+    )
     table = _blocked(
         frames,
         time_ps,
@@ -251,6 +258,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
         np.asarray(coords, dtype=float),
         block_ps,
         float(ctx.frame_dt_ps),
+        window_end_ps=window_end_ps,
     )
     return {"contact": table}
 

@@ -64,7 +64,7 @@ def test_contact_count_and_coordination_share_blocked_table(tmp_path):
     assert len(tables) == 1
     frame = pd.read_csv(tables[0])
     assert frame["time_ps"].iloc[0] == 0.0
-    assert frame["time_ps"].iloc[-1] == 3.0
+    assert frame["time_ps"].iloc[-1] == 4.0
     assert frame["block_frames"].iloc[0] == 2
     assert (out / "figures" / "fig.png").is_file()
 

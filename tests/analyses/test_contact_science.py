@@ -70,9 +70,9 @@ def test_cutoff_excludes_far_molecules():
 def test_block_average_keeps_head_and_tail_endpoints():
     u = _universe(frames=5)
     table = contact_run(_ctx(u, u.atoms[:2], u.atoms[2:], frames=5, block_ps=2.0))["contact"]
-    assert table["time_ps"].tolist() == [0.0, 0.5, 2.5, 4.0]
-    assert table["count"].tolist() == [1.0, 1.0, 1.0, 1.0]
-    assert table["coordination"].tolist() == [1.0, 1.0, 1.0, 1.0]
+    assert table["time_ps"].tolist() == [0.0, 0.5, 2.5, 4.0, 5.0]
+    assert table["count"].tolist() == [1.0, 1.0, 1.0, 1.0, 1.0]
+    assert table["coordination"].tolist() == [1.0, 1.0, 1.0, 1.0, 1.0]
     assert int(table["block_frames"].iloc[0]) == 2
     assert int(table["block_frames"].iloc[-1]) == 1
 
@@ -123,8 +123,8 @@ def test_block_average_values_and_endpoints_with_motion():
     ])
     u.load_new(coords, format=MemoryReader, dimensions=np.tile([10.0, 10.0, 10.0, 90.0, 90.0, 90.0], (5, 1)))
     table = contact_run(_ctx(u, u.atoms[[0]], u.atoms[[1]], frames=5, block_ps=2.0))["contact"]
-    assert table["time_ps"].tolist() == [0.0, 0.5, 2.5, 4.0]
-    assert table["count"].tolist() == [0.5, 0.5, 0.5, 1.0]
+    assert table["time_ps"].tolist() == [0.0, 0.5, 2.5, 4.0, 5.0]
+    assert table["count"].tolist() == [0.5, 0.5, 0.5, 1.0, 1.0]
 
 
 def test_window_time_origin_starts_at_zero():
