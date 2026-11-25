@@ -197,11 +197,22 @@ def replot_from(
         if not records:
             raise ValidationError(f"图快照没有 Panel：{path}")
         override = overrides.figures.get(path.stem) if overrides else None
+        base_panel_style = dict(_record_style(records) or {})
+        panel_override_style: dict[str, Any] = {}
         if override is not None:
             if max(override.panels, default=-1) >= len(records):
                 raise ValidationError(
                     f"{path.stem}: plot.panels 索引超出 {len(records)} 个 Panel"
                 )
+            panel_override_style = dict(
+                _record_style(
+                    [
+                        {"plot": dict(override.panels.get(index) or {})}
+                        for index in range(len(records))
+                    ]
+                )
+                or {}
+            )
             records = [
                 {
                     **record,
@@ -230,8 +241,9 @@ def replot_from(
             else render.get("annotate", False)
         )
         style = {
-            **dict(_record_style(records) or {}),
+            **base_panel_style,
             **dict(render.get("style") or {}),
+            **panel_override_style,
             **dict(override.style if override and override.style else {}),
         }
         panels = [

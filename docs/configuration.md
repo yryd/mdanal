@@ -65,7 +65,7 @@ figures:
 | `pack` | 图包名 |
 | `product` | 图产品 ID；见 `mdanal packs` |
 | `select` | 槽位 → group/选择串；键必须正好是图包的 `slots` |
-| `compute` | 算法参数；键必须在图包 `PARAMS` 内 |
+| `compute` | 算法参数；键必须在图包 `PARAMS` 内；compare/stack 的来源字段增量覆盖公共值 |
 | `derive` | 派生参数；产品需要的键必须提供 |
 | `section` | 相对 source `frames` 的 `[起, 止)` |
 | `plot` | 标题、范围、窗口、颜色、尺寸、`plane/axis`、`cbar_width/cbar_frame/legend_loc` 等呈现/查看参数 |

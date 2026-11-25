@@ -116,7 +116,6 @@ def _draw_fit(ax, ctx, tables):
 
 
 def panels_fit(ctx, tables):
-    table = tables["msd"]
     panel = Panel(
         name="msd-fit",
         draw=lambda ax: _draw_fit(ax, ctx, tables),

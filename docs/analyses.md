@@ -4,6 +4,7 @@
 
 | 图包 | 产品 | 槽位 | 主要参数 |
 |---|---|---|---|
+| `contact` | `contact-count`, `contact-coordination` | first, second | `mode`、`cutoff`、`block_ps`、`time_origin` |
 | `density` | `density-2d`, `density-line` | group | `delta`、`binsize`、`plane`/`axis` |
 | `hbond` | `hbond-count`, `hbond-type`, `hbond-lifetime-continuous`, `hbond-lifetime-intermittent` | donor, hydrogen, acceptor | 距离/角度、`tau_max_ps`、`figure_axis` |
 | `msd` | `msd-raw`, `msd-fit`, `msd-rdc` | group | `msd_type`、`grouping`、`derive` |
@@ -14,7 +15,7 @@
 
 - `density-2d`：3D 数密度沿一个方向投影；`plot.plane` 选择 `xy/xz/yz`；
 - `density-line`：沿 x/y/z 的质量密度与电荷密度；`plot.axis` 选择轴；
-- 一次 compute 产出三个投影和三条线密度；固定正交盒，变盒只用首帧并警告；
+- 按请求计算：请求 2D 才建三个投影，请求 line 才算线密度；固定正交盒，整窗检查变盒/PBC 并警告；
 - `density-2d` 是 field，不可 compare；多体系用多个 Panel 并排。
 
 ## hbond
@@ -40,7 +41,7 @@
 ## velocity
 
 - `velocity`：轴坐标、速度、样本标准误；
-- 在首帧参考盒中平均；误差未校正时间相关性；
+- 在首帧参考盒中平均；误差是 bin 内合并统计单元样本 SEM，未校正帧间/单元间相关性；
 - 固定正交盒。
 
 ## 统一边界

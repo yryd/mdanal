@@ -107,6 +107,16 @@ def run(ctx) -> dict[str, pd.DataFrame]:
             f"帧间隔 {frame_dt:g} ps 已不小于水的氢键寿命量级（约 1 ps），"
             "寿命结果不可信；请用更密的 dump"
         )
+    n_frames = max(int(ctx.stop) - int(ctx.start), 1)
+    max_lag_ps = float(n_frames - 1) * frame_dt
+    requested_tau_max_ps = tau_max_ps
+    if tau_max > n_frames - 1:
+        tau_max = max(n_frames - 1, 1)
+        tau_max_ps = tau_max * frame_dt
+        ctx.warn(
+            f"tau_max_ps={requested_tau_max_ps:g} 超过当前窗口可用最大 lag≈{max_lag_ps:g} ps；"
+            f"按 {tau_max_ps:g} ps 截断，尾部不会伪造或填零"
+        )
 
     from .._hbond import analysis as _analysis
 
@@ -171,6 +181,7 @@ def run(ctx) -> dict[str, pd.DataFrame]:
 
     ctx.extras["hbond_lifetime"] = {
         "tau_max_ps": tau_max_ps,
+        "tau_max_ps_requested": requested_tau_max_ps,
         "tau_max_frames": tau_max,
         "frame_dt_ps": frame_dt,
         "tau_cont": tau_cont,
@@ -247,6 +258,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
     _, _, tau_key = _criterion(criterion)
     color = curves[0].color
     show_legend = bool(request.options.get("legend")) or len(curves) > 1
+    is_compare = bool((request.metadata or {}).get("compare"))
 
     def draw(ax):
         for curve in curves:
@@ -278,7 +290,7 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
                 fontsize=chart.ANNOTATION_FONTSIZE,
                 color=chart.COLORS["label"],
             )
-            value = info.get(tau_key)
+            value = info.get(tau_key) if not is_compare else None
             if value is not None and np.isfinite(value):
                 chart.vline(
                     ax,
@@ -305,8 +317,12 @@ def render_panel(ctx, request: PanelRequest) -> Panel:
 
     xlim = None
     ylim = (0.0, 1.02) if native else None
-    if native and len(curves[0].x):
-        xlim = (0.0, float(curves[0].x[-1]))
+    if native and curves:
+        ends = [float(curve.x[-1]) for curve in curves if len(curve.x)]
+        if ends:
+            xlim = (0.0, max(ends) if is_compare else ends[0])
+    if ctx.window("x") is not None:
+        xlim = ctx.window("x")
     return Panel(
         name="hbond_lifetime",
         draw=draw,

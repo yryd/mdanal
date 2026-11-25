@@ -69,10 +69,6 @@ LABELS = {
     },
 }
 
-REQUIRES = ("velocities",)
-MUTATES_POSITIONS = False
-
-
 COLUMN_LABELS = {
     "zh": {
         "x_angstrom": "$x$ (Å)", "y_angstrom": "$y$ (Å)", "z_angstrom": "$z$ (Å)",
@@ -297,7 +293,6 @@ def build_series(ctx, tables) -> list[Series]:
         x=coordinate + ctx.shift[dim],
         y=velocity,
         label=ctx.label(f"v_{AXES[vdim]}"),
-        color=chart.COLORS["primary"],
     )
     return [
         Series(

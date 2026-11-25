@@ -211,13 +211,14 @@ def _validate_item(item, packs, sources) -> list[str]:
             kind = "stack" if is_stack else "compare"
             problems.append(f"{kind} 引用了不存在的 source {entry.source!r}")
             continue
+        effective = _effective_curve_fields(item, entry)
         problems.extend(
             _validate_fields(
                 pack,
                 product,
-                entry.select or item.select,
-                entry.compute or item.compute,
-                entry.derive or item.derive,
+                effective["select"],
+                effective["compute"],
+                effective["derive"],
                 f"{'stack' if is_stack else 'compare'}[{entry.label}]",
             )
         )
@@ -459,15 +460,26 @@ def _source_for(job: _Job, label: str | None = None) -> PanelSource:
     )
 
 
+def _effective_curve_fields(item, entry) -> dict[str, Any]:
+    """公共参数为底、来源字段按字段覆盖；嵌套对象不递归合并。"""
+    return {
+        "select": {**dict(item.select), **dict(entry.select or {})},
+        "compute": {**dict(item.compute), **dict(entry.compute or {})},
+        "derive": {**dict(item.derive), **dict(entry.derive or {})},
+        "section": entry.section if entry.section is not None else item.section,
+    }
+
+
 def _curve_ref(item, entry) -> PanelRef:
+    fields = _effective_curve_fields(item, entry)
     return PanelRef(
         source=entry.source,
         pack=item.pack,
         product=item.product,
-        select=dict(entry.select or item.select),
-        compute=dict(entry.compute or item.compute),
-        derive=dict(entry.derive or item.derive),
-        section=entry.section if entry.section is not None else item.section,
+        select=fields["select"],
+        compute=fields["compute"],
+        derive=fields["derive"],
+        section=fields["section"],
         plot=dict(item.plot),
     )
 

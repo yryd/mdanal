@@ -16,6 +16,7 @@ from ._impl import (
     panels as _panels,
     render_panel,
     run as _run,
+    _axis_index,
 )
 
 
@@ -33,8 +34,8 @@ def _build(ctx, source):
 def _compare(ctx, sources):
     def signature(source):
         return (
-            source.params.get("dim", PARAMS["dim"]["default"]),
-            source.params.get("vdim", PARAMS["vdim"]["default"]),
+            _axis_index(source.params.get("dim", PARAMS["dim"]["default"]), "dim"),
+            _axis_index(source.params.get("vdim", PARAMS["vdim"]["default"]), "vdim"),
         )
 
     first = signature(sources[0])

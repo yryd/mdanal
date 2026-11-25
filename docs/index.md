@@ -13,6 +13,8 @@ mdanal 是 figure-first 的 LAMMPS 轨迹绘图工具：用户声明要哪些图
 | 新增图包 | [插件手册](plugins.md) |
 | 排错 | [排错](troubleshooting.md) |
 | 看科学口径 | [分析说明](analyses.md) |
+| 看颜色/色板 | [颜色](colors.md) |
+| 看图库 | [图库](gallery.md) |
 
 ## 一句话架构
 

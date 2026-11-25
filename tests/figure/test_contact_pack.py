@@ -249,3 +249,46 @@ figures:
     replot_from(out, tmp_path / "replot", overrides=read_overrides(override))
     colors = captured["fig"].axes[0].collections[0].get_facecolor()
     assert tuple(round(float(v), 3) for v in colors[0][:3]) == (0.0, 0.0, 1.0)
+
+
+def test_compare_source_compute_fields_overlay_common(tmp_path):
+    import json
+
+    body = """  - name: cmp
+    panels:
+      - compare:
+          pack: contact
+          product: contact-count
+          compute: {cutoff: 1.0, block_ps: 2.0}
+          sources:
+            - {source: T, label: base, select: {first: all, second: all}}
+            - {source: T, label: block-only, select: {first: all, second: all}, compute: {block_ps: 1.0}}
+"""
+    out = render_project(read_project(_config(tmp_path, body)), tmp_path / "out")
+    payload = json.loads((out / "figures" / "cmp.json").read_text(encoding="utf-8"))
+    sources = {entry["label"]: entry for entry in payload["items"][0]["sources"]}
+    assert sources["base"]["request"]["compute"]["cutoff"] == 1.0
+    assert sources["block-only"]["request"]["compute"]["cutoff"] == 1.0
+    assert sources["block-only"]["request"]["compute"]["block_ps"] == 1.0
+
+
+def test_compare_source_select_fields_overlay_common(tmp_path):
+    import json
+
+    body = """  - name: cmp
+    panels:
+      - compare:
+          pack: contact
+          product: contact-count
+          select: {first: all, second: all}
+          sources:
+            - {source: T, label: partial, select: {first: all}}
+            - {source: T, label: full, select: {first: all, second: all}}
+"""
+    out = render_project(read_project(_config(tmp_path, body)), tmp_path / "out")
+    payload = json.loads((out / "figures" / "cmp.json").read_text(encoding="utf-8"))
+    sources = {entry["label"]: entry for entry in payload["items"][0]["sources"]}
+    assert sources["partial"]["request"]["select"] == {
+        "first": "all",
+        "second": "all",
+    }

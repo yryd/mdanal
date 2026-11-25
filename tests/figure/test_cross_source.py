@@ -213,3 +213,57 @@ def test_compare_source_context_keeps_frame_dt():
         shift=(0.0, 0.0, 0.0),
     )
     assert _source_context(ctx, source).frame_dt_ps == 0.002
+
+
+def test_compare_velocity_accepts_numeric_equivalent_axes(tmp_path):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        "schema_version: 1\nname: veq\nsources:\n"
+        + _source("A")
+        + _source("B")
+        + """figures:
+  - name: v
+    panels:
+      - compare:
+          pack: velocity
+          product: velocity
+          select: {group: all, ref: all}
+          sources:
+            - {source: A, label: A, compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}}
+            - {source: B, label: B, compute: {dim: 2, vdim: 0, bin_width: 2.0, grouping: atoms, sym: false}}
+""",
+        encoding="utf-8",
+    )
+    out = render_project(read_project(path), tmp_path / "out")
+    assert (out / "figures" / "v.png").is_file()
+
+
+def test_velocity_palette_takes_effect(tmp_path, monkeypatch):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        "schema_version: 1\nname: vpalette\nsources:\n"
+        + _source("A")
+        + """figures:
+  - name: v
+    panels:
+      - source: A
+        pack: velocity
+        product: velocity
+        select: {group: all, ref: all}
+        compute: {dim: z, vdim: x, bin_width: 2.0, grouping: atoms, sym: false}
+        plot: {palette: ["#00ff00"]}
+""",
+        encoding="utf-8",
+    )
+    from mdanal.figure import engine
+
+    seen = {}
+    original = engine.chart.save
+
+    def save(fig, target, dpi):
+        seen["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(engine.chart, "save", save)
+    render_project(read_project(path), tmp_path / "out")
+    assert seen["fig"].axes[0].lines[0].get_color() == "#00ff00"

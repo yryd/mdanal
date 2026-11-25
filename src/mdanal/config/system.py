@@ -32,12 +32,6 @@ COORDINATE_CONVENTIONS = {
 WRAPPED_CONVENTIONS = ("unscaled", "scaled")
 
 UNKNOWN_INPUT_WARNING = "无法从轨迹表头判断坐标是否包裹，按未包裹坐标处理。"
-NOJUMP_WARNING = (
-    "输入为包裹坐标，连续视图按最小镜像逐帧展开；"
-    "相邻帧位移超过半个盒长时结果可能失真。"
-)
-
-
 
 @dataclass(frozen=True)
 class ViewConfig:
@@ -221,10 +215,6 @@ def coordinate_convention(cfg: SystemConfig, view: str) -> str | None:
     return None
 
 
-def is_wrapped_convention(convention: str | None) -> bool:
-    return convention in WRAPPED_CONVENTIONS
-
-
 def frame_window(cfg: SystemConfig, universe: mda.Universe) -> tuple[int, int]:
     """返回 (start, stop)，并校验落在轨迹长度内。"""
     n_frames = len(universe.trajectory)
@@ -276,15 +266,6 @@ def resolve_group(cfg: SystemConfig, universe: mda.Universe, value: str) -> Grou
             where=f"{cfg.yaml_path}:analyses",
         )
     return Group(key=value if named else None, selection=selection, atoms=atoms)
-
-
-def rebuild_group(group: Group, universe: mda.Universe) -> Group:
-    """按原子索引在另一个视图上重建原子组。"""
-    return Group(
-        key=group.key,
-        selection=group.selection,
-        atoms=universe.atoms[group.atoms.indices],
-    )
 
 
 # --------------------------------------------------------------------------- #

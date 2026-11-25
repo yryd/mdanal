@@ -92,3 +92,15 @@ def test_geometry_meta_uses_window_pbc_and_actual_kernel():
     assert meta["kernel_pbc"] == "per_frame"
     assert meta["pbc_changed"] is True
     assert meta["geometry_status"] == "unsupported_geometry"
+
+
+def test_lifetime_warns_when_tau_max_exceeds_available_lag():
+    tables, ctx = compute_pack(
+        "hbond",
+        select=SELECT,
+        compute={**PARAMS, "tau_max_ps": 100},
+        frames=(0, 8),
+        names=True,
+    )
+    assert not tables["hbond_lifetime"].empty
+    assert any("最大 lag" in warning for warning in ctx.warnings)

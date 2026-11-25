@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import Callable, Sequence
 
+from ..plot import chart
 from ..plot.specs import PanelRequest
 
 
@@ -30,6 +31,9 @@ def compare_curves(
     render_panel: Callable,
 ):
     first_request = panel_request(_source_context(ctx, sources[0]), sources[0].tables)
+    palette = list((getattr(ctx, "plot", {}) or {}).get("palette") or chart.THEME_COLORS)
+    if not palette:
+        palette = list(chart.THEME_COLORS)
     merged = []
     for source_index, source in enumerate(sources):
         request = panel_request(_source_context(ctx, source), source.tables)
@@ -47,6 +51,7 @@ def compare_curves(
                     replace(
                         curve,
                         label=label,
+                        color=palette[source_index % len(palette)],
                         source=source.source,
                         linestyle=linestyle,
                     )

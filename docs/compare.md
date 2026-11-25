@@ -22,7 +22,8 @@ figures:
 - 每个来源的 `PanelSource.label` 用作曲线标签；
 - `plot.legend_loc` 可指定图例位置，如 `lower left`、`upper right`；
 - compare 最终产出一个 Panel；
-- 同一 source 可以出现多次，用 per-source `compute`/`select` 做参数对比，`label` 必须不同。
+- 同一 source 可以出现多次，用 per-source `compute`/`select` 做参数对比，`label` 必须不同；
+- per-source 的 `compute`/`select`/`derive` 是**字段增量覆盖**：公共配置为底，来源只覆盖写出的字段；`derive.fit` 等嵌套对象整体替换。
 
 ```yaml
 sources:

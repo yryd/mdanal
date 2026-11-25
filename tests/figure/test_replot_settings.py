@@ -84,6 +84,9 @@ figures:
         pack: msd
         product: msd-raw
         select: {{group: all}}
+        plot:
+          palette: ["#ff0000"]
+          rc: {{lines.linewidth: 3}}
 """,
         encoding="utf-8",
     )
@@ -221,3 +224,52 @@ figures:
     ax = seen["fig"].axes[0]
     assert ax.get_xlim()[1] == pytest.approx(0.01)
     assert ax.get_ylim() == pytest.approx((0.0, 20.0))
+
+
+def test_replot_panel_style_overrides_snapshot_style(tmp_path, monkeypatch):
+    path = tmp_path / "figures.yaml"
+    path.write_text(
+        f"""schema_version: 1
+name: panel-style
+render:
+  dpi: 60
+sources:
+  A:
+    topology: {TINY / 'data.lmp'}
+    trajectory: {TINY / 'run.lammpstrj'}
+    frames: [0, 8]
+    groups: {{all: all}}
+figures:
+  - name: f
+    panels:
+      - source: A
+        pack: msd
+        product: msd-raw
+        select: {{group: all}}
+""",
+        encoding="utf-8",
+    )
+    out = render_project(read_project(path), tmp_path / "out")
+    override = tmp_path / "plot.yaml"
+    override.write_text(
+        """schema_version: 1
+figures:
+  f:
+    panels:
+      - palette: ["#00aa00"]
+        rc: {lines.linewidth: 7}
+""",
+        encoding="utf-8",
+    )
+    seen = {}
+    original = replot_module.chart.save
+
+    def save(fig, target, dpi):
+        seen["fig"] = fig
+        return original(fig, target, dpi)
+
+    monkeypatch.setattr(replot_module.chart, "save", save)
+    replot_from(out, tmp_path / "replot", overrides=read_overrides(override))
+    line = seen["fig"].axes[0].lines[0]
+    assert line.get_color() == "#00aa00"
+    assert line.get_linewidth() == pytest.approx(7.0)

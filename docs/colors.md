@@ -57,13 +57,13 @@ plot:
 
 | 图 | `palette` 是否生效 | 说明 |
 |---|---|---|
-| `rdf` / `msd-raw` / `density-line` / `velocity` | 是 | 数据曲线未显式设色，使用循环色 |
+| `rdf` / `msd-raw` / `density-line` / `velocity` | 是 | 数据曲线未显式设色，使用循环色；velocity 默认仍以蓝色为首色 |
 | `hbond-count` | 否 | 曲线显式使用固定主色 |
 | `hbond-lifetime-continuous` | 否 | 单曲线和标记显式使用主色 |
 | `hbond-lifetime-intermittent` | 否 | 单曲线和标记显式使用对照色 |
 | `hbond-type` | 否 | 条形图显式使用主色 |
 | `density-2d` | 否 | 使用白→砖红→蓝连续色标；色标由分析参数 `cmap/colors/vmin/vmax` 控制 |
-| `compare` | 是（`compare.plot.palette`） | 不配置时按 mdanal 主题；多列按线型区分 |
+| `compare` | 是（`compare.plot.palette`） | 不配置时按 mdanal 主题；按来源分配颜色/线型 |
 | 自己的 `chart.line` | 是 | 未显式写 `color=` 时使用循环色 |
 
 固定主色/对照色：
